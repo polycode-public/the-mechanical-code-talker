@@ -168,3 +168,174 @@ up on the next fetch. Any other read/parse failure is a clean `ToolError`.
    upsert already tolerates the swap.
 5. Optionally run `attachProseTokens` + `buildProseIndex` over your
    individuals to light up free-text resolution.
+
+---
+
+# The memory-backend adapter contract
+
+tmct's session memory lives behind a pluggable seam. The reference and sqlite backends ship in the library; you can build a custom one and inject it into a session. This document is the complete interface: what tmct calls, what it expects back, the shape of data that travels the seam, and what stays adapter-specific.
+
+## The seam, in one sentence
+
+You construct a small async row store scoped to one session key and hand it to `createSession`. tmct loads its working payload once per session, writes back only the rows that changed, and binds every read and write through the same backend object.
+
+## 1. The backend interface
+
+A backend is an object (duck-typed; `isRowBackend(obj)` tests it). It has these properties:
+
+```js
+{
+  kind: "tmct-memory-row-backend",
+  contractVersion: 1,
+
+  // All async. Rows are wire rows (below).
+  readRows(),              // → AsyncIterable<row> | Promise<row[]>
+  putRows(rows),           // upsert; per-row atomic; resolves when durable
+  deleteRows(rowKeys),     // rows absent from every later read; missing keys are a no-op
+  readRowsByTerm(term),    // OPTIONAL: rows whose index term matches
+  readMeta(key),           // → string | null
+  putMeta(key, value),     // upsert one sidecar value
+  deleteAll(),             // every row and meta entry this session key reaches goes absent
+  close(),                 // release connections; further calls may reject
+}
+```
+
+Read order never carries meaning. What a row means rides its own content, so two backends handing the same rows back in different orders assemble the same payload.
+
+Deleting is observable, not physical. The contract promises one thing: a deleted row never appears in any later read. You can remove the item or tombstone it behind a filtered read — both satisfy the contract. An adapter picks whichever its store makes cheap.
+
+## 2. The wire row
+
+This is what your backend stores:
+
+```js
+{
+  rowKey: "fact:1a2b…@src:…",  // stable id; the same (triple, source) is the same rowKey
+                                // everywhere, so two sources asserting one triple are two rows
+  rowClass: "fact",             // closed set: fact | source | utterance | session | rule |
+                                //   retraction | edge-group | bookkeeping
+  term: "tariff",               // canonical index term for fact rows; "" otherwise
+  json: "…",                    // serialized record, ≤ 4 KB; the only field carrying tmct content
+  expiresAt: 1739145600,        // OPTIONAL epoch seconds; stamped by the adapter from TTL policy
+}
+```
+
+`rowClass` is the structural gate: `bookkeeping` rows are internal (research-queue entries, the researched-terms set) and never surface in answers. Read paths exclude them by field, not by content matching, so an adapter can filter them at the storage level.
+
+Mutation is additive. A supersession carries `mgx:supersedes: [oldId]` in the json. Assembly derives `mgx:supersededBy` from the union of `supersedes` pointers, never by rewriting the old row. A retraction is its own `retraction`-class row. Two concurrent supersessions both land; assembly applies both.
+
+The 4 KB cap fails before the network. tmct rejects an oversized row at projection time with `BackendRejected`, before any write leaves the process. The default posture is throw. A backend constructed with `onOversizedRow: "drop"` logs the row's provenance and skips it; the turn completes with everything else persisted.
+
+## 3. The index key
+
+For fact rows, `term` is the normalized subject term. The recommended table layout:
+
+- partition key: the session key;
+- sort key: `${rowClass}#${term}#${rowKey}` (empty term collapses cleanly).
+
+This makes `query(skPrefix: "fact#tariff#")` a native term read with no table migration when tmct starts issuing term reads. Object-side lookups ride the assembled payload; an adapter that wants them indexed adds its own duplicate row or GSI.
+
+## 4. The HTTP service (the wire between page and backend)
+
+When the backend is remote, `createHttpRowBackend({apiBase, sessionKey, fetchImpl})` wires the contract over HTTP. The row service implements the other side.
+
+| method | path | wire call | response | notes |
+| --- | --- | --- | --- | --- |
+| GET | /api/rows | readRows | 200 `{rows:[…]}` | key in `x-tmct-session` |
+| PUT | /api/sessions/:uuid/rows | putRows | 204 | body `{puts:[row…]}` |
+| DELETE | /api/sessions/:uuid/rows | deleteRows \| deleteAll | 204 | body `{rowKeys:[…]}` or `{all:true}` |
+| GET | /api/meta/:key | readMeta | 200 `{value}` \| 404 | key in `x-tmct-session` |
+| PUT | /api/sessions/:uuid/meta/:key | putMeta | 204 | body `{value}` |
+
+Errors map to the contract's two failure classes (below).
+
+## 5. Failure semantics
+
+Two named error classes are part of the published contract:
+
+- `BackendRejected` (`code: "TMCT_BACKEND_REJECTED"`) — the input was refused: an oversized row, a malformed key, a validation failure. Retrying the same input gets the same answer.
+- `BackendUnavailable` (`code: "TMCT_BACKEND_UNAVAILABLE"`) — the store could not be reached or refused service: a network failure, a 429/507/5xx. The same input may well succeed later.
+
+A consumer whose turn is itself a last-resort fallback catches by class or by `code` and continues without persistence.
+
+## 6. Adapter-documented requirements
+
+These are the adapter's responsibility, not checked by the conformance suite:
+
+- **TTL enforcement** — time-driven, outside tmct's control. The suite asserts only that `expiresAt` round-trips untouched. Your adapter deletes expired rows per its own schedule.
+- **Latency budget** — consumer-measured. Your adapter's cold-open latency and its write throughput are the inputs to this measure. Expect one read per cold session load and delta-only writes thereafter.
+- **Lazy SDK, no import-time IO** — the DynamoDB backend loads with the AWS SDK absent. Only the first storage call requires it. No adapter should do I/O at import time.
+- **Concurrency handling** — fact rows are content-addressed, so concurrent writers land distinct rows or the same row with identical content. Metadata and derived rows use last-write-wins semantics; a regression costs one re-derivation. No turn-serialization guarantee is required.
+
+## 7. Running the conformance suite
+
+Every shipped backend passes this suite:
+
+```js
+import { runMemoryBackendConformance } from "@polycode-projects/the-mechanical-code-talker/memory-backend-conformance";
+
+await runMemoryBackendConformance("my-backend", async () => {
+  return await createMyCustomBackend(/* config */);
+});
+```
+
+The kit checks: per-row atomicity, row-level concurrency, concurrent supersession, delete-by-key reachability (observable semantics only), meta round-trip, bookkeeping exclusion, determinism across read orders, the 4 KB cap in both modes, and typed failures with stable codes.
+
+Export the essentials:
+
+```js
+import { createRowMemoryBackend, createDynamoRowBackend, isRowBackend } from "@polycode-projects/the-mechanical-code-talker/memory-backends";
+import { createSqliteRowBackend } from "@polycode-projects/the-mechanical-code-talker/adapters/memory";
+```
+
+## 8. Shipped implementations
+
+**In-memory reference backend** (`createRowMemoryBackend`): the simplest implementation, for testing and small ephemeral sessions. Deletes are physical removal.
+
+**DynamoDB backend** (`createDynamoRowBackend`): wired through the `./memory-backends` subpath for consumers hosting on AWS. Takes configuration for soft-delete mode (tombstoning for TTL reclamation) and key remapping to fit existing tables. See the constructor docstring in `src/adapters/memory/row-backend-dynamo.mjs` for the full option set.
+
+**SQLite backend** (`createSqliteRowBackend`, exported from `src/adapters/memory/core.mjs`): the CLI's persistent store, wired as a row backend for consistency with the other two. Each call opens one database connection; one `.sqlite` file is one store viewed through two entry points: `createSqliteMemoryStore` (the classic memory-store interface) and `createSqliteRowBackend` (the row-backend interface). Both see the same seven tables (individuals, relations, edges, facts, meta, fact_heads, fact_object_supersessions).
+
+SQLite-specific notes:
+
+- Deletes are physical removal, not tombstoned. The `deleteRows` method issues `DELETE` statements; `deleteAll` issues a `DELETE FROM` over the whole session partition.
+- Term reads scan the individuals table; SQLite has no sort-key index like the recommended partition layout provides. Performance is acceptable at the reference-backend scale (~40 facts per session).
+- The 4 KB cap applies at `putRows` time (the wire row's json field). Internal payload writes have no cap; the payload's own scalars (`memory`, `prefixes`) live as meta rows, and derived rows (classes, vocabulary, proseIndex) are recomputed at assembly.
+- Meta keys are shared with the payload's own stored scalars: `memory`, `prefixes`, `nodeId`, and `syllogiseState` occupy meta rows the store already writes. A consumer-injected backend's meta keys coexist.
+- Fixture rows (those not mappable to tmct's own classes) live verbatim in an unmapped_rows table, created on first use. The conformance kit's fixture rows land there, unchallenged. Real payloads' rows go to the seven base tables; a store that never sees a verbatim row never grows unmapped_rows.
+
+## 9. Building a custom backend
+
+You can skip the three shipped implementations and build your own. The conformance kit is the single authority on what tmct expects.
+
+The minimum viable backend:
+
+```js
+class MyRowBackend {
+  kind = "tmct-memory-row-backend";
+  contractVersion = 1;
+
+  async readRows() { /* return all rows as AsyncIterable or Promise<array> */ }
+  async putRows(rows) { /* upsert all rows; resolve when durable */ }
+  async deleteRows(rowKeys) { /* mark rows absent from reads */ }
+  async readMeta(key) { /* return value string or null */ }
+  async putMeta(key, value) { /* upsert one value */ }
+  async deleteAll() { /* mark all rows and meta absent */ }
+  async close() { /* release resources */ }
+}
+
+export function createMyBackend(sessionKey) {
+  return new MyRowBackend(sessionKey);
+}
+```
+
+Wire `readRowsByTerm` only if your store has a term index. Delete observability is the contract; you pick the mechanism (physical removal or filtered reads). Test with the conformance kit before shipping. Join the `./memory-backends` export if it belongs in the library; otherwise stay local.
+
+Expect tmct to:
+
+- Call `readRows` once per cold session load, once per recovery, never mid-session.
+- Call `putRows` with 1–5 rows per turn, only rows that changed.
+- Call `deleteRows` or `deleteAll` when a visitor retracts facts or forgets.
+- Call `readMeta` and `putMeta` for scalars (watermark, node id) with last-write-wins semantics.
+- Construct a fresh backend per session. Never reuse one across sessions.
+- Close the backend when the session ends; further calls may error.

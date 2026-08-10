@@ -981,6 +981,18 @@ package or a bare user gets a working install in one command.
 > Install-size note: tmct depends on wink-nlp's deterministic English language
 > model (~3.8 MB installed). That model is a lookup table, not an LLM.
 
+### Custom memory backends
+
+Memory — the facts you teach tmct — lives behind a pluggable adapter seam. The CLI and library come with three backends: in-memory (ephemeral), SQLite (the CLI's default), and DynamoDB (for hosted deployments). You can inject a custom backend and tmct will read and write through it instead. The backend is a small async row store scoped to one session key — it needs eight methods (read, write, delete, and a couple of scalar sidecars). The published conformance suite validates that a custom backend meets the contract. See `docs/adapter-contract.md` for the full interface and `src/adapters/memory/row-backend-memory.mjs` for the reference implementation. Wire it into a session:
+
+```js
+import { createSession } from "@polycode-projects/the-mechanical-code-talker";
+import { createMyBackend } from "./my-backend.mjs";
+
+const backend = createMyBackend(sessionKey, config);
+const session = await createSession({ memoryBackend: backend });
+```
+
 ### Full command reference (`tmct --help`)
 
 `tmct --help` always prints the real, current flags. What follows is that
