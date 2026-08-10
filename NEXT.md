@@ -35,11 +35,11 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
 - In flight: T8 chat/ledger backend modes (Sonnet, resumed once after a stall; scope
-  clarified to chat/ledger only — T13 covered the news side), T14 news chat area
-  (Sonnet, owns news entry/viz + news e2e). Landed since the last tracker move: T13
-  (refresh loop, cycle UI, fuzzy toggle, page weight 5.4 MiB → 11.1 KiB), the
-  graph-less config guard (fetchEntities bootstraps empty instead of crashing; the
-  companion read in graph-load.mjs fixed with it), the cap-refusal wording fix.
+  clarified to chat/ledger only), the turn-triggers-materialization fold (Sonnet, owns
+  turn-service + the infra grant; T14 found §3.12's invoke was prose-only). Landed
+  since the last tracker move: T13, the graph-less config guard, the cap-refusal
+  wording fix, T14 (the chat area on news.html, XSS-pinned, honest about feed
+  staleness).
 - Queued: T9 after T8 → T10/M10/T11 tail. After T14: a fresh `npm run gen:screenshots`
   news capture (news.png still shows the pre-flip UI). Operator step recorded by T6:
   wikidata-slice and conceptnet-full stay empty until their raw dumps are downloaded

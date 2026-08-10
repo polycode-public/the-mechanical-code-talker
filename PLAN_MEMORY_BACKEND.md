@@ -2050,6 +2050,15 @@ Acceptance: the e2e file; `node --test test/adapters/news-browser-entry.test.mjs
 
 ## 27c. Phase T14 — the news chat area
 
+**BUILT** (2026-08-10, merged): the chat area lives in `#chatMount` — same session UUID,
+synchronous replies over the turn endpoint, learned-fact citations rendered through the
+phrase layer with findings caveats, everything text-nodes (the XSS pin covers a chat
+reply), disabled before consent and while unreachable. The agent verified the code, not
+the prose: §3.12 said the turn handler invokes materialization but it did not — the
+wiring (invoke grant + env + inline double + flipped e2e pins) landed as its own
+follow-on fold, so a chat teach reaches the feed through the version poll with no button
+press.
+
 **Owns** `src/services/news-viz.mjs` (the chat section below `#teachPanel`: transcript,
 input row, send; each turn rendering the reply as text nodes, citations through the shared
 `./phrase` layer from `factsTouched`, and a collapsible narration block presented the way
