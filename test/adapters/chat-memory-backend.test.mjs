@@ -12,13 +12,28 @@ import assert from "node:assert/strict";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSession } from "../../src/services/chat.mjs";
-import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { createSession, runTurn, PERSIST_UNAVAILABLE_TEXT } from "../../src/services/chat.mjs";
+import { loadMemory, readFactRows, wrapRowBackend } from "../../src/adapters/memory/core.mjs";
+import { createRowMemoryBackend } from "../../src/adapters/memory/row-backend-memory.mjs";
+import {
+  BACKEND_REJECTED_CODE, BackendRejected, BackendUnavailable,
+} from "../../src/adapters/memory/row-backend.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 
 async function tmpRepo() {
   return mkdtemp(join(tmpdir(), "tmct-chat-backend-"));
 }
+
+/** A row backend that reads normally and refuses every write with `failure()`.
+ *  The refusal carries nothing but the contract's own class and code, so a
+ *  chat lane that recognized it by message text would fail here. */
+function backendRefusingWrites(failure) {
+  return { ...createRowMemoryBackend(), async putRows() { throw failure(); } };
+}
+
+const unavailableBackend = () => backendRefusingWrites(
+  () => new BackendUnavailable("the table is full", { status: 507 }),
+);
 
 async function memoryEntries(dir) {
   try { return await readdir(join(dir, ".tmct", "memory")); } catch (e) { if (e?.code === "ENOENT") return []; throw e; }
@@ -228,4 +243,72 @@ test("createSession: a tmct.toml [memory] backend of \"default\" (what `tmct ini
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("a teach the store will not take reports the refusal, never a vocabulary decline", async () => {
+  clearCache();
+  const dir = await tmpRepo();
+  try {
+    const s = await createSession({
+      repoPath: dir, env: { TMCT_NO_SEED: "1" }, memoryBackend: unavailableBackend(),
+    });
+    const { answer } = await s.turn("remember that zorblatt is a dog");
+    assert.ok(answer.includes(PERSIST_UNAVAILABLE_TEXT), `the refusal is reported as itself, got: ${answer}`);
+    assert.doesNotMatch(answer, /as a word I know/, "the vocabulary had nothing to do with it");
+    assert.deepEqual(readFactRows(await loadMemory(s.memoryDir)), [], "nothing was stored");
+    await s.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the ACE assert lane and the rule-teach lane report the same refusal in the same words", async () => {
+  clearCache();
+  const dir = await tmpRepo();
+  try {
+    const s = await createSession({
+      repoPath: dir, env: { TMCT_NO_SEED: "1" }, memoryBackend: unavailableBackend(),
+    });
+    const asserted = await s.turn("every module is a component");
+    assert.ok(asserted.answer.includes(PERSIST_UNAVAILABLE_TEXT), `the assert lane reports the refusal, got: ${asserted.answer}`);
+    assert.doesNotMatch(asserted.answer, /noted — remembered/, "nothing was remembered, so nothing says it was");
+
+    const ruled = await s.turn("a doubler is a maker of a maker");
+    assert.ok(ruled.answer.includes(PERSIST_UNAVAILABLE_TEXT), `the rule-teach lane reports the refusal, got: ${ruled.answer}`);
+    await s.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a refused turn carries the persist-unavailable marker and touches no fact", async () => {
+  const memoryDir = wrapRowBackend(unavailableBackend());
+  const turn = await runTurn("remember that zorblatt is a dog", { memoryDir, sessionId: "test-session" });
+  assert.equal(turn.record.via, "persist-unavailable");
+  assert.equal(turn.record.miss, true, "a turn that stored nothing is a miss, not a quiet success");
+  assert.deepEqual(turn.factsTouched, []);
+});
+
+test("a store that rejects the input itself fails loudly, naming the row's provenance", async () => {
+  const rejecting = backendRefusingWrites(() => new BackendRejected(
+    "fact row serializes to 5000 bytes, over the 4096-byte cap (provenance: teach:chat)",
+    { rowKey: "fact#zorblatt", rowClass: "fact", provenance: "teach:chat" },
+  ));
+  const memoryDir = wrapRowBackend(rejecting);
+  await assert.rejects(
+    () => runTurn("remember that zorblatt is a dog", { memoryDir, sessionId: "test-session" }),
+    (error) => {
+      assert.equal(error.code, BACKEND_REJECTED_CODE, "the rejection travels as itself");
+      assert.equal(error.provenance, "teach:chat", "and still names what produced the row");
+      return true;
+    },
+  );
+});
+
+test("a working row backend still confirms the teach it stored", async () => {
+  const memoryDir = wrapRowBackend(createRowMemoryBackend());
+  const turn = await runTurn("remember that zorblatt is a dog", { memoryDir, sessionId: "test-session" });
+  assert.match(turn.answer, /noted — remembered: zorblatt is a dog/);
+  assert.doesNotMatch(turn.answer, /couldn't save it/);
+  assert.ok(turn.factsTouched.length > 0, "the write landed");
 });
