@@ -31,9 +31,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks these levers for the
-  next tuning cycle, each its own measured round. The latest round, the negation-scope filter,
-  is landed and measured (`reports/BENCHMARK_CEFR_ENGLISH_5.0.41.md`); its decision log re-ranks
-  what is left:
+  next tuning cycle, each its own measured round. The latest round closed the tail three cases and
+  took the pool to 1075/1075 on tier-1 (`reports/BENCHMARK_CEFR_ENGLISH_5.0.42.md`); its decision
+  log re-ranks what is left:
   - [x] relative-embedded chain resolution
   - [x] converse verb readings — the placement phrasings ("live in", "sit inside") stay forward
     by design, since a taught locative fact stores the located thing as its subject
@@ -55,11 +55,11 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     doesn't reach it
   - [x] A2 negation's four standing hard fails (`g-a2-neg-3`, `-4`, `-14`, `-24`) — all four clear
     in the negation-scope round, three of them 0.000 to 2.000
-  - [ ] `g-b1-neg-11`, "which functions are not exported" — the right empty set under a recovery
-    line about commits. The last hard fail the 5.0.41 round's cells carry that is a product line
-    rather than judge noise
-  - [ ] `g-b2-coord-4` and `g-c1-presup-4`, the two tier-1 failures the pool has left. Different
-    cells, so two small levers rather than one
+  - [x] `g-b1-neg-11`, "which functions are not exported" — measured in
+    `reports/BENCHMARK_CEFR_ENGLISH_5.0.42.md`; the recovery line now offers the exported-functions
+    branch, rephrase-hint goes 0.5 to 1.0 and the hard fail clears
+  - [x] `g-b2-coord-4` and `g-c1-presup-4` — measured in the same round; one defect in the
+    enumerated-choice label marker, not two levers, and the pool reaches 1075/1075 on tier-1
   - [x] growing the under-covered C2 relative-embedded census cell — the 5.0.36 round judges
     all 25 of it, so the cell is measured rather than excluded
 - [ ] **Judge both chatbench arms against the same verdict-cache snapshot** — the 5.0.37 round
@@ -69,7 +69,18 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   25 answers as 1.288 and 1.282 across two passes for the same reason, and the 5.0.40 round put
   the leftover noise at the same size as a small lever's whole signal — it now gates how small a
   lever the rig can measure. In the 5.0.41 round a hard fail crossed the line on byte-identical
-  text, so the hard-fail count needs the answer-identity control applied by hand too.
+  text, so the hard-fail count needs the answer-identity control applied by hand too. The 5.0.42
+  round read `g-b1-neg-12` a full 1.0 apart across its arms on unchanged text, carrying a hard-fail
+  flag with it — on a 25-case cell that decides the raw hard-fail count outright.
+- [ ] **The composite miss lead claims more than the engine checked** — "nothing in the index
+  matches that (functions)" reports an empty set by saying the index matches nothing of that kind,
+  which is false whenever the kind is non-empty and the filter is what emptied it. Both judge
+  samples on both arms of `g-b1-neg-11` name this sentence unprompted and score honesty 0 for it,
+  on an answer whose verdict is correct
+  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.42.md`). The lead heads 121 of the 1,075 answers across 15
+  cells — B2 relative-embedded (23), C2 garden-path (19), C1 relative-embedded (16) lead it — so
+  separating "this kind is empty" from "nothing satisfied the filter" is a judged round over those
+  cells rather than a spot fix.
 - [ ] **An empty composition names its emptied branch only for a seed clause plus one qualifier** —
   the 5.0.41 round widened it to the negative polarity, so both "and tested" and "but not tested"
   now name what held. An intersection of two clauses, a difference of two clause sets, and a
