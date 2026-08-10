@@ -1,0 +1,5 @@
+{"start":"/c/en/dolphin","rel":"/r/IsA","end":"/c/en/mammal","weight":1,"surfaceText":"[[dolphin]] IsA [[mammal]]"}
+{"start":"/c/en/mammal","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[mammal]] IsA [[animal]]"}
+{"start":"/c/en/wheel","rel":"/r/PartOf","end":"/c/en/car","weight":1,"surfaceText":"[[wheel]] PartOf [[car]]"}
+{"start":"/c/en/happy","rel":"/r/Synonym","end":"/c/en/glad","weight":1,"surfaceText":"[[happy]] Synonym [[glad]]"}
+{"start":"/c/en/dolphin","rel":"/r/RelatedTo","end":"/c/en/porpoise","weight":1,"surfaceText":"[[dolphin]] RelatedTo [[porpoise]]"}
