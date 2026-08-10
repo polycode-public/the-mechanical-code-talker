@@ -79,7 +79,10 @@ const NEW_PHRASE_CASES = [
   ["which functions hits helper", "calls"],
   ["which functions triggers helper", "calls"],
   ["which functions executes helper", "calls"],
-  ["which classes is defined in Widget", "contains"],
+  // "which classes … defined in X" now routes to the membership lane (typed
+  // list over a container), so the contains VERB_ALT phrase is proven through
+  // the untyped form instead.
+  ["what is defined in Widget", "contains"],
   ["which modules verifies auth", "tests"],
   ["which modules exercises auth", "tests"],
   ["which classes is a subclass of Base", "inherits"],
