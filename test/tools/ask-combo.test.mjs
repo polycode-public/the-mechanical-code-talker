@@ -562,3 +562,93 @@ test("named filter: 'called' reads as a name only after a copula, so the passive
   assert.deepEqual(labels(runAsk("which modules import app/lib/a.mjs and are called app/lib/b.mjs")), ["app/lib/b.mjs"]);
   assert.deepEqual(labels(runAsk("which functions are called by Widget.render")), ["fnAlpha"]);
 });
+
+// =====================================================================
+// NEGATION SCOPE — which head a trailing negation restricts, which universe its
+// complement is taken over, and what the receipt may claim when it empties the set
+// =====================================================================
+test("negation scope: a trailing qualifier after a relative chain restricts the matrix head, not the embedded one", () => {
+  // a.mjs defines fnAlpha; b.mjs, c.mjs and e.mjs import it, and b.mjs is the
+  // tested one. The exclusion is about the importers.
+  assert.deepEqual(labels(runAsk("modules importing the module that defines fnAlpha but not tested")),
+    ["app/lib/c.mjs", "app/lib/e.mjs"]);
+  // The same reading the fronted adjective spells out.
+  assert.deepEqual(labels(runAsk("untested modules that import the module that defines fnAlpha")),
+    ["app/lib/c.mjs", "app/lib/e.mjs"]);
+});
+
+test("negation scope: the lift reaches a two-hop chain and an intersection alike", () => {
+  // Importers of a.mjs are b, c and e; the modules importing those are
+  // d/handler (tested) and f.mjs.
+  assert.deepEqual(labels(runAsk("modules importing something that imports app/lib/a.mjs but not tested")),
+    ["app/lib/f.mjs"]);
+  assert.deepEqual(labels(runAsk("modules importing the module that defines fnAlpha and tested")),
+    ["app/lib/b.mjs"]);
+});
+
+test("negation scope: a branch with a verb of its own stays inside the relative clause", () => {
+  // "but not importing app/lib/f.mjs" is a second predicate, not an adjective on
+  // the importers, so nothing lifts and the chain still reads.
+  const r = runAsk("modules importing the module that defines fnAlpha but not importing app/lib/f.mjs");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.deepEqual(labels(r), ["app/lib/b.mjs", "app/lib/c.mjs", "app/lib/e.mjs"]);
+});
+
+test("negation over a relative chain refuses when the exclusion empties it, rather than answering the unfiltered set", () => {
+  // Widget lives in b.mjs; the one module importing b.mjs is d/handler, which
+  // b.test.mjs covers.
+  const r = runAsk("modules importing the module that defines Widget but not tested");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.doesNotMatch(r.content, /app\/functions\/d\/handler\.mjs/);
+});
+
+test("negation scope: a coverage complement is taken over the modules the index can place, not over every individual", () => {
+  // Widget.render carries a source site and no defines edge of its own. Reading
+  // only the edge left it outside the tested set and therefore inside every
+  // complement, which answered a method to a question whose answer is none.
+  for (const q of ["untested methods", "uncovered methods", "which methods are not tested"]) {
+    const r = runAsk(q);
+    assert.equal(r.tmct_ask.miss, true, q);
+    assert.doesNotMatch(r.content, /Widget\.render/, q);
+  }
+  assert.match(runAsk("how many methods are not tested").content, /^0 methods\.$/);
+  // The module the method lives in is what carries the coverage.
+  assert.deepEqual(labels(runAsk("tested methods")), ["Widget.render"]);
+  // A commit is in no module at all, so it is neither tested nor untested.
+  const commits = runAsk("who touched the module that defines fnAlpha but not tested");
+  assert.equal(commits.tmct_ask.miss, true);
+  assert.doesNotMatch(commits.content, /abc1234/);
+});
+
+test("negation scope: a symbol still reads the coverage its own defining module records", () => {
+  // fnAlpha has a defines edge to a.mjs, which nothing tests.
+  assert.deepEqual(labels(runAsk("untested functions")), ["fnAlpha"]);
+  assert.match(runAsk("how many functions are not tested").content, /^1 function\.$/);
+  // Base and Button carry a site and no defines edge; both live in untested modules.
+  assert.deepEqual(labels(runAsk("untested classes")), ["Base", "Button"]);
+});
+
+test("an empty coverage-filtered symbol set explains the module grain instead of the generic rephrase nudge", () => {
+  const r = runAsk("untested methods");
+  assert.match(r.content, /^nothing in the index matches that \(methods\)\./);
+  assert.match(r.content, /records tests edges module to module/);
+  assert.match(r.content, /counts as covered exactly when the module it lives in is tested/);
+  assert.doesNotMatch(r.content, /who touched/);
+});
+
+test("a negation that empties a clause names the branch that held and what was true of it", () => {
+  // Widget is the one class inheriting Base, and b.mjs — where it lives — is tested.
+  const r = runAsk("classes inheriting from Base but not tested");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^1 class inherits from Base, but it is tested\./);
+  assert.match(r.content, /Try "which classes inherit from Base" for that branch on its own\./);
+});
+
+test("a double negation refuses rather than guessing when nothing supports the inner clause", () => {
+  // Nothing imports scripts/g.mjs, so "but not tested" has no set to exclude
+  // from and there is no held branch to name.
+  const r = runAsk("modules importing scripts/g.mjs but not tested");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^nothing in the index matches that \(modules\)\./);
+  assert.doesNotMatch(r.content, /but it is|but none of them|but all of them/);
+});

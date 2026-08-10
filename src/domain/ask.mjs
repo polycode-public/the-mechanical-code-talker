@@ -545,6 +545,49 @@ function parseSetPhrase(text, nlp, depth) {
  *  the gerund form, "who touched the module importing X" falls through to the legacy
  *  strategy pipeline, which misreads the leading verb "touched" as the flat ASK shape's
  *  subject term instead of resolving to a real entity. */
+/** Split a relative clause's words at a trailing branch of bare qualifier
+ *  adjectives, which restricts the MATRIX head rather than the embedded one.
+ *
+ *  "modules importing the module that defines fnAlpha but not tested" excludes
+ *  the tested IMPORTERS, not a tested definer — the same sentence with the
+ *  adjective fronted ("untested modules that import the module that defines
+ *  fnAlpha") is the reading it pairs with, and the explicit-pronoun order
+ *  ("modules that import … and tested") already splits its branches at the
+ *  matrix head before this production is reached. Left inside the relative
+ *  clause, the filter narrowed the definer instead, which is a set of one that
+ *  usually survives it, so the exclusion silently did nothing.
+ *
+ *  Only adjectives lift. A trailing branch with a verb of its own is a second
+ *  predicate on the embedded head and stays where it was written. Returns
+ *  {rest, lifted} with `lifted` as ready-made boolean atoms, or null when the
+ *  clause carries no such branch. */
+function liftTrailingQualifierBranches(words) {
+  const lc = words.map((x) => x.toLowerCase());
+  const conns = Object.keys(BOOLEAN_CONNECTIVES).sort((a, z) => z.split(" ").length - a.split(" ").length);
+  const lifted = [];
+  let end = words.length;
+  for (;;) {
+    let found = null;
+    for (let i = end - 1; i >= 1 && !found; i -= 1) {
+      for (const c of conns) {
+        const cw = c.split(" ");
+        if (i + cw.length <= end && lc.slice(i, i + cw.length).join(" ") === c) {
+          found = { at: i, len: cw.length, op: BOOLEAN_CONNECTIVES[c] };
+          break;
+        }
+      }
+    }
+    if (!found) break;
+    const tail = words.slice(found.at + found.len, end);
+    const { blc } = dropLeadCopula(tail, tail.map((x) => x.toLowerCase()));
+    if (!blc.length || !blc.every((x) => QUALIFIERS[x])) break;
+    lifted.unshift({ op: found.op, kind: "qual", filters: blc });
+    end = found.at;
+  }
+  if (!lifted.length || !end) return null;
+  return { rest: words.slice(0, end), lifted };
+}
+
 function parseNested(w, lc, nlp, depth) {
   for (let r = 1; r < lc.length; r += 1) {
     const isPronoun = RELATIVE_PRONOUNS.includes(lc[r]);
@@ -568,10 +611,18 @@ function parseNested(w, lc, nlp, depth) {
     // so the inner may itself be nested/boolean/qualified (depth ≥2). An explicit
     // relative pronoun is consumed (skip past it, start at r+1); a gerund marker IS
     // the predicate's own verb, so it stays in the inner text (start AT r).
-    const innerText = `which ${lc[r - 1]} ${w.slice(isPronoun ? r + 1 : r).join(" ")}`;
+    const innerWords = w.slice(isPronoun ? r + 1 : r);
+    const highAttached = liftTrailingQualifierBranches(innerWords);
+    const innerText = `which ${lc[r - 1]} ${(highAttached ? highAttached.rest : innerWords).join(" ")}`;
     const inner = parseSetPhrase(innerText, nlp, depth + 1);
     if (!inner || inner.node === "miss") return inner ? { node: "miss", reason: inner.reason || "inner clause didn't parse" } : { node: "miss", reason: "inner clause didn't parse" };
-    return { node: outer.shape === "reverse" ? "reverseSet" : "forwardSet", kind: outer.kind, entityType: outer.entityType, inner };
+    const set = { node: outer.shape === "reverse" ? "reverseSet" : "forwardSet", kind: outer.kind, entityType: outer.entityType, inner };
+    if (!highAttached) return set;
+    return {
+      node: "boolean",
+      entityType: outer.entityType,
+      atoms: [{ op: "seed", kind: "set", ast: set }, ...highAttached.lifted],
+    };
   }
   return null;
 }
@@ -1709,6 +1760,24 @@ function moduleIdOf(graph, ind) {
   return qualSets(graph).moduleOfSymbol.get(ind.id) || null;
 }
 
+/** The module a coverage question is really about for this individual.
+ *
+ *  `tests` edges run module to module, so a symbol is covered exactly when the
+ *  module it lives in is. Which module that is comes from the defines edge
+ *  first and the recorded source site second — a method belongs to its class,
+ *  not to the module's top-level scope, so it carries a site and no defines
+ *  edge of its own, and reading only the edge left every method outside the
+ *  tested set and therefore inside every complement.
+ *
+ *  Null means the index places this individual in no module at all, which is a
+ *  different thing from "not tested" — see qualHolds. */
+function coveragePivotModuleId(graph, ind) {
+  const direct = moduleIdOf(graph, ind);
+  if (direct) return direct;
+  const path = moduleLabelOf(ind);
+  return path ? modulesByPath(graph).get(normPath(path))?.id || null : null;
+}
+
 /** Meta fallback to real entities: after a SchemaClass/SchemaPredicate miss,
  *  an exact case-insensitive unique label match against real code-entity
  *  classes, so "what is a Record" answers even though Record isn't a graph
@@ -1812,7 +1881,7 @@ function qualHolds(graph, ind, spec) {
       return ex.has(String(ind.label).toLowerCase()) || ex.has(String(ind.id).toLowerCase());
     }
     case "tested": {
-      const mid = moduleIdOf(graph, ind);
+      const mid = coveragePivotModuleId(graph, ind);
       const sets = qualSets(graph);
       // A TEST module is neither tested nor untested. Coverage is a claim about
       // SOURCE modules, so asking whether a test covers itself is a category
@@ -1822,10 +1891,13 @@ function qualHolds(graph, ind, spec) {
       // path shape (a test-named module that happens to test nothing).
       const mind = mid ? graph.byId?.get?.(mid) : null;
       if (mid && (sets.testModules.has(mid) || (mind && isTestPath(String(mind.label).toLowerCase())))) return false;
-      // An entity whose defining module can't be resolved (a class with no
-      // defines edge) is not a test module — it reads as "not tested", so it
-      // stays in the untested set instead of dropping out of both polarities.
-      return (!!mid && sets.testedModules.has(mid)) === spec.value;
+      // Nothing this index can place in a module is outside the coverage
+      // question altogether, at BOTH polarities — a Commit is neither tested
+      // nor untested. Reading a missing pivot as "not tested" put every such
+      // individual in the complement, which is how the negation's universe
+      // grew past the set the question was about.
+      if (!mid) return false;
+      return sets.testedModules.has(mid) === spec.value;
     }
     default: return false;
   }
@@ -2139,6 +2211,17 @@ function evalSet(graph, ast, opts) {
  *  opposite to ask and keep the plain complement, which is the right reading
  *  for them: "not exported" really is everything that is not exported. */
 const oppositeQualifierSpec = (spec) => (spec && typeof spec.value === "boolean" ? { ...spec, value: !spec.value } : null);
+
+/** The adjective for a qualifier's opposite, where the vocabulary carries one
+ *  ("untested" -> "tested"). A receipt that has to state the negation reads
+ *  "but it is tested" from this, instead of stacking a bare "not" onto an
+ *  already-negative adjective. Null where the qualifier has no opposite word. */
+function oppositeQualifierWord(word) {
+  const spec = QUALIFIERS[word];
+  const opposite = oppositeQualifierSpec(spec);
+  if (!opposite) return null;
+  return Object.keys(QUALIFIERS).find((k) => QUALIFIERS[k].via === opposite.via && QUALIFIERS[k].value === opposite.value) || null;
+}
 
 function evalBoolean(graph, ast, opts) {
   let acc = [];
@@ -2591,14 +2674,32 @@ function evalComposite(graph, ast, opts = {}) {
 function qualifierEmptiedSet(graph, ast, opts) {
   if (ast.node !== "boolean" || ast.atoms?.length !== 2) return null;
   const [seed, filter] = ast.atoms;
-  if (seed.op !== "seed" || filter.op !== "intersection" || filter.kind !== "qual") return null;
+  if (seed.op !== "seed" || filter.kind !== "qual") return null;
+  const excluded = filter.op === "difference";
+  if (!excluded && filter.op !== "intersection") return null;
   const clause = seed.ast?.node === "clause" ? seed.ast.clause : null;
   if (!clause?.kind || !clause.object || clause.modifier === "transitive") return null;
   const held = evalSet(graph, seed.ast, opts);
   if (!held.length) return null;
+  const allHold = (words) => held.every((ind) => words.every((f) => qualHolds(graph, ind, QUALIFIERS[f])));
+  // A difference reports what the exclusion took away, so it may only name the
+  // qualifier where the clause's members really do satisfy it. A member the
+  // qualifier does not apply to at either polarity leaves by the same door, and
+  // saying it was tested would be a guess about a coverage fact nothing records.
+  if (excluded && !allHold(filter.filters)) return null;
+  // An intersection's members failed the filter, which is all that is proven,
+  // so the receipt negates it. A filter that is already a negative adjective
+  // would stack into "but it is not untested", so where the vocabulary carries
+  // the positive word AND every member satisfies it, the receipt says that
+  // instead.
+  const opposites = excluded || !filter.filters.every((f) => QUALIFIERS[f].value === false)
+    ? [] : filter.filters.map(oppositeQualifierWord);
+  const statable = opposites.length > 0 && opposites.every(Boolean) && allHold(opposites);
   return {
     count: held.length, entityType: clause.entityType || ast.entityType || null,
-    kind: clause.kind, object: clause.object, filters: filter.filters,
+    kind: clause.kind, object: clause.object,
+    filters: statable ? opposites : filter.filters,
+    negated: !excluded && !statable,
   };
 }
 
@@ -2634,14 +2735,15 @@ function filtersOnCoverage(node) {
   return Object.values(node).some(filtersOnCoverage);
 }
 
-/** An empty coverage-filtered set over symbols is a grain mismatch, not an
- *  absent answer: `tests` edges are recorded module to module, so no
- *  function-grain coverage exists to filter on. Say that instead of the
+/** An empty coverage-filtered set over symbols has a grain behind it worth
+ *  saying: `tests` edges are recorded module to module, so a symbol counts as
+ *  covered exactly when the module it lives in does. Say that instead of the
  *  generic rephrase nudge, which would send the reader somewhere unrelated. */
 function coverageGrainNote(parsed, entityType) {
   if (!["Function", "Method"].includes(entityType)) return null;
   if (!filtersOnCoverage(parsed)) return null;
-  return "This index records tests edges module to module, so it holds no function-grain coverage to filter on — ask whether the module a function lives in is tested instead.";
+  const noun = nounFor(entityType, 1);
+  return `This index records tests edges module to module, so a ${noun} counts as covered exactly when the module it lives in is tested — ask about that module to see the coverage itself.`;
 }
 
 function renderComposite(parsed, result, graph) {
@@ -2886,24 +2988,25 @@ function renderComposite(parsed, result, graph) {
   }
   // set-producing
   if (!result.matches.length) {
-    // A grain the graph records nothing at cannot be reported as a filter that
-    // rejected anything — that note keeps precedence over the narrowing below.
-    const grainNote = coverageGrainNote(parsed, result.entityType);
     // The qualifier, not the clause, is what emptied this set — so name the
     // entities the clause did hold and point at that branch on its own,
     // instead of a blanket "nothing matches" beside an unrelated recovery.
-    const narrowed = grainNote ? null : result.narrowedFrom;
+    const narrowed = result.narrowedFrom;
     if (narrowed) {
       const kindPlural = nounFor(narrowed.entityType || "Module", 2);
+      const filters = listJoin(narrowed.filters);
+      const clause = narrowed.negated
+        ? { one: `but it is not ${filters}`, many: `but none of them is ${filters}` }
+        : { one: `but it is ${filters}`, many: `but all of them are ${filters}` };
       const held = narrowed.count === 1
-        ? `1 ${nounFor(narrowed.entityType || "Module", 1)} ${verbFor(narrowed.kind)} ${narrowed.object}, but it is not ${listJoin(narrowed.filters)}`
-        : `${narrowed.count} ${kindPlural} ${bareVerbFor(narrowed.kind)} ${narrowed.object}, but none of them is ${listJoin(narrowed.filters)}`;
+        ? `1 ${nounFor(narrowed.entityType || "Module", 1)} ${thirdPersonVerbFor(narrowed.kind)} ${narrowed.object}, ${clause.one}`
+        : `${narrowed.count} ${kindPlural} ${bareVerbFor(narrowed.kind)} ${narrowed.object}, ${clause.many}`;
       return {
         content: `${held}. Try "which ${kindPlural} ${bareVerbFor(narrowed.kind)} ${narrowed.object}" for that branch on its own.`,
         miss: true, ambiguous: false, matches: [],
       };
     }
-    const hint = grainNote || touchesRephraseHint(graph);
+    const hint = coverageGrainNote(parsed, result.entityType) || touchesRephraseHint(graph);
     return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${hint}`, miss: true, ambiguous: false, matches: [] };
   }
   return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
@@ -4071,6 +4174,15 @@ function describeParse(p) {
  *  than being coerced into a guessed base form. */
 function bareVerbFor(kind) {
   return RELATIONS[kind]?.bare || kind;
+}
+
+/** The 3rd-person singular of a relation's bare form, keeping any preposition
+ *  the phrase carries: "inherit from" -> "inherits from". A one-member set
+ *  otherwise read "1 class inherits Base" beside the plural's "classes inherit
+ *  from Base" in the very next sentence. */
+function thirdPersonVerbFor(kind) {
+  const [head, ...rest] = String(bareVerbFor(kind)).split(" ");
+  return [`${head}s`, ...rest].join(" ");
 }
 
 /** The passive participle of a relation ("uses" -> "used", "imports" ->

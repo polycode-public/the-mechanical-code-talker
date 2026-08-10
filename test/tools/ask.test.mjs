@@ -1627,18 +1627,16 @@ test("ask(): 'how many of them are <kind>' counts the narrowed set and names tha
   assert.match(ask(miniWebappGraph, "how many of them are functions", { prev }).content, /^0 functions\./);
 });
 
-// ---- §coverage grain: a coverage filter over SYMBOLS has no function-grain
-// edges to read, because `tests` is recorded module to module. The empty set is a
-// grain mismatch, so the miss says that rather than offering the generic nudge. ----
+// ---- §coverage grain: `tests` is recorded module to module, so a symbol is
+// covered exactly when the module it lives in is. An empty coverage-filtered
+// symbol set says that rather than offering the generic nudge. ----
 
-test("ask(): an empty coverage-filtered function set explains the module-grain limit instead of the generic rephrase nudge", () => {
+test("ask(): a coverage filter that narrowed a real clause names the branch that held, without the double negative", () => {
   const { content, tmct_ask } = ask(miniWebappGraph, "which functions call loadStore and are untested");
   assert.equal(tmct_ask.miss, true);
-  assert.match(content, /^nothing in the index matches that \(functions\)\./);
-  assert.match(content, /records tests edges module to module/);
-  assert.match(content, /no function-grain coverage to filter on/);
-  // the generic touches/history nudge would send the reader somewhere unrelated
-  assert.doesNotMatch(content, /who touched/);
+  assert.match(content, /^1 function calls loadStore, but it is tested\./);
+  assert.doesNotMatch(content, /not untested/);
+  assert.match(content, /Try "which functions call loadStore" for that branch on its own\./);
 });
 
 test("ask(): the grain note is confined to coverage filters over symbols — a module-grain coverage query still answers, and a non-coverage qualifier is untouched", () => {
