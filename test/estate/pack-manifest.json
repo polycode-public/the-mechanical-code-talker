@@ -327,6 +327,8 @@
   "src/adapters/memory/core.mjs",
   "src/adapters/memory/export-jsonl.mjs",
   "src/adapters/memory/inspect.mjs",
+  "src/adapters/memory/row-backend.mjs",
+  "src/adapters/memory/rows.mjs",
   "src/adapters/memory/shacl.mjs",
   "src/adapters/news-store.mjs",
   "src/adapters/p2p/webrtc-transport.mjs",
