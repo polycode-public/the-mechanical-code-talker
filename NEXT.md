@@ -53,8 +53,10 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
   major).
 - Queued: E3 after T4 → T5 after T3+T4 → T6 after T3 → M8 after T12+T3 → T7 after
   T4+E3 → E4 after E2+E3 → T8/T13/T14 → T9/M10/T10/T11.
-- Pushes: 6.0.0 published; batch 3 (miss-round, T0, T2, E2, M3, M6, M7, M9, T4 + 6.0.1,
-  gate 7840/0) is on origin/main. Batch 4 accumulates from E3 onward.
+- Pushes: 6.0.0 and 6.0.1 published; batch 4 (E3/E4/p2p/T3/T5/T6/T7/T12/M8/cap-fix +
+  the #760 pipeline fixes + 6.0.2, gate 7922/0) is on origin/main — its pipeline is the
+  first attempt at a full row-service deploy. The extraction item is verified and gone;
+  its plan doc (Status: BUILT) moves to archive/ in the campaign's closing docs pass.
 
 - [ ] **The memory backend, the AWS row service, and the consumer-hosted turn surface — one
   plan** — `PLAN_MEMORY_BACKEND.md`, six operator revision rounds, now also absorbing the
@@ -84,11 +86,6 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
   itself landed: +0.084 answer-identity-controlled on changed answers, every cell up, report
   `reports/BENCHMARK_CEFR_ENGLISH_5.0.46.md`; judge reliability on `g-b1-neg-11` is that
   report's own open caveat.)
-- [ ] **The extraction-quality findings: `PLAN_EXTRACTION_CONFIDENCE.md`** — CODE COMPLETE:
-  all five phases plus the E1-found p2p replication remainder are merged (the plan's own
-  build markers carry the numbers; NYT fixture at exactly 3 hubs, latency sentence at one
-  marked edge, caveats on every citation surface). Removed from this list when batch 4's
-  full gate verifies it.
 
 ## Discipline
 
