@@ -1238,6 +1238,24 @@ function parseFindPredicateHead(w, lc) {
   return { entityType: noun.entityType, term, relIdx: r };
 }
 
+// An identity filter inside a boolean predicate: "…covered by X AND NAMED Y"
+// keeps the members of the branch's own set whose name is Y. Without it the
+// branch has no verb of its own, so it inherits the previous branch's verb and
+// reads the name as that verb's object — which either fails to parse or answers
+// about the wrong entity. Exact names only; the {node:"named"} leaf it builds
+// runs no fuzzy tier, and a name the index has no entity for refuses.
+// "called" also spells the passive of the `calls` verb, so it reads as a name
+// only where a copula has already declared a predicate adjective ("and IS
+// called X"); "named" carries no such second reading and needs no copula.
+function nameFilterAtom(entityType, bw, blc, afterCopula) {
+  if (!blc.length) return null;
+  if (blc[0] !== "named" && !(blc[0] === "called" && afterCopula)) return null;
+  if (blc[1] === "by") return null;
+  const term = bw.slice(1).join(" ").trim();
+  if (!term) return null;
+  return { node: "named", entityType: entityType || null, term };
+}
+
 /** Build boolean/qualifier atoms for a predicate whose first (seed) atom the
  *  caller already determined externally. Every atom's op defaults to
  *  "intersection" except where an explicit and/or/but-not connective says
@@ -1252,6 +1270,8 @@ function buildPredicateAtoms(entityType, subjPrefix, predLc, predWords, nlp, dep
     const op = b === 0 ? "intersection" : ops[b - 1];
     const qc = dropLeadCopula(bw, blc);
     if (qc.blc.length && qc.blc.every((x) => QUALIFIERS[x])) { atoms.push({ op, kind: "qual", filters: qc.blc }); continue; }
+    const namedAtom = nameFilterAtom(entityType, qc.bw, qc.blc, qc.blc.length !== blc.length);
+    if (namedAtom) { atoms.push({ op, kind: "set", ast: namedAtom }); continue; }
     if (blc[0] === "of" || blc[0] === "in") {
       const owned = membershipAtom(entityType, bw.slice(1), nlp, depth);
       if (owned.node === "miss") return { miss: owned.reason };
@@ -1393,6 +1413,8 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
     const op = b === 0 ? "seed" : ops[b - 1];
     const qc = dropLeadCopula(bw, blc);
     if (qc.blc.length && qc.blc.every((x) => QUALIFIERS[x])) { atoms.push({ op, kind: "qual", filters: qc.blc }); continue; }
+    const namedAtom = nameFilterAtom(entityType, qc.bw, qc.blc, qc.blc.length !== blc.length);
+    if (namedAtom) { atoms.push({ op, kind: "set", ast: namedAtom }); continue; }
     if (blc[0] === "of" || blc[0] === "in") {
       const owned = membershipAtom(entityType, bw.slice(1), nlp, depth + 1);
       if (owned.node === "miss") return owned;
@@ -1955,9 +1977,48 @@ function packageIndividuals(graph) {
     .map(([dir]) => ({ id: `pkg:${dir}`, label: dir, class: "Package" }));
 }
 
+/** Individuals whose own name IS `term`: an exact label or id, or — for a module
+ *  — the same path once normalized. No substring, prose or fuzzy tier: a name
+ *  filter that near-matched would hand back a confident answer about a
+ *  neighbouring entity, which is the shape the miss-over-guess contract forbids.
+ *  `entityType` null means any kind. */
+function individualsNamed(graph, term, entityType) {
+  const t = String(term || "").trim().toLowerCase();
+  if (!t) return [];
+  const asPath = normPath(t);
+  return graph.individuals.filter((ind) => {
+    if (entityType && ind.class !== entityType) return false;
+    const label = String(ind.label || "").toLowerCase();
+    if (label === t || String(ind.id || "").toLowerCase() === t) return true;
+    return ind.class === "Module" && normPath(label) === asPath;
+  });
+}
+
+/** The first `named <X>` filter anywhere in a compiled AST whose name the graph
+ *  holds no entity for, with whatever else does carry that name. A name the
+ *  index cannot place is a refusal, not an empty intersection: the surrounding
+ *  question would otherwise answer "no classes" about a module that does not
+ *  exist. Walks the whole AST, so the filter refuses at any nesting depth.
+ *  Deterministic — individuals are scanned in graph order. */
+function unknownNameFilter(graph, node) {
+  if (!node || typeof node !== "object") return null;
+  if (Array.isArray(node)) {
+    for (const child of node) { const hit = unknownNameFilter(graph, child); if (hit) return hit; }
+    return null;
+  }
+  if (node.node === "named") {
+    if (individualsNamed(graph, node.term, node.entityType).length) return null;
+    return { term: node.term, entityType: node.entityType || null, elsewhere: individualsNamed(graph, node.term, null)[0] || null };
+  }
+  for (const value of Object.values(node)) { const hit = unknownNameFilter(graph, value); if (hit) return hit; }
+  return null;
+}
+
 /** Compile a set-producing AST into an array of individuals. */
 function evalSet(graph, ast, opts) {
   switch (ast.node) {
+    // Identity filter: the entity a boolean branch's "named <X>" picks out.
+    case "named": return individualsNamed(graph, ast.term, ast.entityType);
     case "clause": return traverse(graph, ast.clause, opts).matches || [];
     case "allOfClass":
       if (ast.entityType === "Package") return packageIndividuals(graph);
@@ -2460,6 +2521,8 @@ function commitTouchObjectIds(graph, base, opts) {
  *  simple path — {matches, …} plus compositeKind/compositeMiss flags render() reads. */
 function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "miss") return { compositeMiss: true, reason: ast.reason || null, matches: [] };
+  const unknownName = unknownNameFilter(graph, ast);
+  if (unknownName) return { compositeMiss: true, unknownName, matches: [] };
   if (ast.node === "exists") return evalExists(graph, ast);
   if (ast.node === "qualCheck") return evalQualCheck(graph, ast, opts);
   if (ast.node === "universal") return evalUniversal(graph, ast, opts);
@@ -2585,6 +2648,14 @@ function renderComposite(parsed, result, graph) {
   if (result.compositeMiss) {
     if (result.reason === "no-prev") {
       return { content: `"those"/"them" needs a previous answer to refer to — ask a listing question first, then follow up.`, miss: true, ambiguous: false };
+    }
+    if (result.unknownName) {
+      const { term, entityType, elsewhere } = result.unknownName;
+      const wanted = entityType ? nounFor(entityType, 1) : "entity";
+      const clash = elsewhere
+        ? ` "${term}" names ${articleFor(nounFor(elsewhere.class, 1))} ${nounFor(elsewhere.class, 1)} here, not ${articleFor(wanted)} ${wanted}.`
+        : "";
+      return { content: `no ${wanted} named "${term}" in this index.${clash}`, miss: true, ambiguous: false };
     }
     return { content: `couldn't compile this compositional question${result.reason ? ` (${result.reason})` : ""}. ${compositionalHint()}.`, miss: true, ambiguous: false };
   }

@@ -55,10 +55,8 @@ function windowGraph({ commits, touches, moduleProvenance = {} }) {
   });
 }
 
-// ============================================================================
-// LEVER 1 — B1 COMBO composition (pronoun-binding / discourse reference)
-// ============================================================================
-
+// =====================================================================// LEVER 1 — B1 COMBO composition (pronoun-binding / discourse reference)
+// =====================================================================
 test("pron+neg: 'which modules don't import it' resolves 'it' via focus THEN complements", () => {
   // it = a.mjs; importers of a.mjs are b, c, e → the complement is everyone else.
   assert.deepEqual(labels(runAsk("which modules don't import it", { contextId: idOf("app/lib/a.mjs") })),
@@ -104,10 +102,8 @@ test("disc+count: bare 'count them' / 'count those' / 'list them' are anaphora o
   assert.equal(runAsk("count them").tmct_ask.miss, true);
 });
 
-// ============================================================================
-// LEVER 3 — grain-aware counting (commits × symbol/module grain)
-// ============================================================================
-
+// =====================================================================// LEVER 3 — grain-aware counting (commits × symbol/module grain)
+// =====================================================================
 test("count+temp grain: 'how many commits touched <symbol>' counts at SYMBOL grain", () => {
   // Widget.render carries a touchesSymbol edge from abc1234 → 1, not the false 0 the
   // module-coarse scan used to return.
@@ -158,10 +154,8 @@ test("a provenance ref still counts when the index records no touch set for that
   assert.match(ask(truncated, "how many commits touched app/lib/x.mjs", { nlp }).content, /^1 commit\.$/);
 });
 
-// ============================================================================
-// The date-or-commit window, and its edges
-// ============================================================================
-
+// =====================================================================// The date-or-commit window, and its edges
+// =====================================================================
 test("a kind-headed window reads what the commits inside it touched", () => {
   assert.deepEqual(labels(runAsk("which modules changed on 2026-06-28")), ["app/lib/a.mjs"]);
   assert.match(runAsk("how many modules changed on 2026-06-28").content, /^1 module\.$/);
@@ -221,10 +215,8 @@ test("grain FIX: null-entityType 'what calls <fn>' reads the callsSymbol grain (
   assert.match(r.content, /Widget\.render/);
 });
 
-// ============================================================================
-// 0.8.2 WS1 — forward call union (symbol-grain subject scans coarse+sibling)
-// ============================================================================
-
+// =====================================================================// 0.8.2 WS1 — forward call union (symbol-grain subject scans coarse+sibling)
+// =====================================================================
 test("forward union: 'what does Widget.render call' reads calls+callsSymbol (fn->fn), names fnAlpha", () => {
   // BEFORE: kind "calls" scanned only the module-coarse edges, whose subjects are
   // modules — a Method subject answered "no calls edges" while the reverse worked.
@@ -248,10 +240,8 @@ test("forward union: a fine subject with NO sibling edges is still the honest em
   assert.equal(r.tmct_ask.traversal, "calls+callsSymbol edges where subject = fnAlpha");
 });
 
-// ============================================================================
-// 0.8.2 WS1 — fine-grain family fallback (Function<->Method on an empty exact class)
-// ============================================================================
-
+// =====================================================================// 0.8.2 WS1 — fine-grain family fallback (Function<->Method on an empty exact class)
+// =====================================================================
 test("family fallback: 'which functions call fnAlpha' widens to the Method caller Widget.render", () => {
   // The only recorded caller is class Method; the exact Function filter used to
   // return the false empty (the standing gq-functions-call-fnalpha baselineFail).
@@ -281,10 +271,8 @@ test("family fallback: a truly-uncalled symbol keeps the honest empty (no siblin
     "no widening note when there was nothing to widen to");
 });
 
-// ============================================================================
-// 0.8.2 WS1 — meta-lookup fallback to real entities
-// ============================================================================
-
+// =====================================================================// 0.8.2 WS1 — meta-lookup fallback to real entities
+// =====================================================================
 test("meta fallback: 'what is a Widget' answers with the code-graph Class one-liner, not the vocabulary miss", () => {
   const r = runAsk("what is a Widget");
   assert.equal(r.tmct_ask.miss, false);
@@ -304,10 +292,8 @@ test("meta fallback: a both-miss term keeps the current honest vocabulary miss",
   assert.match(r.content, /"doohickey" isn't a term in this graph's own vocabulary/);
 });
 
-// ============================================================================
-// VOICE NIT — the reverse zero-hit reads naturally
-// ============================================================================
-
+// =====================================================================// VOICE NIT — the reverse zero-hit reads naturally
+// =====================================================================
 test("reverse zero-hit: honest empty with the traditional phrasing; the receipt rides the envelope", () => {
   // (A cycle-5 voice-nit rephrasing was reverted — the frozen v1 cases.jsonl pins the
   // "whose module directly <verb>s X" wording, and the case set is sacred mid-arc.
@@ -319,11 +305,9 @@ test("reverse zero-hit: honest empty with the traditional phrasing; the receipt 
   assert.equal(r.tmct_ask.traversal, "tests edges where object = app/lib/f.mjs", "receipt kept on the envelope for the why-path");
 });
 
-// ============================================================================
-// RELATIVE-EMBEDDED CHAIN RESOLUTION — a relative clause resolves to real
+// =====================================================================// RELATIVE-EMBEDDED CHAIN RESOLUTION — a relative clause resolves to real
 // entities first, then the outer question runs over that result
-// ============================================================================
-
+// =====================================================================
 test("relative chain: the defines hop reads a symbol's recorded site when the index carries no defines edge", () => {
   // Button and Widget.render are sited in the fixture but carry no defines edge;
   // the where-lane already answers off that site, so the defines hop must agree.
@@ -376,12 +360,10 @@ test("relative chain: a clause nothing satisfies refuses instead of citing the n
   assert.doesNotMatch(r.content, /is defined in/);
 });
 
-// ============================================================================
-// CONVERSE VERB READINGS — a phrase that states a relation from its object's
+// =====================================================================// CONVERSE VERB READINGS — a phrase that states a relation from its object's
 // side ("belongs to", "is part of", "is a superclass of") flips at parse time,
 // so the traversal runs the way the sentence means rather than its mirror.
-// ============================================================================
-
+// =====================================================================
 test("converse verb: a chain hop through 'belongs to' reads the containing class, not the mirror", () => {
   assert.deepEqual(labels(runAsk("which tests cover the module that defines the class that Widget.render belongs to")),
     ["app/unit-tests/b.test.mjs"]);
@@ -435,12 +417,10 @@ test("a relation with no converse defined stays an honest miss rather than a gue
   assert.doesNotMatch(flat.content, /Widget/);
 });
 
-// ============================================================================
-// THE CONDITIONAL LANE — a conditional over facts the graph holds compiles to a
+// =====================================================================// THE CONDITIONAL LANE — a conditional over facts the graph holds compiles to a
 // real traversal; a hypothetical nothing in the fact set decides refuses and
 // names the readings it does have.
-// ============================================================================
-
+// =====================================================================
 test("counterfactual: both word orders of the deletion question read the same closure", () => {
   const fronted = runAsk("if app/lib/a.mjs were deleted, what would break");
   const postposed = runAsk("what would break if app/lib/a.mjs were removed");
@@ -539,4 +519,46 @@ test("a clause nothing satisfied keeps the plain empty message — there is no h
   assert.equal(r.tmct_ask.miss, true);
   assert.match(r.content, /^nothing in the index matches that \(modules\)\./);
   assert.doesNotMatch(r.content, /but none of them|but it is not/);
+});
+
+// =====================================================================
+// A `named <X>` QUALIFIER INSIDE A BOOLEAN BRANCH — the branch keeps the member
+// of its own set whose name is X, instead of inheriting the previous branch's
+// verb and reading the name as that verb's object
+// =====================================================================
+test("named filter: a boolean branch narrows the relative clause's set to the module it names", () => {
+  // b.test.mjs covers b.mjs AND d/handler.mjs; the name picks one of the two.
+  assert.deepEqual(labels(runAsk("which classes are defined in the module that is covered by app/unit-tests/b.test.mjs and named app/lib/b.mjs")),
+    ["Widget"]);
+  const other = runAsk("which classes are defined in the module that is covered by app/unit-tests/b.test.mjs and named app/functions/d/handler.mjs");
+  assert.equal(other.tmct_ask.miss, true);
+  assert.doesNotMatch(other.content, /Widget/);
+});
+
+test("named filter: the name is matched exactly, so an unknown name refuses instead of emptying the set", () => {
+  const r = runAsk("which classes are defined in the module that is covered by app/unit-tests/b.test.mjs and named app/lib/zebra.mjs");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^no module named "app\/lib\/zebra\.mjs" in this index\./);
+  assert.doesNotMatch(r.content, /Widget/);
+});
+
+test("named filter: a name the index holds under another kind says which kind it found", () => {
+  // `register` is a global variable in the fixture, so no module answers to it.
+  const r = runAsk("which classes are defined in the module that is covered by app/unit-tests/b.test.mjs and named register");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /"register" names a variable here, not a module\./);
+  // Same for a class name in a slot that asks for a module.
+  assert.match(runAsk("which modules import app/lib/a.mjs and named Widget").content,
+    /"Widget" names a class here, not a module\./);
+});
+
+test("named filter: it composes with the other boolean ops over a plain relation branch", () => {
+  assert.deepEqual(labels(runAsk("which modules import app/lib/a.mjs and named app/lib/b.mjs")), ["app/lib/b.mjs"]);
+  assert.deepEqual(labels(runAsk("which modules import app/lib/a.mjs but not named app/lib/b.mjs")),
+    ["app/lib/c.mjs", "app/lib/e.mjs"]);
+});
+
+test("named filter: 'called' reads as a name only after a copula, so the passive `calls` verb is untouched", () => {
+  assert.deepEqual(labels(runAsk("which modules import app/lib/a.mjs and are called app/lib/b.mjs")), ["app/lib/b.mjs"]);
+  assert.deepEqual(labels(runAsk("which functions are called by Widget.render")), ["fnAlpha"]);
 });

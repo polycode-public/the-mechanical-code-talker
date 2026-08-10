@@ -31,9 +31,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 - [ ] **CEFR levers from the 5.0.25 dual-draw baseline** — the run is delivered
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.25.md`); its decision log ranks these levers for the
-  next tuning cycle, each its own measured round. The conditional-lane round is landed and
-  measured (`reports/BENCHMARK_CEFR_ENGLISH_5.0.39.md`), and its own decision log re-ranks what
-  is left:
+  next tuning cycle, each its own measured round. The latest round, the `named <X>` qualifier,
+  is landed and measured (`reports/BENCHMARK_CEFR_ENGLISH_5.0.40.md`); its decision log re-ranks
+  what is left:
   - [x] relative-embedded chain resolution
   - [x] converse verb readings — the placement phrasings ("live in", "sit inside") stay forward
     by design, since a taught locative fact stores the located thing as its subject
@@ -41,8 +41,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     `reports/BENCHMARK_CEFR_ENGLISH_5.0.38.md`; the pool's tier-1 failures drop from nine to two
   - [x] a conditional-question lane — measured in `reports/BENCHMARK_CEFR_ENGLISH_5.0.39.md`; the
     cell goes 15/25 to 25/25 green and a hypothetical the fact set cannot decide refuses
-  - [ ] a `named <X>` qualifier inside a boolean branch — `g-c2-rel-17` and `g-c2-rel-25`, the
-    last two frontier rows in C2 relative-embedded
+  - [x] a `named <X>` qualifier inside a boolean branch — measured in
+    `reports/BENCHMARK_CEFR_ENGLISH_5.0.40.md`; both frontier rows compile and C2
+    relative-embedded is 25/25 green
   - [ ] a negation-scope filter
   - [ ] `g-c1-neg-rel-19` — "modules importing the module that defines fnAlpha but not tested"
     answers b, c and e; the tested importer b.mjs should be excluded
@@ -61,7 +62,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   scored four unchanged answers differently across its two arms, worth ±0.9 on a single case's
   mean, because each arm inherited a different partition of the cache
   (`reports/BENCHMARK_CEFR_ENGLISH_5.0.37.md`, instrument note). The 5.0.39 round read the same
-  25 answers as 1.288 and 1.282 across two passes for the same reason.
+  25 answers as 1.288 and 1.282 across two passes for the same reason, and the 5.0.40 round put
+  the leftover noise at the same size as a small lever's whole signal — it now gates how small a
+  lever the rig can measure.
 - [ ] **An empty composition names its emptied branch only for a seed clause plus one qualifier** —
   the shape a conditional compiles to. An intersection of two clauses, a difference, and a
   multi-step fold still answer "nothing in the index matches that". Carrying the intermediate
