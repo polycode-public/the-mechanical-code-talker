@@ -2,7 +2,7 @@
 // (public/index.html) and the six about pages beside it, all git-tracked and
 // all sharing public/site.css.
 //
-// The home page reads as a hero, a grid of claim cards that each link to their
+// The home page reads as a hero, a grid of demo cards that each link to their
 // demo page and carry an info link and a share button, a capability table
 // mapping demos to what they show, one feature section per page with a framed
 // screenshot plate, the run-yourself and library docs, and a Polycode-family
@@ -23,28 +23,32 @@ const publicFile = (name) => fileURLToPath(new URL(`../public/${name}`, import.m
 
 const PAGE_ORDER = DEMO_PAGES;
 
-// The grid carries one cell per demo page plus one deep-link cell into
-// mudiii's river scenario, sitting right after mudiii's own cell since it is
-// the same engine and page, not a demo page of its own.
+// The grid carries one cell per demo page plus two deep-link cells: chat's
+// own AWS-backend mode, sitting right after chat's own cell, and mudiii's
+// river scenario, sitting right after mudiii's own cell. Neither is a demo
+// page of its own — each deep-links into a page already in PAGE_ORDER.
+const chatAt = PAGE_ORDER.indexOf("chat");
 const mudiiiAt = PAGE_ORDER.indexOf("mudiii");
-const gridValues = (map, riverValue) => [
-  ...PAGE_ORDER.slice(0, mudiiiAt + 1).map(map),
+const gridValues = (map, chatAwsValue, riverValue) => [
+  ...PAGE_ORDER.slice(0, chatAt + 1).map(map),
+  chatAwsValue,
+  ...PAGE_ORDER.slice(chatAt + 1, mudiiiAt + 1).map(map),
   riverValue,
   ...PAGE_ORDER.slice(mudiiiAt + 1).map(map),
 ];
 
-test("the claim grid lists one cell per demo page plus the river deep-link cell, in that order", async () => {
+test("the demo grid lists one cell per demo page plus the chat-AWS and river deep-link cells, in that order", async () => {
   const html = await readFile(INDEX, "utf8");
-  const grid = html.slice(html.indexOf('<div class="claim-grid">'), html.indexOf('<section class="capabilities"'));
+  const grid = html.slice(html.indexOf('<div class="demo-grid">'), html.indexOf('<section class="capabilities"'));
   const hrefs = [...grid.matchAll(/<a class="claim" href="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(hrefs, gridValues((p) => `./${p}.html`, "./mudiii.html?scenario=river"));
+  assert.deepEqual(hrefs, gridValues((p) => `./${p}.html`, "./chat.html?backend=aws", "./mudiii.html?scenario=river"));
 });
 
-test("every claim block names the page it opens in a filename chip that matches its href", async () => {
+test("every demo cell names the page it opens in a filename chip that matches its href", async () => {
   const html = await readFile(INDEX, "utf8");
-  const grid = html.slice(html.indexOf('<div class="claim-grid">'), html.indexOf('<section class="capabilities"'));
-  const chips = [...grid.matchAll(/<span class="claim-page">([^<]+)/g)].map((m) => m[1].trim());
-  assert.deepEqual(chips, gridValues((p) => `${p}.html`, "mudiii.html"));
+  const grid = html.slice(html.indexOf('<div class="demo-grid">'), html.indexOf('<section class="capabilities"'));
+  const chips = [...grid.matchAll(/<span class="demo-page">([^<]+)/g)].map((m) => m[1].trim());
+  assert.deepEqual(chips, gridValues((p) => `${p}.html`, "chat.html", "mudiii.html"));
 });
 
 test("each demo page gets a feature section whose plate shows that page's screenshot and links to it", async () => {
@@ -66,11 +70,11 @@ test("each demo page gets a feature section whose plate shows that page's screen
   }
 });
 
-test("the feature sections repeat the claims in claim-grid order, plates numbered I to VII", async () => {
+test("the feature sections repeat the demo grid's order, plates numbered I to VII", async () => {
   const html = await readFile(INDEX, "utf8");
   const positions = PAGE_ORDER.map((page) => html.indexOf(`id="feature-${page}"`));
   assert.ok(positions.every((i) => i !== -1));
-  assert.deepEqual(positions, [...positions].sort((a, b) => a - b), "feature order matches claim order");
+  assert.deepEqual(positions, [...positions].sort((a, b) => a - b), "feature order matches the demo grid's order");
   const numerals = [...html.matchAll(/<span class="plate-no">Plate ([IVX]+)<\/span>/g)].map((m) => m[1]);
   assert.deepEqual(numerals, ["I", "II", "III", "IV", "V", "VI", "VII"]);
 });
@@ -113,15 +117,52 @@ test("the news example sits between the news and sprites feature plates and show
   assert.match(section, /1\. wombat \(2\) — unknown word/, "the example shows the engine's real ranked ungrounded-term list");
 });
 
+test("the chat-AWS cell sits right after chat's and deep-links onto chat.html's own AWS backend mode", async () => {
+  const html = await readFile(INDEX, "utf8");
+  const gridStart = html.indexOf('<div class="demo-grid">');
+  const gridEnd = html.indexOf('<section class="capabilities"');
+  const chatAt = html.indexOf('data-share-demo="chat"');
+  const chatAwsAt = html.indexOf('data-share-demo="chat-aws"');
+  assert.ok(gridStart !== -1 && chatAt !== -1 && chatAwsAt !== -1, "both cells are on the page");
+  assert.ok(gridStart < chatAt && chatAt < chatAwsAt && chatAwsAt < gridEnd, "the chat-AWS cell sits right after chat's, inside the grid");
+  const cellStart = html.lastIndexOf('<div class="demo-cell">', chatAwsAt);
+  const cell = html.slice(cellStart, html.indexOf("</div>", chatAwsAt));
+  assert.match(
+    cell,
+    /<a class="claim" href="\.\/chat\.html\?backend=aws" target="_blank" rel="noopener noreferrer">/,
+    "the cell opens chat.html on its AWS backend mode, in a new tab",
+  );
+  assert.match(cell, /demo-page">chat\.html <svg/, "the chip shows the page name; the deep link stays on the href");
+  // The backend parameter is only worth linking if the page reads it.
+  const viz = await readFile(fileURLToPath(new URL("../src/services/chat-page-viz.mjs", import.meta.url)), "utf8");
+  assert.match(viz, /resolveBackendMode\(location\.search\)/);
+});
+
+test("the chat-AWS cell carries its own info link and share button, sharing chat's about page", async () => {
+  const html = await readFile(INDEX, "utf8");
+  const chatAwsAt = html.indexOf('data-share-demo="chat-aws"');
+  const cellStart = html.lastIndexOf('<div class="demo-cell">', chatAwsAt);
+  const cell = html.slice(cellStart, html.indexOf("</div>", chatAwsAt));
+  assert.match(cell, /<a class="card-btn" href="\.\/chat-about\.html">/, "About points at the shared chat about page, not a new one");
+  assert.match(cell, /<button class="card-btn share-btn" type="button" data-share-demo="chat-aws">/, "the Share button names its own share-target key");
+  const labels = [...cell.matchAll(/<span class="sr-only">(About|Share) /g)].length;
+  assert.equal(labels, 2, "both the info link and the share button carry an accessible name");
+});
+
+test("no feature section exists for the chat-AWS cell: it is a deep link into chat's own AWS mode, not a demo page with its own plate", async () => {
+  const html = await readFile(INDEX, "utf8");
+  assert.doesNotMatch(html, /id="feature-chat-aws"/, "the chat-AWS cell demands no feature section or plate of its own");
+});
+
 test("the river-crossing cell sits right after mudiii's and deep-links straight onto the scenario mudiii.html reads from the URL", async () => {
   const html = await readFile(INDEX, "utf8");
-  const gridStart = html.indexOf('<div class="claim-grid">');
+  const gridStart = html.indexOf('<div class="demo-grid">');
   const gridEnd = html.indexOf('<section class="capabilities"');
   const mudiiiAt = html.indexOf('data-share-demo="mudiii"');
   const riverAt = html.indexOf('data-share-demo="river"');
   assert.ok(gridStart !== -1 && mudiiiAt !== -1 && riverAt !== -1, "both cells are on the page");
   assert.ok(gridStart < mudiiiAt && mudiiiAt < riverAt && riverAt < gridEnd, "the river cell sits right after mudiii's, inside the grid");
-  const cellStart = html.lastIndexOf('<div class="claim-cell">', riverAt);
+  const cellStart = html.lastIndexOf('<div class="demo-cell">', riverAt);
   const cell = html.slice(cellStart, html.indexOf("</div>", riverAt));
   assert.match(
     cell,
@@ -129,7 +170,7 @@ test("the river-crossing cell sits right after mudiii's and deep-links straight 
     "the cell opens mudiii on the river scenario, in a new tab",
   );
   assert.match(cell, /<h3>The fox, the goat and the cabbage<\/h3>/, "the cell names the puzzle rather than the page");
-  assert.match(cell, /claim-page">mudiii\.html <svg/, "the chip shows the page name; the deep link stays on the href");
+  assert.match(cell, /demo-page">mudiii\.html <svg/, "the chip shows the page name; the deep link stays on the href");
   // The scenario parameter is only worth linking if the page reads it.
   const viz = await readFile(fileURLToPath(new URL("../src/services/mudiii-viz.mjs", import.meta.url)), "utf8");
   assert.match(viz, /scenarioIndexFromQuery\(window\.location\.search, DATA\.scenarios\)/);
@@ -138,7 +179,7 @@ test("the river-crossing cell sits right after mudiii's and deep-links straight 
 test("the river-crossing cell carries its own info link and share button, sharing mudiii's about page", async () => {
   const html = await readFile(INDEX, "utf8");
   const riverAt = html.indexOf('data-share-demo="river"');
-  const cellStart = html.lastIndexOf('<div class="claim-cell">', riverAt);
+  const cellStart = html.lastIndexOf('<div class="demo-cell">', riverAt);
   const cell = html.slice(cellStart, html.indexOf("</div>", riverAt));
   assert.match(cell, /<a class="card-btn" href="\.\/mudiii-about\.html">/, "About points at the shared mudiii about page, not a new one");
   assert.match(cell, /<button class="card-btn share-btn" type="button" data-share-demo="river">/, "the Share button names its own share-target key");
@@ -185,7 +226,7 @@ test("the showcase names the Polycode family projects and links to them", async 
 test("the page reads hero, claims, capabilities, features, run-yourself, library, showcase, footer, in that order", async () => {
   const html = await readFile(INDEX, "utf8");
   const hero = html.indexOf('<header class="hero">');
-  const claims = html.indexOf('<div class="claim-grid">');
+  const claims = html.indexOf('<div class="demo-grid">');
   const capabilities = html.indexOf('<section class="capabilities"');
   const firstFeature = html.indexOf('<section class="feature"');
   const demoBox = html.indexOf('<div id="tmct-demo">');
@@ -239,18 +280,18 @@ test("the shared stylesheet carries the neutral palette and rounded-sans type, n
   assert.doesNotMatch(css, /--border:/, "the old --border token name is gone");
 });
 
-test("every claim cell carries an info link to its about page and a share button naming its demo", async () => {
+test("every demo cell carries an info link to its about page and a share button naming its demo", async () => {
   const html = await readFile(INDEX, "utf8");
-  const gridStart = html.indexOf('<div class="claim-grid">');
+  const gridStart = html.indexOf('<div class="demo-grid">');
   const grid = html.slice(gridStart, html.indexOf("</section>", gridStart));
   const infoHrefs = [...grid.matchAll(/<a class="card-btn" href="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(infoHrefs, gridValues((p) => `./${aboutPageOf(p)}`, "./mudiii-about.html"));
+  assert.deepEqual(infoHrefs, gridValues((p) => `./${aboutPageOf(p)}`, "./chat-about.html", "./mudiii-about.html"));
   const shared = [...grid.matchAll(/data-share-demo="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(shared, gridValues((p) => p, "river"), "one share button per cell, in the grid order");
+  assert.deepEqual(shared, gridValues((p) => p, "chat-aws", "river"), "one share button per cell, in the grid order");
   // Both controls are icon-only, so each needs the sr-only label the new-tab
   // hint already uses; an unlabelled icon button reads as nothing.
   const labels = [...grid.matchAll(/<span class="sr-only">(About|Share) /g)].length;
-  assert.equal(labels, (PAGE_ORDER.length + 1) * 2, "each info link and each share button carries an accessible name");
+  assert.equal(labels, (PAGE_ORDER.length + 2) * 2, "each info link and each share button carries an accessible name");
 });
 
 test("the capability table lists every demo page once, and every column has at least one demo", async () => {
@@ -379,12 +420,17 @@ test("every share post targets a real page, and every deep link a real anchor", 
 test("a share post's query parameter is only used where the target page reads one", async () => {
   const share = await readFile(publicFile("share.mjs"), "utf8");
   const parameterised = [...share.matchAll(/to: "([^"]*\?[^"]*)"/g)].map((m) => m[1]);
-  // Two pages read a query parameter off a share link: index.html primes the
-  // live demo box, and mudiii.html picks its opening scenario.
+  // Three pages read a query parameter off a share link: index.html primes
+  // the live demo box, chat.html picks its backend mode, and mudiii.html
+  // picks its opening scenario.
   const readers = {
     "index.html": {
       content: () => readFile(publicFile("demo-ui.mjs"), "utf8"),
       pattern: (key) => new RegExp(`params\\.(get|has)\\("${key}"\\)`),
+    },
+    "chat.html": {
+      content: () => readFile(fileURLToPath(new URL("../src/services/chat-page-viz.mjs", import.meta.url)), "utf8"),
+      pattern: () => /resolveBackendMode\(location\.search\)/,
     },
     "mudiii.html": {
       content: () => readFile(fileURLToPath(new URL("../src/services/mudiii-viz.mjs", import.meta.url)), "utf8"),
@@ -394,17 +440,17 @@ test("a share post's query parameter is only used where the target page reads on
   for (const target of parameterised) {
     const [name, query] = target.split("?");
     const reader = readers[name];
-    assert.ok(reader, `${target} carries a parameter, and only index.html and mudiii.html read one`);
+    assert.ok(reader, `${target} carries a parameter, and only index.html, chat.html and mudiii.html read one`);
     const key = new URLSearchParams(query).keys().next().value;
     const content = await reader.content();
     assert.match(content, reader.pattern(key), `${name} actually reads ?${key}`);
   }
 });
 
-// The river-crossing card is not a demo page (no about page or screenshot of
-// its own), but it carries a share button like the demo pages do, so its
-// share.mjs block is held to the same shape.
-const SHARE_KEYS = [...PAGE_ORDER, "river"];
+// The chat-AWS and river-crossing cards are not demo pages (no about page or
+// screenshot of their own), but each carries a share button like the demo
+// pages do, so their share.mjs blocks are held to the same shape.
+const SHARE_KEYS = [...PAGE_ORDER, "chat-aws", "river"];
 
 test("every share button target carries at least five share posts, each on its own angle and its own target", async () => {
   const share = await readFile(publicFile("share.mjs"), "utf8");

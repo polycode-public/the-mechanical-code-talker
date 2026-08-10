@@ -1,5 +1,5 @@
 // The deployed home page and its six about pages, in a real browser: they
-// load clean, the claim cards link to the demo pages and offer an info link
+// load clean, the demo cards link to the demo pages and offer an info link
 // and a share sheet, the capability table scrolls in its own box, the feature
 // sections show each page's screenshot as a framed plate rather than a live
 // embed, the showcase links to the sibling Polycode projects, and all of it
@@ -24,12 +24,16 @@ import { DEMO_PAGES, aboutPageOf } from "../scripts/site-pages.mjs";
 
 const PAGE_ORDER = DEMO_PAGES;
 
-// The grid carries one cell per demo page plus one deep-link cell into
-// mudiii's river scenario, sitting right after mudiii's own cell since it is
-// the same engine and page, not a demo page of its own.
+// The grid carries one cell per demo page plus two deep-link cells: chat's
+// own AWS-backend mode, sitting right after chat's own cell, and mudiii's
+// river scenario, sitting right after mudiii's own cell. Neither is a demo
+// page of its own — each deep-links into a page already in PAGE_ORDER.
+const chatAt = PAGE_ORDER.indexOf("chat");
 const mudiiiAt = PAGE_ORDER.indexOf("mudiii");
 const gridHrefs = [
-  ...PAGE_ORDER.slice(0, mudiiiAt + 1).map((p) => `./${p}.html`),
+  ...PAGE_ORDER.slice(0, chatAt + 1).map((p) => `./${p}.html`),
+  "./chat.html?backend=aws",
+  ...PAGE_ORDER.slice(chatAt + 1, mudiiiAt + 1).map((p) => `./${p}.html`),
   "./mudiii.html?scenario=river",
   ...PAGE_ORDER.slice(mudiiiAt + 1).map((p) => `./${p}.html`),
 ];
@@ -123,12 +127,12 @@ test("the page embeds no live widget: no iframe, no #tmct-chat, no chat engine s
   }
 });
 
-test("the claim grid shows one claim block per demo page plus the river deep-link block, each a link, in that order", async () => {
+test("the demo grid shows one card per demo page plus the chat-AWS and river deep-link cards, each a link, in that order", async () => {
   const { context, page } = await openHomePage();
   try {
-    await page.locator(".claim-grid").waitFor({ state: "visible" });
+    await page.locator(".demo-grid").waitFor({ state: "visible" });
     const claims = page.locator("a.claim");
-    assert.equal(await claims.count(), PAGE_ORDER.length + 1, "one claim block per demo page, plus the river cell");
+    assert.equal(await claims.count(), PAGE_ORDER.length + 2, "one card per demo page, plus the chat-AWS and river cells");
     const hrefs = await claims.evaluateAll((els) => els.map((el) => el.getAttribute("href")));
     assert.deepEqual(hrefs, gridHrefs);
   } finally {
@@ -240,10 +244,53 @@ test("the showcase links to the Polycode family projects", async () => {
   }
 });
 
+test("the chat-AWS cell opens chat on its AWS backend mode in a new tab, right after chat's own cell", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    const cell = page.locator('.demo-cell:has(a.claim[href="./chat.html?backend=aws"])');
+    const card = cell.locator('a.claim[href="./chat.html?backend=aws"]');
+    await card.waitFor({ state: "visible" });
+    assert.equal(await card.getAttribute("target"), "_blank", "it leaves the home page standing behind it");
+    assert.equal(await card.getAttribute("rel"), "noopener noreferrer");
+    const text = await cell.innerText();
+    assert.match(text, /server session/i, "the cell names the server-backed mode rather than repeating chat's own copy");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the chat-AWS cell offers an info link to chat's about page and its own share sheet, with 5+ distinct posts", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    const cell = page.locator('.demo-cell:has(a.claim[href="./chat.html?backend=aws"])');
+    const info = cell.locator("a.card-btn");
+    assert.equal(await info.getAttribute("href"), "./chat-about.html", "About shares chat's own about page rather than a new one");
+    assert.match(await info.innerText(), /^About /, "the info link has a readable name, not a bare icon");
+
+    const share = cell.locator("button.share-btn");
+    assert.equal(await share.getAttribute("data-share-demo"), "chat-aws", "the share button names its own share-target key");
+    await share.click();
+    const sheet = page.locator("dialog.share-sheet");
+    await sheet.waitFor({ state: "visible" });
+    const posts = sheet.locator(".share-post");
+    const count = await posts.count();
+    assert.ok(count >= 5, `expected at least five chat-AWS posts, found ${count}`);
+    const texts = await posts.locator(".share-text").allInnerTexts();
+    assert.equal(new Set(texts).size, texts.length, "each chat-AWS post says something different");
+    await sheet.locator(".share-close").click();
+    await sheet.waitFor({ state: "hidden" });
+
+    await info.click();
+    await page.waitForURL(/chat-about\.html$/);
+  } finally {
+    await context.close();
+  }
+});
+
 test("the river cell opens mudiii on that scenario in a new tab, right where mudiii's own cell sits", async () => {
   const { context, page } = await openHomePage();
   try {
-    const cell = page.locator('.claim-cell:has(a.claim[href="./mudiii.html?scenario=river"])');
+    const cell = page.locator('.demo-cell:has(a.claim[href="./mudiii.html?scenario=river"])');
     const card = cell.locator('a.claim[href="./mudiii.html?scenario=river"]');
     await card.waitFor({ state: "visible" });
     assert.equal(await card.getAttribute("target"), "_blank", "it leaves the home page standing behind it");
@@ -258,7 +305,7 @@ test("the river cell opens mudiii on that scenario in a new tab, right where mud
 test("the river cell offers an info link to mudiii's about page and its own share sheet, with 5+ distinct posts", async () => {
   const { context, page } = await openHomePage();
   try {
-    const cell = page.locator('.claim-cell:has(a.claim[href="./mudiii.html?scenario=river"])');
+    const cell = page.locator('.demo-cell:has(a.claim[href="./mudiii.html?scenario=river"])');
     const info = cell.locator("a.card-btn");
     assert.equal(await info.getAttribute("href"), "./mudiii-about.html", "About shares mudiii's own about page rather than a new one");
     assert.match(await info.innerText(), /^About /, "the info link has a readable name, not a bare icon");
@@ -404,7 +451,7 @@ test("the page fits a phone viewport without sideways scrolling", async () => {
       overflow.scrollWidth <= overflow.clientWidth + 1,
       `the page is ${overflow.scrollWidth}px wide in a ${overflow.clientWidth}px viewport`,
     );
-    await assert.doesNotReject(page.locator(".claim-grid").waitFor({ state: "visible" }));
+    await assert.doesNotReject(page.locator(".demo-grid").waitFor({ state: "visible" }));
   } finally {
     await context.close();
   }
@@ -413,16 +460,18 @@ test("the page fits a phone viewport without sideways scrolling", async () => {
 // ---- the about pages, and the two controls that reach them ------------------------
 
 const gridCells = [
-  ...PAGE_ORDER.slice(0, mudiiiAt + 1).map((name) => ({ name, about: `./${aboutPageOf(name)}`, share: name })),
+  ...PAGE_ORDER.slice(0, chatAt + 1).map((name) => ({ name, about: `./${aboutPageOf(name)}`, share: name })),
+  { name: "chat-aws", about: "./chat-about.html", share: "chat-aws" },
+  ...PAGE_ORDER.slice(chatAt + 1, mudiiiAt + 1).map((name) => ({ name, about: `./${aboutPageOf(name)}`, share: name })),
   { name: "river", about: "./mudiii-about.html", share: "river" },
   ...PAGE_ORDER.slice(mudiiiAt + 1).map((name) => ({ name, about: `./${aboutPageOf(name)}`, share: name })),
 ];
 
-test("every claim card offers an info link to its about page and a share button, both with an accessible name", async () => {
+test("every demo card offers an info link to its about page and a share button, both with an accessible name", async () => {
   const { context, page } = await openHomePage();
   try {
-    const cells = page.locator(".claim-cell");
-    assert.equal(await cells.count(), gridCells.length, "one cell per demo, plus the river cell");
+    const cells = page.locator(".demo-cell");
+    assert.equal(await cells.count(), gridCells.length, "one cell per demo, plus the chat-AWS and river cells");
     for (const [i, { name, about, share: shareKey }] of gridCells.entries()) {
       const cell = cells.nth(i);
       const info = cell.locator("a.card-btn");
@@ -440,7 +489,7 @@ test("every claim card offers an info link to its about page and a share button,
 test("the share sheet opens with five or more posts, each with its own text and its own link", async () => {
   const { context, page } = await openHomePage();
   try {
-    await page.locator(".claim-cell").first().locator("button.share-btn").click();
+    await page.locator(".demo-cell").first().locator("button.share-btn").click();
     const sheet = page.locator("dialog.share-sheet");
     await sheet.waitFor({ state: "visible" });
     const posts = sheet.locator(".share-post");
