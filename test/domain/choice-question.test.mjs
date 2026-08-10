@@ -57,6 +57,49 @@ test("a labelled enumerated question separates its stem from its lettered option
   assert.deepEqual(optionTexts(parsed), ["doctor", "bookstore", "market", "train station", "mortuary"]);
 });
 
+// ---- negative: a label marker has to stand alone ----
+
+test("dotted module paths in A/B order are not read as a lettered option list", () => {
+  const text = "which modules import app/lib/a.mjs or app/lib/b.mjs";
+  assert.equal(splitChoiceQuestion(text), null);
+  assert.equal(isChoiceQuestion(text), false);
+});
+
+test("a path pair inside a why-question is left for the presupposition lane", () => {
+  const text = "why does app/lib/a.mjs still import app/lib/b.mjs";
+  assert.equal(splitChoiceQuestion(text), null);
+  assert.equal(isChoiceQuestion(text), false);
+});
+
+test("a file extension after a single letter is not a label marker", () => {
+  const text = "which modules import a.mjs and b.mjs";
+  assert.equal(splitChoiceQuestion(text), null);
+});
+
+test("a letter run inside a word never opens an option list", () => {
+  const text = "which classes extend Base.Widget or Base.Button";
+  assert.equal(splitChoiceQuestion(text), null);
+});
+
+test("a marker at the very end of the text still closes its option", () => {
+  const parsed = splitChoiceQuestion("Which is it?\nA) apple B) pear");
+  assert.deepEqual(optionTexts(parsed), ["apple", "pear"]);
+});
+
+test("parenthesized labels parse the same as bare ones", () => {
+  const parsed = splitChoiceQuestion("Which fruit is it?\n(A) apple (B) pear");
+  assert.equal(parsed.shape, CHOICE_SHAPES.enumerated);
+  assert.deepEqual(optionLabels(parsed), ["A", "B"]);
+  assert.deepEqual(optionTexts(parsed), ["apple", "pear"]);
+});
+
+test("dotted and colon label markers parse when they stand alone", () => {
+  const dotted = splitChoiceQuestion("Which is it?\nA. apple B. pear");
+  assert.deepEqual(optionTexts(dotted), ["apple", "pear"]);
+  const colon = splitChoiceQuestion("Which is it?\nA: apple B: pear");
+  assert.deepEqual(optionTexts(colon), ["apple", "pear"]);
+});
+
 // ---- negative: the write-boundary set (5.3) ----
 
 test("a disjunctive class definition is a teach sentence, never a choice question", () => {

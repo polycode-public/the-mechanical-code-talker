@@ -150,7 +150,13 @@ function parseInline(text) {
 // CHOICE_MAX_OPTIONS (an eight-option "A) ... H) ...") is still recognized
 // as enumerated and declines on the option count, rather than the marker
 // regex itself silently stopping short and truncating the list.
-const LABEL_MARKER_RE = /\(([A-Za-z])\)|\b([A-Za-z])[.):]/g;
+//
+// A marker stands alone: whitespace or the start of the text before it, and
+// whitespace or the end of the text after it. Without both edges the letter
+// and dot inside a dotted path ("app/lib/a.mjs … app/lib/b.mjs") read as an
+// A, B label run, and an ordinary set question gets answered as a closed
+// multiple choice over the fragments either side of the slash.
+const LABEL_MARKER_RE = /(?<=^|\s)\(?([A-Za-z])[.):](?=\s|$)/g;
 
 /** The longest run of label markers found in strict A, B, C, ... sequence.
  *  A marker that does not match the next expected letter is skipped rather
@@ -162,7 +168,7 @@ function findAcceptedLabelSequence(text) {
   LABEL_MARKER_RE.lastIndex = 0;
   let m;
   while ((m = LABEL_MARKER_RE.exec(text))) {
-    const letter = (m[1] || m[2]).toUpperCase();
+    const letter = m[1].toUpperCase();
     if (letter === String.fromCharCode(65 + expected)) {
       accepted.push({ letter, start: m.index, end: LABEL_MARKER_RE.lastIndex });
       expected += 1;
