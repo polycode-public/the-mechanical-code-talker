@@ -40,8 +40,8 @@ test("E5: a min/max cardinality clash reports through 'what do you know about' w
     await appendFacts(dir, bicycleWithWheelsFacts);
     const { answer, record } = await runTurn("what do you know about beryl", { memoryDir: dir });
     assert.match(answer, /I can't answer that — what I've been told about beryl is inconsistent:/);
-    assert.match(answer, /min-wheel owl:minCardinality 2/);
-    assert.match(answer, /max-wheel owl:maxCardinality 0/);
+    assert.match(answer, /min-wheel minCardinality 2/);
+    assert.match(answer, /max-wheel maxCardinality 0/);
     assert.equal(record.miss, false, "a definite finding, not a miss");
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -98,8 +98,8 @@ test("findWiderConsistencyClash: the full budget finds E5's clash directly, citi
     await appendFacts(dir, bicycleWithWheelsFacts);
     const rows = readFactRows(await loadMemory(dir));
     const result = await findWiderConsistencyClash(rows, new Set(["beryl"]), DEFAULT_REASONING);
-    assert.match(result, /min-wheel owl:minCardinality 2/);
-    assert.match(result, /max-wheel owl:maxCardinality 0/);
+    assert.match(result, /min-wheel minCardinality 2/);
+    assert.match(result, /max-wheel maxCardinality 0/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

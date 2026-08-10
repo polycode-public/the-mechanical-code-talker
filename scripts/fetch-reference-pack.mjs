@@ -34,7 +34,7 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import {
   shardNameFor, cleanMissReferenceTerm, isReferenceArticleRow,
-  sentencesUpTo, isaOf, SUMMARY_CHAR_CAP,
+  sentencesUpTo, isaOf, SUMMARY_CHAR_CAP, articleUrlFor, REFERENCE_PACK_ORIGIN,
 } from "../src/domain/reference-pack.mjs";
 import { loadLexicon } from "../src/domain/grammar/lexicon.mjs";
 
@@ -188,10 +188,6 @@ export function passesSanityCheck(plain) {
 
 // ---- phase c: select --------------------------------------------------------
 
-function articleUrlFor(title) {
-  return `https://simple.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
-}
-
 /**
  * Decide what ships. `pages` are cleaned ns-0 candidates
  * ({ title, revid, plain }); `redirects` are { from, to } title pairs. An
@@ -229,7 +225,7 @@ export function selectArticles(pages, redirects, lexicon = loadLexicon()) {
       title: page.title,
       text,
       summary: sentencesUpTo(page.plain, SUMMARY_CHAR_CAP),
-      url: articleUrlFor(page.title),
+      url: articleUrlFor(REFERENCE_PACK_ORIGIN, page.title),
       revid: page.revid,
       ...(isa ? { isa } : {}),
     });

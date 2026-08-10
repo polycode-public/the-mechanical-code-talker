@@ -423,6 +423,7 @@
   "src/domain/paraphrase.mjs",
   "src/domain/persona/examples.mjs",
   "src/domain/persona/tiers.mjs",
+  "src/domain/phrase-exports.mjs",
   "src/domain/planning.mjs",
   "src/domain/prose.mjs",
   "src/domain/real-word-collisions.json",
