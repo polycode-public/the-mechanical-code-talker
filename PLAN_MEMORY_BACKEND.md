@@ -1,13 +1,16 @@
 # PLAN_MEMORY_BACKEND.md — a pluggable session-memory backend: injected row stores, a conformance kit, and the deployed news demo running on a tmct-owned AWS row service
 
-Status: DESIGN, revised three times. The first draft made news.html an IndexedDB consumer; the
+Status: DESIGN, revised four times. The first draft made news.html an IndexedDB consumer; the
 operator redirected it (2026-08-10): the deployed news demo must BE the AWS-backed architecture,
 fronted by a new row service in tmct's own stack. The second revision (same day) moved every
 backend into the library: there is no consumer-written adapter — tmct builds, tests, demos, and
 ships the DynamoDB backend in-tree, and a consumer's integration is configuration. The third
 (same day) reshaped the service surface: session keys ride the mutating request paths, TTL is a
 configurable deployment knob defaulting to one week, and the per-session row limit gave way to
-one hard global table cap. The consumer requirements it answers are bedrock-meter's
+one hard global table cap. The fourth (same day) made the service's deletes soft: a delete
+marks rows and reclaims nothing, so filling and deleting in a loop cannot burn spend — the cap
+holds, TTL alone removes data, and the operator accepts waiting out the TTL window after an
+attack. The consumer requirements it answers are bedrock-meter's
 `GRAPH_BACKEND_SPEC.md` (untracked in their repo, carried over by the operator; its section
 numbers are cited as spec §N throughout). The seam it formalizes already exists in embryo:
 `src/adapters/memory/core.mjs` routes every read and write through one opaque `memoryDir` token
@@ -117,7 +120,8 @@ order on read never carries meaning.
   best-effort on this device, never sent anywhere — is unchanged, to the word. news.html makes a
   different promise and says so on the page: facts taught or polled there are stored server-side
   against an anonymous session addressed by a random key kept in this browser, expire after
-  seven days, and "stop & forget" deletes them. The one local item beyond the existing consent
+  seven days, and "stop & forget" hides them from every read immediately, with physical removal
+  finishing inside that seven-day window. The one local item beyond the existing consent
   preference is that key — a session pointer, never facts — and the copy says so. Neither page
   borrows the other's wording.
 - **Best-effort in the browser, honest everywhere.** The service being unreachable never blocks
@@ -148,14 +152,21 @@ A custom backend is an object the consumer constructs and injects. tmct binds it
   // All async. `rows` are wire rows (§3.2). Order never carries meaning.
   readRows(),                 // → AsyncIterable<row> or Promise<row[]>; every live row for this session
   putRows(rows),              // upsert; per-row atomic; resolves when all rows are durable
-  deleteRows(rowKeys),        // remove by key; missing keys are a no-op
+  deleteRows(rowKeys),        // make the rows absent from every read; missing keys are a no-op
   readRowsByTerm(term),       // OPTIONAL: rows whose index term matches; absent → core reads readRows()
   readMeta(key),              // → string | null   (sidecar values, JSON-encoded by the caller)
   putMeta(key, value),        // upsert one sidecar value
-  deleteAll(),                // remove every row and meta entry this session key reaches (spec §4)
+  deleteAll(),                // make every row and meta entry this session key reaches absent (spec §4)
   close(),                    // release connections; further calls may reject
 }
 ```
+
+**Delete semantics are observable, not physical.** The contract promises one thing: a deleted
+row never appears in any subsequent read. Whether a backend removes the item (the in-memory
+and sqlite backends do) or tombstones it and filters reads (the DynamoDB backend's soft-delete
+mode, which the row service uses — §3.10) is that backend's implementation choice. The
+conformance suite checks the observable behaviour only, so its delete-then-read-empty checks
+pass both ways.
 
 Decisions folded into that shape:
 
@@ -326,13 +337,15 @@ news.html (engine in-page, seed graph as basePayload, never persisted)
   payload alone, further writes are not attempted until the page reloads, and a reload retries
   against the same stored key. No facts are ever stored locally — no IndexedDB, no fact rows in
   localStorage — so an unpersisted visit's rows live exactly as long as the tab.
-- **The copy tells the truth.** The consent moment and the page's persistence note say: facts
-  taught or polled here are stored against an anonymous session on our server, addressed by a
-  random key kept in this browser, expiring after seven days; "stop & forget" deletes them now.
-  "Stop & forget" wires its purge to `deleteAll()` (DELETE /api/sessions/:uuid/rows with
-  `{all: true}`),
+- **The copy tells the truth, both halves of it.** The consent moment and the page's
+  persistence note say: facts taught or polled here are stored against an anonymous session on
+  our server, addressed by a random key kept in this browser, expiring after seven days;
+  "stop & forget" hides everything immediately — the rows are unreadable from the moment of
+  the press — and physical removal finishes inside the seven-day window. "Stop & forget"
+  wires its purge to `deleteAll()` (DELETE /api/sessions/:uuid/rows with `{all: true}`),
   discards the stored UUID, keeps its existing in-page retraction behaviour, and the e2e
-  extends to assert the server side reports zero rows afterwards (against the local double).
+  extends to assert the server reports zero readable rows afterwards (against the local
+  double) — the observable check, satisfied whether the storage removed or tombstoned them.
   chat.html's local-only promise is untouched.
 - **Reload restores the session.** A returning visit re-opens against the stored key: one
   GET /api/rows, and the feed rebuilds from real rows. Schema drift is guarded server-side:
@@ -355,10 +368,10 @@ path, and the first write under a fresh key creates the session implicitly.
 
 | method + path | contract call | success | notes |
 | --- | --- | --- | --- |
-| GET /api/rows | readRows | 200 `{rows:[…]}` | key in `x-tmct-session`; an unknown key reads as an empty session; one response — the global cap and the mutation-rate cap bound any one session's realistic size, and the handler 500s loudly rather than truncating if the one-response assumption ever breaks |
+| GET /api/rows | readRows | 200 `{rows:[…]}` | key in `x-tmct-session`; an unknown key reads as an empty session; soft-deleted rows are filtered out before the response, so a deleted row is observably absent; one response — the global cap and the mutation-rate cap bound any one session's realistic size, and the handler 500s loudly rather than truncating if the one-response assumption ever breaks |
 | PUT /api/sessions/:uuid/rows | putRows | 204 | body `{puts:[row…]}`; whole batch validated before any apply; first write under a fresh key is the implicit mint; 507 when the global table cap (below) is reached, nothing applied |
-| DELETE /api/sessions/:uuid/rows | deleteRows / deleteAll | 204 | body `{rowKeys:[…]}` for diff-driven removal (a retraction or forget dropping rows, derived-row invalidation); body `{all: true}` purges the session — rows, then meta, then the session's rate-counter rows, decrementing the global counter as it goes (§16.4) |
-| GET /api/meta/:key | readMeta | 200 `{value}` / 404 | key in `x-tmct-session`; client maps 404 to null |
+| DELETE /api/sessions/:uuid/rows | deleteRows / deleteAll | 204 | **soft delete, never physical**: body `{rowKeys:[…]}` marks the named rows deleted (an UpdateItem stamping `deletedAt` — §3.10's soft-delete mode) for diff-driven removal (a retraction or forget dropping rows, derived-row invalidation); body `{all: true}` marks every session row and meta entry. Nothing is removed from the table, the global counter never decrements, and TTL alone reclaims the items (§16.4) |
+| GET /api/meta/:key | readMeta | 200 `{value}` / 404 | key in `x-tmct-session`; client maps 404 to null; a soft-deleted meta entry reads as absent |
 | PUT /api/sessions/:uuid/meta/:key | putMeta | 204 | body `{value}` |
 
 `readRowsByTerm` stays dormant client-side, and the handler already serves it
@@ -393,22 +406,28 @@ default: 2 M rows × 4 KB worst case is 8 GB — about $2/month stored at the ab
 (on-demand storage rates), roughly $12 of write units if an attacker filled it once, and the
 billing alarm (§3.9) pages far below either. The mechanism is the service's own atomic counter
 item (a reserved partition no valid v4 key can collide with, e.g. pk `_meta`, sk `counter`),
-incremented by row count inside every write path and decremented on deletes and purges.
-DescribeTable's `ItemCount` is explicitly rejected as the mechanism: it refreshes roughly every
-six hours, and a cap enforced on six-hour-old data is not a cap. The counter is one hot item;
-at reserved concurrency 10 and the edge rate limit, its write rate is bounded far below
-DynamoDB's per-item throughput, noted and fine at this scale. Every row, meta value, and
-counter row carries `expiresAt` = its own write time + the configured TTL (`TTL_DAYS`,
-default 7 — §3.10's `ttlSeconds` at the backend seam), enforced by DynamoDB-native TTL —
-implicit sessions have no mint moment, so expiry is per row and a session is gone when its
-last row is. TTL reaping happens outside the service's write paths, so the counter drifts
-upward relative to the real row count; the reconciliation is a scheduled daily reconcile run
-(an EventBridge rule invoking the same Lambda in a reconcile mode) that counts the table with
-a paginated `Scan` (`Select: COUNT`) and rewrites the counter. Cost: pennies at expected
-occupancy, ≈ $0.30 per run if the table ever sits at the full 8 GB cap. Between reconciles the
-drift direction is toward over-refusal — the safe direction: the service refuses writes it
-could have taken, never accepts writes past the cap. The threats these caps answer, and the
-ones they don't, are enumerated in §3.9.
+incremented by row count inside every write path. **The counter never decrements on a delete**:
+deletes are soft (the endpoint table above), a marked row still occupies the table, and
+counting it toward the cap is the cost-protection point — a session that fills and deletes in
+a loop reclaims nothing and just reaches the 507 sooner. The only thing that trues the counter
+down is the reconcile below, after TTL has physically reaped rows. DescribeTable's `ItemCount`
+is explicitly rejected as the mechanism: it refreshes roughly every six hours, and a cap
+enforced on six-hour-old data is not a cap. The counter is one hot item; at reserved
+concurrency 10 and the edge rate limit, its write rate is bounded far below DynamoDB's
+per-item throughput, noted and fine at this scale. Every row, meta value, and counter row
+carries `expiresAt` = its own write time + the configured TTL (`TTL_DAYS`, default 7 — §3.10's
+`ttlSeconds` at the backend seam), enforced by DynamoDB-native TTL — implicit sessions have no
+mint moment, so expiry is per row, a soft-deleted row keeps the `expiresAt` it was written
+with, and a session is physically gone when its last row is. Physical removal is TTL's job
+alone. TTL reaping happens outside the service's write paths, so the counter drifts upward
+relative to the real row count; the reconciliation is a scheduled daily reconcile run (an
+EventBridge rule invoking the same Lambda in a reconcile mode) that counts the table with a
+paginated `Scan` (`Select: COUNT`) — a physical count, so tombstoned rows rightly stay in it
+until TTL takes them — and rewrites the counter. Cost: pennies at expected occupancy, ≈ $0.30
+per run if the table ever sits at the full 8 GB cap. Between reconciles the drift direction is
+toward over-refusal — the safe direction: the service refuses writes it could have taken,
+never accepts writes past the cap. The threats these caps answer, and the ones they don't, are
+enumerated in §3.9.
 
 **Error semantics, pinned for the client and the kit.** 400/413 → `BackendRejected` (the turn
 errors; the session stays networked; a 400 on the session key is a client bug, not a retry
@@ -420,13 +439,16 @@ mid-batch may leave rows applied, which is the contract's own half-landed-batch 
 **The handler is in-repo, backend-agnostic, and contains no storage code.** `server/row-service/`
 (new, top-level, excluded from the npm `files` array — the published library ships no Lambda)
 holds `handler.mjs`: parse, validate, enforce caps, then call a §3.1 row backend. In AWS that
-backend is the library's own `createDynamoRowBackend` (§3.10), imported from
-`src/adapters/memory/row-backend-dynamo.mjs` — the service is the first consumer of the shipped
-backend, so the deployed demo exercises the exact code a library consumer installs. The SDK is
-marked external in the bundle because the Lambda Node runtime ships it. Locally the SAME handler
-mounts on `node:http` over the M2 in-memory reference backend — `server/row-service/local.mjs` —
-and that is the test double: real routing, real validation, real error semantics, fake storage.
-The service is itself a consumer of the seam it fronts, twice over.
+backend is the library's own `createDynamoRowBackend` (§3.10) with `softDelete: true`, imported
+from `src/adapters/memory/row-backend-dynamo.mjs` — the service is the first consumer of the
+shipped backend, so the deployed demo exercises the exact code a library consumer installs. The
+SDK is marked external in the bundle because the Lambda Node runtime ships it. Locally the SAME
+handler mounts on `node:http` over the M2 in-memory reference backend —
+`server/row-service/local.mjs` — and that is the test double: real routing, real validation,
+real error semantics, fake storage. The reference backend removes rows physically where the
+deployed backend tombstones them; the contract's delete semantics are observable (§3.1), so the
+double and the deployment behave identically to every caller and every test. The service is
+itself a consumer of the seam it fronts, twice over.
 
 **Deploy path.** The service is new constructs inside the existing `infra/` stack: a
 `dynamodb.Table` (pk `sessionKey`, sk `sk`, TTL attribute `expiresAt`, on-demand billing), a
@@ -450,7 +472,8 @@ every attack below is bounded to the attacker's own sessions and the account's b
 | risk | mitigation |
 | --- | --- |
 | write flooding (implicit creation makes every fresh-UUID write a mint) | a WAF rate-based rule on the distribution scoped to `/api/*` — per-IP, 300 requests per 5 minutes; the one new edge construct, roughly $8/month; writes also queue behind Lambda reserved concurrency 10 |
-| storage flooding | the hard global cap (§3.8) bounds the whole table at `TABLE_ROW_CAP` rows — 8 GB absolute worst case at the default — enforced by the service's own atomic counter, with the daily reconcile correcting TTL drift toward over-refusal. The accepted consequence, stated plainly: with no per-session bound, one determined session (or many) can consume the entire global budget and deny persistence to every visitor until the TTL reclaims rows — the page then degrades to §3.7's unpersisted mode for everyone. The per-IP edge rate limit and the per-session mutation rate bound how fast the budget can be eaten, the 7-day TTL bounds how long the denial lasts, and the billing alarm plus kill switch below remain the operational backstops |
+| storage flooding | the hard global cap (§3.8) bounds the whole table at `TABLE_ROW_CAP` rows — 8 GB absolute worst case at the default — enforced by the service's own atomic counter, with the daily reconcile correcting TTL drift toward over-refusal. The accepted consequence, stated plainly: with no per-session bound, one determined session (or many) can consume the entire global budget and deny persistence to every visitor until the TTL reclaims rows — the page then degrades to §3.7's unpersisted mode for everyone. The per-IP edge rate limit and the per-session mutation rate bound how fast the budget can be eaten, the 7-day TTL bounds how long the denial lasts (accepted: it's a demo, waiting out the window is fine), and the billing alarm plus kill switch below remain the operational backstops |
+| fill-and-delete write churn | dead by construction: deletes are soft (§3.8), so a delete reclaims no cap space and the counter never decrements. The maximum an attacker can spend is one table fill (~$12 of write units at the 2 M cap), plus rate-limited delete-marks (each one UpdateItem write unit, bounded by the per-IP and per-session mutation limits), plus the counter pre-check read on each refused write (~$0.25 per million). After the cap, their PUTs 507 and their DELETEs recover nothing — there is no loop to run. Recovery is TTL within `TTL_DAYS` |
 | cost attack (Lambda invocations, table writes) | reserved concurrency 10 caps compute; the on-demand table plus a CloudWatch estimated-charges alarm (threshold set in the stack, $20/month to start); the kill switch is removing the `/api/*` behavior from the distribution — one CDK deploy or a console action — after which the page degrades to §3.7's unpersisted mode and keeps working |
 | cross-site request forgery | effectively gone by construction: there is no ambient credential — no cookie rides a cross-site request, and a cross-origin page cannot know the victim's UUID. The no-CORS posture and the `application/json` content-type check stay as hygiene |
 | session-key theft | the key is page-readable by design (localStorage, sent in headers and mutating paths), so exfiltrating it requires running script in the page — the stored-XSS row below — and the prize is one anonymous, 7-day, self-owned session; no cross-session pivot exists. The key never appears in a response body or any cross-origin channel; it does appear in the page's own same-origin mutating URLs, which is why access logging stays off and the handler redacts the path segment (§3.8) |
@@ -470,15 +493,22 @@ createDynamoRowBackend({
   sessionKey,      // the pk; opaque, consumer-chosen (the row service passes the caller's validated key)
   ttlSeconds = null,   // null → no expiresAt stamped; the row service passes its configured
                        // TTL through this knob (TTL_DAYS, default 7 — §3.8)
-  attributeNames = { pk: "pk", sk: "sk", expiresAt: "expiresAt" },  // fit an existing table
+  softDelete = false,  // true → deletes tombstone instead of removing; the row service sets it
+                       // (§3.8); either mode satisfies the contract's observable semantics (§3.1)
+  attributeNames = { pk: "pk", sk: "sk", expiresAt: "expiresAt", deletedAt: "deletedAt" },  // fit an existing table
 })
 ```
 
 - **Ops mapping.** `readRows` → one paginated Query on the pk; `readRowsByTerm` → Query with
   `begins_with(sk, "fact#<term>#")`; `putRows` → looped PutCommand (per-row atomicity is the
-  contract; batch write APIs' partial-failure bookkeeping buys nothing here); `deleteRows` →
-  looped DeleteCommand; meta → Get/Put under `sk = "meta#<key>"`; `deleteAll` → Query then
-  looped Delete, rows → meta → counter rows, the §16.4 ordering.
+  contract; batch write APIs' partial-failure bookkeeping buys nothing here); meta → Get/Put
+  under `sk = "meta#<key>"`. Deletes depend on the mode. Default: `deleteRows` → looped
+  DeleteCommand; `deleteAll` → Query then looped Delete. With `softDelete: true`: `deleteRows`
+  → looped UpdateCommand stamping `deletedAt` (the row keeps its `expiresAt`, so TTL removes it
+  on the original schedule); `deleteAll` → Query then looped Update over rows and meta; and
+  both Query paths add a filter so a `deletedAt`-stamped item never reaches a read — the §3.1
+  observable semantics, satisfied by tombstone. Re-marking an already-marked row is an
+  idempotent Update.
 - **Lazy SDK, exactly.** The module imports nothing from AWS at load. The first storage call
   runs `await import("@aws-sdk/lib-dynamodb")` once and caches the command constructors.
   `package.json` declares `"peerDependencies": { "@aws-sdk/lib-dynamodb": ">=3" }` with
@@ -531,7 +561,7 @@ available to any consumer who chooses a custom store anyway.
 | per-fact atomicity, no cross-fact transactions | yes | a poisoned batch (one row rejected by a wrapping test backend) leaves the others readable and valid |
 | row-level concurrency, both writers land | yes | two handles on one key interleave `putRows`; the suite asserts both fact rows present |
 | concurrent supersession survives | yes | two handles supersede the same fact differently; assembly over the union shows both supersessions applied (§3.2's additive rule) |
-| delete-by-key reachability | yes | `deleteAll()` then `readRows()` empty and every meta key null |
+| delete-by-key reachability, observable semantics | yes | `deleteAll()` then `readRows()` empty and every meta key null; `deleteRows` then the row absent from reads. Satisfiable by physical removal or by tombstoning with filtered reads (§3.1) — the suite checks what a reader can observe, never the storage |
 | meta round-trip | yes | put/get/absent-is-null for each named key |
 | bookkeeping exclusion | yes | a `rowClass: "bookkeeping"` row round-trips but never surfaces in `rowsToPayload`'s answer-facing individuals |
 | determinism / order independence | yes | one row set, two arrival orders, identical assembled payloads |
@@ -626,12 +656,16 @@ mapping), `src/adapters/memory/backends-exports.mjs` (new: the `./memory-backend
 `test/adapters/memory-dynamo-conformance.test.mjs` (new). **Sonnet**, after M2, parallel with
 M3.
 
-The conformance test runs the FULL kit against the backend over the fake client, plus the
+The conformance test runs the FULL kit against the backend over the fake client — twice, once
+per delete mode, since both must satisfy the same observable semantics — plus the
 backend-specific pins: the module loads with no SDK installed and the first call without it
 fails with the named install hint; the key expressions the backend emits match §3.3's layout
 exactly; `ttlSeconds` stamps `expiresAt` and null stamps nothing; `attributeNames` remaps every
-expression; `deleteAll` deletes rows, then meta, then the counter rows. Setting
-`TMCT_DYNAMO_LIVE_TABLE` reruns the same file against a real table by hand; CI never sets it.
+expression; in default mode `deleteRows`/`deleteAll` remove items; in `softDelete` mode they
+stamp `deletedAt` (the item still present in the fake's map, its `expiresAt` unchanged), every
+read filters stamped items out, and re-marking a marked row is an idempotent no-op-shaped
+Update. Setting `TMCT_DYNAMO_LIVE_TABLE` reruns the same file against a real table by hand; CI
+never sets it.
 
 Acceptance: `node --test test/adapters/memory-dynamo-conformance.test.mjs test/estate/pack.test.mjs`;
 a consumer-style import through the exports map proving `./memory-backends` resolves;
@@ -652,11 +686,15 @@ accepted in header and in path; missing, malformed, wrong-version, and wrong-var
 400), implicit creation on a fresh key's first write, an unknown key reading as an empty
 session, each cap answering its status code with nothing applied on refusal — including the
 global table cap: `local.mjs` takes a `TABLE_ROW_CAP` override so the test fills a tiny cap
-and asserts the 507 with nothing applied, the counter decrementing on keyed deletes and on
-purge, and writes resuming once rows are deleted — the mutation-rate counter, the TTL knob
-(`TTL_DAYS` reaching the backend as `ttlSeconds`, stamped on written rows; unset stamping
-nothing), batch validation before any apply, the JSON-only content-type rejection (§3.9), the
-`{all: true}` purge beside the keyed delete, and the delete ordering of §16.4.
+and asserts the 507 with nothing applied, that deletes do NOT free the cap (delete rows, write
+again, still 507 — the counter never decrements on a delete), and that only the reconcile mode
+trues the counter down — the mutation-rate counter, the TTL knob (`TTL_DAYS` reaching the
+backend as `ttlSeconds`, stamped on written rows; unset stamping nothing), batch validation
+before any apply, the JSON-only content-type rejection (§3.9), and the soft-delete semantics
+end to end: a keyed DELETE leaves the row absent from every subsequent read, `{all: true}`
+leaves the whole session absent, a repeated DELETE of the same keys is idempotent 204s, and
+the purge never touches the session's rate-counter rows, so a purge cannot reset the mutation
+rate limit (§16.4).
 
 Acceptance: `node --test test/server/row-service.test.mjs`; `npm run test:fast`.
 
@@ -708,7 +746,8 @@ press; the start press writes exactly one new localStorage key, a valid UUIDv4, 
 `/api/` request carries it — reads in `x-tmct-session`, mutations in the
 `/api/sessions/<uuid>/…` path; a poll's stored facts arrive as one PUT; a
 reload rebuilds the feed from the double's rows under the same key; stop & forget leaves the
-double reporting zero rows and the stored key discarded; killing the double mid-visit flips
+double reporting zero readable rows — marked and excluded is enough, physically gone is not
+asserted — and the stored key discarded; killing the double mid-visit flips
 the page to the persistence-unavailable status line, the visit continues, and localStorage
 holds nothing beyond the consent preference and the session pointer — no fact text, ever. The
 news e2e's hard-won waits (sleep-then-evaluate loops, `waitUntil: "load"`, the seed copy into
@@ -735,10 +774,11 @@ snippet verbatim), the `attributeNames` fit for their existing single-table layo
 queue-as-rows change, the §4 split between conformance-checked and adapter-documented, that
 tmct's own site now runs the same shipped backend live against a tmct-owned table (theirs
 stays theirs), and the three spec asks answered differently than written — reads are
-session-scoped per §3.5 with the term-read path settled but dormant; `deleteAll` is
-query-then-delete under the hood; and their §7 adapter offer is superseded because the
-backend ships finished. What stays theirs: the table and IAM, the TTL value, their live
-e2e, the S3-path retirement.
+session-scoped per §3.5 with the term-read path settled but dormant; deletes are observable
+semantics with two shipped modes (physical by default, `softDelete` tombstoning for
+cost-protected deployments — tmct's own service uses the latter, theirs is their choice); and
+their §7 adapter offer is superseded because the backend ships finished. What stays theirs:
+the table and IAM, the TTL value, their live e2e, the S3-path retirement.
 
 ---
 
@@ -760,13 +800,15 @@ ships with it and says so, not that it hides.
    news session are two writers and see each other only on reload. No partition version, no
    ETag in v1; if the staleness bites a real consumer, an `If-None-Match` on GET /api/rows is
    the cheap add and the endpoint table leaves room for it.
-4. **`deleteAll` is query-then-delete, non-atomic.** Accepted, ordered, and made retryable:
-   the delete runs rows, then meta, then the session's rate-counter rows — the handler
-   decrementing the global counter by what it removed as it goes — and the purge is
-   idempotent: a crash mid-way leaves a smaller session and a retried DELETE finishes the
-   job; the client retries the idempotent `{all: true}` DELETE once on 5xx; TTL reaps
-   whatever survives both, and the page discards its stored key regardless, so the visitor's
-   pointer to the residue is gone even when a fragment waits for TTL.
+4. **`deleteAll` is query-then-mark, non-atomic.** Accepted, ordered, and made retryable: the
+   purge marks rows, then meta — never the session's rate-counter rows, so a purge cannot
+   reset the mutation-rate limit — and the global counter is untouched throughout (§3.8). The
+   purge is idempotent: a crash mid-way leaves some rows marked, a retried DELETE marks the
+   rest (re-marking is a no-op-shaped Update), and the client retries the `{all: true}` DELETE
+   once on 5xx. Until the retry lands, unmarked rows remain readable — the residue of a
+   half-purge is visibility, bounded by the retry and by TTL. The page discards its stored key
+   regardless, so the visitor's pointer to any residue is gone even while fragments wait for
+   TTL to remove them physically.
 5. **The 4 KB cap as a runtime failure.** Mitigated at the earliest honest point (§3.2): the
    projection throws before the network with the offending fact's provenance named, the M0
    boundary test pins it, and the service 400 is the backstop. Discovery stays possible at
@@ -779,10 +821,18 @@ ships with it and says so, not that it hides.
 7. **The global counter drifts.** TTL reaping deletes rows outside the service's write paths,
    so the counter over-counts between reconciles, and the two writes inside a mutating request
    (the rows, then the `ADD`) are not one transaction, so a crash between them mis-counts by
-   one batch. Both drift in the same direction — over-refusal, never past the cap — and the
-   daily reconcile (§3.8) rewrites the counter from a real count. Accepted with that direction
-   stated; a table refusing writes it could take for at most a day is the cheap side of the
-   trade.
+   one batch. Deletes add nothing to the drift — they never touch the counter (§3.8). Both
+   sources drift the same direction — over-refusal, never past the cap — and the daily
+   reconcile rewrites the counter from a real physical count, tombstoned rows included, since
+   they occupy the table until TTL takes them. Accepted with that direction stated; a table
+   refusing writes it could take for at most a day is the cheap side of the trade.
+8. **Soft-deleted rows are load until TTL.** A tombstoned row still counts toward the cap (by
+   design — that is the cost protection) and still travels inside the backend's Query pages
+   before the filter drops it, so a session that deleted heavily reads slightly slower than an
+   empty one until TTL clears the tombstones. Bounded by the same arithmetic as everything
+   else: the mutation-rate limit bounds how many tombstones a session can mint, and the TTL
+   window bounds how long they sit. Re-marking already-marked rows burns one write unit per
+   idempotent call, bounded by the same rate limits.
 
 And the two build risks carried from the first draft: **the M3 sqlite refactor** rewrites
 Backend C's persistence internals under a byte-identical-storage pin — the before/after dump
