@@ -1015,10 +1015,10 @@ function cacheUpsertIndividual(cache, ind) {
   else cache.individuals.push(clone);
 }
 
-/** Mirrors the individuals delete loop: drop any cached individual whose id
- *  isn't in the just-persisted payload's full id set. */
-function cacheDropIndividualsExcept(cache, seenIds) {
-  cache.individuals = cache.individuals.filter((i) => seenIds.has(i?.id));
+/** Mirrors `DELETE FROM individuals`: drop every cached individual the write
+ *  just removed. */
+function cacheDropIndividuals(cache, droppedIds) {
+  cache.individuals = cache.individuals.filter((i) => !droppedIds.has(i?.id));
 }
 
 /** Find-or-create the cached edge group for `prop` — mirrors a relation row
@@ -1053,10 +1053,10 @@ function cacheDropEdgesExcept(group, newKeys) {
   group.examples = group.examples.filter((e) => newKeys.has(`${e.subject}\u0000${e.object}`));
 }
 
-/** Mirrors the relations delete loop: drop any cached edge group whose prop
- *  wasn't in the just-persisted payload's `objectProperties`. */
-function cacheDropGroupsExcept(cache, seenProps) {
-  cache.objectProperties = cache.objectProperties.filter((g) => seenProps.has(g?.prop));
+/** Mirrors `DELETE FROM relations`: drop every cached edge group the write just
+ *  removed. */
+function cacheDropGroups(cache, droppedProps) {
+  cache.objectProperties = cache.objectProperties.filter((g) => !droppedProps.has(g?.prop));
 }
 
 // ---- Backend C as a row store ---------------------------------------------
@@ -1396,12 +1396,8 @@ function deleteSqliteRows(ctx, rowKeys) {
     }
     dropUnmappedRow(ctx, rowKey);
   }
-  if (ctx.cache && droppedIndividuals.size) {
-    ctx.cache.individuals = ctx.cache.individuals.filter((i) => !droppedIndividuals.has(i?.id));
-  }
-  if (ctx.cache && droppedProps.size) {
-    ctx.cache.objectProperties = ctx.cache.objectProperties.filter((g) => !droppedProps.has(g?.prop));
-  }
+  if (ctx.cache && droppedIndividuals.size) cacheDropIndividuals(ctx.cache, droppedIndividuals);
+  if (ctx.cache && droppedProps.size) cacheDropGroups(ctx.cache, droppedProps);
 }
 
 /** Re-materialise the derived tables for what a write touched, inside that
