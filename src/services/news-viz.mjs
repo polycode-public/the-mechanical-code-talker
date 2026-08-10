@@ -161,15 +161,34 @@ ${THEME_TOKENS_CSS}
   .teach { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .7rem .85rem; margin-bottom: 1rem; }
   .teach textarea { width: 100%; box-sizing: border-box; min-height: 90px; font-family: ${MONO_STACK}; font-size: .76rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .6rem; }
   .teach .teachrow { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; align-items: center; }
+  .chat { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .7rem .85rem; margin-bottom: 1rem; }
+  .chatlog { display: flex; flex-direction: column; gap: .5rem; max-height: 40vh; overflow-y: auto; margin: .5rem 0; padding-right: .25rem; }
+  .chatlog:empty::after { content: "ask the graph what it knows, or teach it something new"; color: var(--muted); font-size: .8rem; }
+  .chatturn { display: flex; flex-direction: column; gap: .2rem; }
+  .chatbubble { border: 1px solid var(--line); border-radius: 6px; padding: .4rem .6rem; font-size: .84rem; max-width: 42rem; white-space: pre-wrap; }
+  .chatturn.you { align-items: flex-end; }
+  .chatturn.you .chatbubble { background: var(--bg); }
+  .chatturn.graph .chatbubble { background: var(--bg); }
+  .chatturn.error .chatbubble { border-color: var(--alert); color: var(--alert); background: var(--alert-soft); }
+  .chatlearned { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
+  .chatlearned ul { margin: .15rem 0 0; padding-left: 1.1rem; }
+  .chattrace summary { font-family: ${MONO_STACK}; font-size: .64rem; color: var(--muted); cursor: pointer; }
+  .chattrace pre { font-family: ${MONO_STACK}; font-size: .64rem; color: var(--muted); white-space: pre-wrap; margin: .3rem 0 0; }
+  .chatform { display: flex; gap: .4rem; }
+  .chatform input[type="text"] { flex: 1; font: inherit; font-family: ${MONO_STACK}; font-size: .8rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .4rem .6rem; }
+  .chatform input[disabled] { opacity: .55; }
   .pagelog { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); max-height: 140px; overflow-y: auto; border-top: 1px solid var(--line); padding-top: .4rem; }
 `;
 
 /** `renderNewsHtml({ title })` — one self-contained document: the dashboard,
  *  the controls row (start/poll, enrich now, stop & forget), the source
- *  panel, the request log, the feed, and the teach panel. Everything below
- *  the teach panel is left unclaimed for the chat area this page will grow
- *  next — an empty `#chatMount` section, not a placeholder for engine work
- *  of its own. */
+ *  panel, the request log, the feed, the teach panel, and the chat area.
+ *  The chat area is the turn endpoint's page consumer: one input, one send,
+ *  one transcript, over the same session UUID the feed already holds. A
+ *  reply's text and any citation or trace text land through `textContent`/
+ *  `createTextNode` only, never through markup built from a string — this
+ *  page's answer text is the one thing on it never HTML-escaped-then-
+ *  interpolated, because it never needs to be. */
 export function renderNewsHtml({ title = DEFAULT_TITLE } = {}) {
   return `<!doctype html>
 <html lang="en">
@@ -254,7 +273,16 @@ ${NEWS_STYLE}
     </div>
   </section>
 
-  <section id="chatMount" aria-label="Chat"></section>
+  <section id="chatMount" aria-label="Chat">
+    <h2 class="tile-label">chat with the graph</h2>
+    <div class="chat">
+      <div class="chatlog" id="chatLog" aria-live="polite"></div>
+      <form class="chatform" id="chatForm">
+        <input type="text" id="chatInput" autocomplete="off" placeholder="press start above to chat with the graph" aria-label="Message to the graph" disabled>
+        <button type="submit" class="btn primary" id="chatSend" disabled>send</button>
+      </form>
+    </div>
+  </section>
 
   <div class="pagelog" id="pageLog" aria-live="polite"></div>
 </main>
@@ -275,6 +303,11 @@ ${NEWS_STYLE}
   const esc = ${escapeHtml.toString()};
 
   const EMPTY_FEED = { items: [], rankedTerms: [], stats: { graphSize: 0, factsFromNews: 0 }, sourceStatus: [], requestLog: [], builtAt: null };
+
+  // Set once boot() opens the session; read by setUnavailable/
+  // updateChatAvailability below, which both live outside boot()'s own
+  // closure and never call the network themselves.
+  let session = null;
 
   function appendLog(text) {
     const line = document.createElement("div");
@@ -316,6 +349,81 @@ ${NEWS_STYLE}
     ["newsStart", "enrichNow", "stopForget", "teachIngest", "teachBrowse"].forEach(function (id) {
       el(id).disabled = isUnavailable;
     });
+    updateChatAvailability();
+  }
+
+  // Chat joins the same disabled-together posture as every other
+  // network-facing control once the service goes unreachable, and carries
+  // its OWN gate besides: it stays disabled until the visitor has pressed
+  // start at least once, the one control on this page that waits for that
+  // specific press rather than minting its own session on first use.
+  function updateChatAvailability() {
+    const blocked = !session || !session.consented || session.unavailable;
+    el("chatInput").disabled = blocked;
+    el("chatSend").disabled = blocked;
+    el("chatInput").placeholder = (session && session.consented)
+      ? "ask or teach the graph a fact"
+      : "press start above to chat with the graph";
+  }
+
+  /** One chat-log row: ".chatturn <kind>" wrapping one ".chatbubble" whose
+   *  text lands through textContent alone — never HTML built from a
+   *  string, matching the answer-text posture no other text on this page
+   *  needs, since a chat reply is the one string here nobody has read or
+   *  sanitised before it arrives. */
+  function chatBubble(kind, text) {
+    const row = document.createElement("div");
+    row.className = "chatturn " + kind;
+    const bubble = document.createElement("div");
+    bubble.className = "chatbubble";
+    bubble.textContent = text;
+    row.appendChild(bubble);
+    return row;
+  }
+
+  function appendChatTurn(kind, text) {
+    const row = chatBubble(kind, text);
+    el("chatLog").appendChild(row);
+    el("chatLog").scrollTop = el("chatLog").scrollHeight;
+    return row;
+  }
+
+  /** The graph's own turn, plus what it touched: result.citations (already
+   *  phrase-layer English, from session.turn()) as a plain list under the
+   *  reply, and result.narration as a collapsible trace — the same
+   *  disclosure shape a fact card's own "what the graph already knew"
+   *  details block uses. Both are optional; a plain answer with no writes
+   *  and no trace text renders as just the one bubble. Says nothing about
+   *  the feed either way — a taught fact reaches it at the next
+   *  materialization, whenever that runs. */
+  function appendChatReply(result) {
+    const row = chatBubble("graph", result.reply);
+    if (result.citations && result.citations.length) {
+      const learned = document.createElement("div");
+      learned.className = "chatlearned";
+      learned.appendChild(document.createTextNode("learned this turn:"));
+      const list = document.createElement("ul");
+      for (const line of result.citations) {
+        const li = document.createElement("li");
+        li.textContent = line;
+        list.appendChild(li);
+      }
+      learned.appendChild(list);
+      row.appendChild(learned);
+    }
+    if (result.narration) {
+      const trace = document.createElement("details");
+      trace.className = "chattrace";
+      const summary = document.createElement("summary");
+      summary.textContent = "trace";
+      const pre = document.createElement("pre");
+      pre.textContent = result.narration;
+      trace.appendChild(summary);
+      trace.appendChild(pre);
+      row.appendChild(trace);
+    }
+    el("chatLog").appendChild(row);
+    el("chatLog").scrollTop = el("chatLog").scrollHeight;
   }
 
   function renderRequestLog(feed) {
@@ -502,7 +610,7 @@ ${NEWS_STYLE}
   }
 
   async function boot() {
-    const session = await window.tmct.open({});
+    session = await window.tmct.open({});
     window.tmct.news = { phase: "seeded" };
 
     // The standing refresh loop lives inside the session, started already —
@@ -516,6 +624,7 @@ ${NEWS_STYLE}
 
     const startBtn = el("newsStart");
     startBtn.textContent = session.consented ? "poll now" : "start polling live sources";
+    updateChatAvailability(); // a restored, already-consented session unlocks chat right away
 
     function markBusy(button, label) {
       button.dataset.idleLabel = button.textContent;
@@ -613,6 +722,32 @@ ${NEWS_STYLE}
         el("teachStatus").textContent = added + " fact(s) added to the graph";
         return feed;
       }).catch(function (err) { el("teachStatus").textContent = err.message || String(err); });
+    });
+
+    el("chatForm").addEventListener("submit", async function (ev) {
+      ev.preventDefault();
+      const input = el("chatInput");
+      const text = input.value.trim();
+      if (!text || input.disabled) return;
+      appendChatTurn("you", text);
+      input.value = "";
+      const sendBtn = el("chatSend");
+      input.disabled = true;
+      sendBtn.disabled = true;
+      sendBtn.setAttribute("aria-busy", "true");
+      try {
+        const fuzzy = el("fuzzyToggle").checked;
+        const result = await session.turn(text, { fuzzy: fuzzy });
+        setUnavailable(false);
+        appendChatReply(result);
+      } catch (err) {
+        appendChatTurn("error", err && err.message ? err.message : String(err));
+        if (session.unavailable) setUnavailable(true);
+      } finally {
+        sendBtn.removeAttribute("aria-busy");
+        updateChatAvailability();
+        input.focus();
+      }
     });
 
     if (session.sessionKey) {
