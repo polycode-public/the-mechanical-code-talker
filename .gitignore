@@ -147,3 +147,7 @@ corpus/worlds/shards/
 # image compared pixel-to-pixel and never committed.
 .screenshots/
 
+# npm run build:row-service's esbuild bundle — the Lambda deploy artifact the
+# infra stack reads straight off disk, rebuilt fresh before every synth/deploy.
+server/row-service/dist/
+
