@@ -40,8 +40,9 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
   marker (Opus, owns chat.mjs + corpus pins).
   Landed: M0, M1, M2, M4, M5, M6, T1, T2, E0, E1, E2 (NYT fixture at exactly 3 hubs), the
   miss-lead round (report BENCHMARK_CEFR_ENGLISH_5.0.46.md; its whereSet/temporal
-  remainder is an open item below), the screenshot capture (item closed below). Version
-  rolled to 6.0.0 (operator: major).
+  remainder is an open item below), the news screenshot call (operator chose the empty
+  plate — the pipeline's existing shot, no change needed). Version rolled to 6.0.0
+  (operator: major).
 - Queued: E3 after T4 → T3 after T0 → T12 → M8/T5/T6/T7/E4 → T8/T13/T14/M9 →
   T9/M10/T10/T11. M9 dispatches when M3 lands.
 - Pushes: batch 2 (M1/M2/M4/M5/T1/E1 + the 6.0.0 major) is on origin/main, gate suite
@@ -88,11 +89,6 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
   bedrock-meter's confidence-marker ask. Remainder found in E1: `p2p-room.mjs`'s wire fact
   enumerates its fields explicitly, so a finding-bearing row replicates to a peer WITHOUT
   its findings — the wire fact needs the `extraction` field carried before this item closes.
-- [ ] **The news screenshot content call** — both candidates are captured and presented at
-  https://claude.ai/code/artifact/dd7de58f-bdeb-4114-abb8-8330218ed5cf (A: the honest empty
-  plate, pipeline-identical; B: the fixture poll, needs the pipeline to bake the poll and a
-  feed scroll). Open: the operator picks the plate; the winner gets re-captured after the
-  thin-client rebuild flips the page.
 
 ## Discipline
 
