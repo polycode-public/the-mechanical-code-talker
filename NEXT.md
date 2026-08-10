@@ -62,16 +62,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     enumerated-choice label marker, not two levers, and the pool reaches 1075/1075 on tier-1
   - [x] growing the under-covered C2 relative-embedded census cell — the 5.0.36 round judges
     all 25 of it, so the cell is measured rather than excluded
-- [ ] **Judge both chatbench arms against the same verdict-cache snapshot** — the 5.0.37 round
-  scored four unchanged answers differently across its two arms, worth ±0.9 on a single case's
-  mean, because each arm inherited a different partition of the cache
-  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.37.md`, instrument note). The 5.0.39 round read the same
-  25 answers as 1.288 and 1.282 across two passes for the same reason, and the 5.0.40 round put
-  the leftover noise at the same size as a small lever's whole signal — it now gates how small a
-  lever the rig can measure. In the 5.0.41 round a hard fail crossed the line on byte-identical
-  text, so the hard-fail count needs the answer-identity control applied by hand too. The 5.0.42
-  round read `g-b1-neg-12` a full 1.0 apart across its arms on unchanged text, carrying a hard-fail
-  flag with it — on a 25-case cell that decides the raw hard-fail count outright.
 - [ ] **The composite miss lead claims more than the engine checked** — "nothing in the index
   matches that (functions)" reports an empty set by saying the index matches nothing of that kind,
   which is false whenever the kind is non-empty and the filter is what emptied it. Both judge
@@ -88,11 +78,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   `C1:negation+relative-embedded` is one of those, so the cell's floor is this receipt. Carrying the
   intermediate through `evalBoolean` instead of re-evaluating the seed covers all of them; it
   reaches every composite lane and every miss text pinned against them.
-- [ ] **The judge context tells the judge that "touched by 2 commit(s)" is truthful for
-  app/lib/a.mjs**, which the graded pool's own `^1 commit\.$` expectation denies — `run.mjs`'s
-  `FIXTURE_CONTEXT`. It split `g-b2-count-temp-1`'s two draws between 2 and 0 on a correct answer
-  (`reports/BENCHMARK_CEFR_ENGLISH_5.0.38.md`, instrument notes). Rewriting it moves
-  `FIXTURE_CONTEXT_VERSION` and re-judges the pool, so it is a re-baseline run, not a lever round.
 - [ ] **news.html's marketing screenshot now captures the empty state** — since the
   newsworthiness gate landed, the seed alone never heads a card, so the capture pipeline
   photographs the designed empty feed. Operator content call: keep the honest empty plate, or
