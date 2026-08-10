@@ -34,14 +34,15 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 `PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
-- In flight: M3 sqlite conformance (Opus, owns core.mjs under the byte-identity pin),
-  T4 enumeration marker (Opus, owns chat.mjs + corpus pins), T3 turn handler (Sonnet,
-  owns server/turn-service/), T12 news worker + triggers (Sonnet, owns server/news-worker/
-  + row-service handler routes), M9 backend docs (Haiku).
-  Landed: M0–M7, T0 (WordNet band ran for real at 206,357 rows; ConceptNet/Wikidata
-  pipelines fixture-tested, first scale run is T6's CI job), T1, T2, E0, E1, E2, the
-  miss-lead round (whereSet/temporal remainder open below), the news screenshot call
-  (empty plate). Version rolled to 6.0.0 (operator: major).
+- In flight: T4 enumeration marker (Opus, owns chat.mjs + corpus pins), T3 turn handler
+  (Sonnet, owns server/turn-service/), T12 news worker + triggers (Sonnet, owns
+  server/news-worker/ + row-service handler routes), M9 backend docs (Haiku; told the
+  M3 sqlite facts).
+  Landed: M0–M7 (M3's byte-identity dump matched), T0 (WordNet band ran for real at
+  206,357 rows; ConceptNet/Wikidata pipelines fixture-tested, first scale run is T6's
+  CI job), T1, T2, E0, E1, E2, the miss-lead round (whereSet/temporal remainder open
+  below), the news screenshot call (empty plate). Version rolled to 6.0.0 (operator:
+  major).
 - Queued: E3 after T4 → T5 after T3+T4 → T6 after T3 → M8 after T12+T3 → T7 after
   T4+E3 → E4 after E2+E3 → T8/T13/T14 → T9/M10/T10/T11.
 - Pushes: batch 2 (M1/M2/M4/M5/T1/E1 + the 6.0.0 major) is on origin/main, gate suite

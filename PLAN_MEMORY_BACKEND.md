@@ -1486,6 +1486,15 @@ trick) proving the subpath resolves.
 
 ## 8. Phase M3 — sqlite passes the same suite
 
+**BUILT** (2026-08-10, merged): the byte-identity dump (73 lines, schema + every table's
+rows including edge rowids) was written at pristine HEAD and matched after the refactor —
+`persistSqlitePayload` now projects, diffs with `diffRows`, and writes only the difference
+through the shared per-row writers. `createSqliteRowBackend(dbPath)` passes the published
+kit (18 tests); rows the seven tables cannot rebuild byte-identically live verbatim in an
+`unmapped_rows` table created on first use (keeping the DDL and the dump literally
+unchanged), which also gives the research queue a sqlite home. The handle deliberately
+omits the contract marker so `isRowBackend` stays false for tmct's own store handles.
+
 **Owns** `src/adapters/memory/core.mjs` (Backend C refactor: `createSqliteMemoryStore`'s handle
 implements the §3.1 methods over its existing tables; `persistSqlitePayload` collapses onto
 `diffRows` + the handle's own `putRows`/`deleteRows`), `test/adapters/memory-sqlite-conformance.test.mjs`
