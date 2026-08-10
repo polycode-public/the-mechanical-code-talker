@@ -1853,6 +1853,13 @@ test/tools/ask.test.mjs`; `npm run test:fast`; ask bundle rebuilt.
 
 ## 21. Phase T5 — the turn service end to end
 
+**BUILT** (2026-08-10, merged): `test-e2e/turn-service.test.mjs`, 8 tests over real HTTP —
+corpus-grounded provenance, the T4 marker in both modes, byte-identical replayed misses,
+the 4 KB boundary exact, a real 429, and teach → purge composed across the turn and row
+services on one shared backend registry. Found and fixed a real defect: the handler
+dropped `bands` from the retrieval context, so every breaker-open turn silently lost its
+"answered without the corpus supplement" marker — verified by revert-and-rerun.
+
 **Owns** `test-e2e/turn-service.test.mjs` (new): a real HTTP conversation against
 `server/turn-service/local.mjs` with a loaded fixture band — teach, ask, a corpus-grounded
 answer citing band provenance, an enumeration answer carrying the marker, a breaker-forced

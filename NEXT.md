@@ -34,11 +34,12 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 `PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
-- In flight: M8 news.html thin flip (Sonnet, owns news entry/viz/bundle/e2e), T5 turn
-  e2e (Sonnet), T6 turn+worker infra, corpus route, counter fold, CI load (Sonnet, owns
-  infra//.gitlab-ci.yml/row+turn handler counter seam). Landed since the last tracker
-  move: E3, E4, the p2p findings carry, T3, T12, T7 (source breakers + skip notes;
-  coordinator added its missing pack-manifest line).
+- In flight: M8 news.html thin flip (Sonnet, owns news entry/viz/bundle/e2e), T6
+  turn+worker infra, corpus route, counter fold, CI load (Sonnet; told: no reserved
+  concurrency anywhere — the account sits at the Lambda floor). Landed since the last
+  tracker move: E3, E4, the p2p findings carry, T3, T12, T7, T5 (caught the dropped
+  `bands` losing the breaker-open marker). Pipeline fixes for batch 3's red (#760) are
+  committed and ride the next push.
   Landed: M0–M7 (M3's byte-identity dump matched), T0 (WordNet band ran for real at
   206,357 rows; ConceptNet/Wikidata pipelines fixture-tested, first scale run is T6's
   CI job), T1, T2, E0, E1, E2, the miss-lead round (whereSet/temporal remainder open
