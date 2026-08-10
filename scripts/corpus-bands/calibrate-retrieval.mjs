@@ -233,22 +233,24 @@ function budgetPressure(metrics, subgraphBytes) {
   };
 }
 
-async function measureCase({ query, fixture, fuzzy }) {
+async function measureCase({ query, fixture, fuzzy, budgets = MEASURING_BUDGETS }) {
   const client = createFakeDocumentClient(fixture.partitions);
-  const queryTerm = termQueryOverDocumentClient({ client, tableName: "calibration", pageSize: MEASURING_BUDGETS.rowsPerQueryPage });
+  const queryTerm = termQueryOverDocumentClient({ client, tableName: "calibration", pageSize: budgets.rowsPerQueryPage });
   const started = Date.now();
   const { rows, metrics, plan } = await retrieveSubgraph({
-    text: query.text, bands: fixture.bands, queryTerm, fuzzy, budgets: MEASURING_BUDGETS,
+    text: query.text, bands: fixture.bands, queryTerm, fuzzy, budgets,
   });
   const subgraphBytes = rows.reduce((total, row) => total + row.json.length, 0);
   return {
     name: query.name,
     text: query.text,
     fuzzy,
+    bounded: metrics.bounded,
+    tripped: metrics.tripped,
     planTerms: metrics.planTerms,
     exactTerms: metrics.exactTerms,
     fuzzyTerms: metrics.fuzzyTerms,
-    termsAsked: metrics.termsAsked,
+    termsRead: metrics.termsRead,
     hops: metrics.hops,
     queriesByPhase: metrics.queriesByPhase,
     rowsByPhase: metrics.rowsByPhase,
@@ -316,7 +318,7 @@ function printTable(title, records) {
   console.log("| --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --- |");
   for (const record of records) {
     console.log([
-      "", record.name, pad(record.planTerms, 4), pad(record.termsAsked, 4), pad(record.pressure.queries, 5),
+      "", record.name, pad(record.planTerms, 4), pad(record.termsRead, 4), pad(record.pressure.queries, 5),
       pad(record.queriesByPhase.seed, 4), pad(record.queriesByPhase.ancestry, 4), pad(record.queriesByPhase.expansion, 5),
       pad(record.pressure.rows, 5), pad(record.rowsByPhase.seed, 5), pad(record.rowsByPhase.ancestry, 5),
       pad((record.pressure.bytes / 1024).toFixed(1), 8),
@@ -339,7 +341,7 @@ function summarize(records) {
     maxBytes: max((r) => r.pressure.bytes),
     maxElapsedMs: max((r) => r.pressure.elapsedMs),
     maxPlanTerms: max((r) => r.planTerms),
-    maxTermsAsked: max((r) => r.termsAsked),
+    maxTermsRead: max((r) => r.termsRead),
   };
 }
 
@@ -353,19 +355,24 @@ async function main() {
   const buildMs = Date.now() - buildStarted;
 
   const bundled = await midBundleTerms();
-  const movedBandChecks = CALIBRATION_QUERIES
-    .filter((query) => query.absentFromMidBundle)
-    .map((query) => ({
+  const movedBandChecks = [];
+  for (const query of CALIBRATION_QUERIES.filter((entry) => entry.absentFromMidBundle)) {
+    const measured = await measureCase({ query, fixture, fuzzy: true, budgets: RETRIEVAL_BUDGETS });
+    movedBandChecks.push({
       name: query.name,
       term: query.absentFromMidBundle,
       absentFromMidBundle: !bundled.has(normFactTerm(query.absentFromMidBundle)),
-    }));
+      rowsBack: measured.pressure.rows,
+    });
+  }
 
   const withFuzzy = [];
   const withoutFuzzy = [];
+  const budgeted = [];
   for (const query of CALIBRATION_QUERIES) {
     withFuzzy.push(await measureCase({ query, fixture, fuzzy: true }));
     withoutFuzzy.push(await measureCase({ query, fixture, fuzzy: false }));
+    budgeted.push(await measureCase({ query, fixture, fuzzy: true, budgets: RETRIEVAL_BUDGETS }));
   }
 
   const report = {
@@ -376,6 +383,7 @@ async function main() {
     assemblyCost: assemblyCost(fixture),
     fuzzyOn: { cases: withFuzzy, summary: summarize(withFuzzy) },
     fuzzyOff: { cases: withoutFuzzy, summary: summarize(withoutFuzzy) },
+    shippedBudgets: { budgets: RETRIEVAL_BUDGETS, cases: budgeted, summary: summarize(budgeted) },
   };
 
   if (asJson) {
@@ -387,7 +395,13 @@ async function main() {
   console.log(`fixture: ${fixture.rowCount.toLocaleString()} rows over ${fixture.bands.join(", ")}, ${(fixture.bytes / 1024 / 1024).toFixed(1)} MB of row json, built in ${buildMs} ms`);
   console.log(`mid bundle: ${bundled.size.toLocaleString()} distinct terms`);
   for (const check of movedBandChecks) {
-    console.log(`moved-band case ${check.name}: "${check.term}" ${check.absentFromMidBundle ? "is absent from the mid bundle, so retrieval is the only path to it" : "IS in the mid bundle — pick another term"}`);
+    const absence = check.absentFromMidBundle
+      ? "is absent from the mid bundle, so retrieval is the only path to it"
+      : "IS in the mid bundle, so this case proves nothing — pick another term";
+    const round = check.rowsBack > 0
+      ? `retrieval brought ${check.rowsBack} rows back under the shipped budgets`
+      : "retrieval brought NOTHING back, so the round trip is broken";
+    console.log(`moved-band case ${check.name}: "${check.term}" ${absence}; ${round}`);
   }
   console.log(`\n### rows one term's own read brings back\n`);
   console.log("| term | band | rows |");
@@ -405,13 +419,21 @@ async function main() {
   for (const width of report.variantWidths.slice(0, 12)) {
     console.log(`| ${width.term} | ${width.case} | ${width.variants} |`);
   }
-  printTable("fuzzy on", withFuzzy);
-  printTable("fuzzy off", withoutFuzzy);
+  printTable("what an unbounded run wants, fuzzy on", withFuzzy);
+  printTable("what an unbounded run wants, fuzzy off", withoutFuzzy);
+
+  console.log(`\n### what a turn gets under the shipped budgets\n`);
+  console.log("| case | terms asked | queries | rows | subgraph KB | bounded by |");
+  console.log("| --- | --: | --: | --: | --: | --- |");
+  for (const record of budgeted) {
+    console.log(`| ${record.name} | ${record.termsRead} | ${record.pressure.queries} | ${record.pressure.rows} | ${(record.pressure.bytes / 1024).toFixed(1)} | ${record.tripped ?? "-"} |`);
+  }
+
   console.log(`\n### summary\n`);
   console.log("| arm | max plan terms | max terms asked | max queries | p95 queries | max rows | p95 rows | max subgraph KB | max ms |");
   console.log("| --- | --: | --: | --: | --: | --: | --: | --: | --: |");
-  for (const [arm, summary] of [["fuzzy on", report.fuzzyOn.summary], ["fuzzy off", report.fuzzyOff.summary]]) {
-    console.log(`| ${arm} | ${summary.maxPlanTerms} | ${summary.maxTermsAsked} | ${summary.maxQueries} | ${summary.p95Queries} | ${summary.maxRows} | ${summary.p95Rows} | ${(summary.maxBytes / 1024).toFixed(1)} | ${summary.maxElapsedMs} |`);
+  for (const [arm, summary] of [["unbounded, fuzzy on", report.fuzzyOn.summary], ["unbounded, fuzzy off", report.fuzzyOff.summary], ["shipped budgets", report.shippedBudgets.summary]]) {
+    console.log(`| ${arm} | ${summary.maxPlanTerms} | ${summary.maxTermsRead} | ${summary.maxQueries} | ${summary.p95Queries} | ${summary.maxRows} | ${summary.p95Rows} | ${(summary.maxBytes / 1024).toFixed(1)} | ${summary.maxElapsedMs} |`);
   }
 }
 

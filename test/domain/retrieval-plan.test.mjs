@@ -27,8 +27,8 @@ const wordsOnly = (text) => subjectWordsOf(text).map((entry) => entry.word);
 
 test("keeps the words that could name a subject and drops the grammar around them", () => {
   assert.deepEqual(wordsOnly("what is a dolphin"), ["dolphin"]);
-  assert.deepEqual(wordsOnly("how many legs does a spider have"), ["legs", "spider"]);
-  assert.deepEqual(wordsOnly("tell me about tariffs"), ["tariffs"]);
+  assert.deepEqual(wordsOnly("how many legs does a spider have"), ["many", "legs", "spider"]);
+  assert.deepEqual(wordsOnly("tell me about tariffs"), ["about", "tariffs"]);
 });
 
 test("a dotted module name survives as one word", () => {
@@ -41,6 +41,15 @@ test("folds a plural onto the lemma the lexicon declares", () => {
 
 test("falls back to the regular singular for a word the lexicon never declared", () => {
   assert.deepEqual(foldedFormsOf("tariffs"), ["tariff", "tariffs"]);
+});
+
+test("reaches the singular behind an -oes plural", () => {
+  assert.ok(foldedFormsOf("volcanoes").includes("volcano"));
+});
+
+test("keeps a word a general stopword list would swallow, because the corpus stores facts against it", () => {
+  assert.deepEqual(wordsOnly("what is the opposite of always"), ["opposite", "always"]);
+  assert.deepEqual(wordsOnly("what is the opposite of above"), ["opposite", "above"]);
 });
 
 test("leaves a singular that merely ends in s alone", () => {

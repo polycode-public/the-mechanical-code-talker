@@ -18,20 +18,46 @@ import {
 import { loadLexicon } from "../domain/grammar/lexicon.mjs";
 import { BACKEND_UNAVAILABLE_CODE } from "../adapters/memory/row-backend.mjs";
 
-/** The retrieval budgets, calibrated by scripts/corpus-bands/calibrate-retrieval.mjs
- *  over the committed WordNet and ConceptNet corpora and frozen here. Changing
- *  one is a code change, deliberately: a request cannot widen its own read.
+/** The retrieval budgets, set from what scripts/corpus-bands/calibrate-retrieval.mjs
+ *  measured over the committed WordNet and ConceptNet corpora. Changing one is
+ *  a code change, deliberately: a request cannot widen its own read.
  *
  *  Each budget degrades rather than failing. `fuzzyVariantsPerTerm` and
  *  `hopDepth` cut the plan before any read; `rowsPerQueryPage` paginates;
  *  `totalRows`, `totalQueries` and `wallTimeMs` stop the traversal and mark the
- *  subgraph bounded; `inFlightQueries` only queues. */
+ *  subgraph bounded; `inFlightQueries` only queues.
+ *
+ *  What each number came from:
+ *
+ *    fuzzyVariantsPerTerm  the widest measured tie was five candidates at the
+ *                          same distance; below that the cap cuts alphabetically
+ *                          and drops real candidates, so six clears every case
+ *    hopDepth              the engine's own alias chase is two hops
+ *    rowsPerQueryPage      the heaviest single term returned 92 rows, so 200
+ *                          reads every measured term in one round trip
+ *    totalRows             folding 1,000 rows into a payload costs about 12 ms
+ *                          and about 1 MB; 5,000 costs 44 ms and 5.3 MB, which
+ *                          is a third of the whole bundled seed for one question
+ *    totalQueries          eight rounds of eight in flight, about 80 ms against
+ *                          a store answering in the 10 ms class. A wide turn
+ *                          spends 20-30 of these on its own terms across three
+ *                          bands, and the rest goes to the subClassOf chain
+ *    wallTimeMs            the latency the turn surface can spend on reads
+ *    inFlightQueries       eight, so a turn cannot monopolize table throughput
+ *    queryRetries          two retries at 25 ms doubling spends at most 75 ms of
+ *    backoffBaseMs         the 300 ms on waiting, leaving 225 ms of reading
+ *
+ *  The measurement's headline is worth knowing when reading a turn's metrics: a
+ *  grounded question over a corpus this dense wants thousands of Queries if
+ *  nothing stops it, because the subClassOf closure branches rather than
+ *  chaining. Every grounded turn comes back bounded, and the marker says so.
+ *  Reads are ordered so what a budget takes is always the least targeted part. */
 export const RETRIEVAL_BUDGETS = Object.freeze({
-  fuzzyVariantsPerTerm: 4,
+  fuzzyVariantsPerTerm: 6,
   hopDepth: 2,
   rowsPerQueryPage: 200,
-  totalRows: 5000,
-  totalQueries: 40,
+  totalRows: 1000,
+  totalQueries: 64,
   wallTimeMs: 300,
   inFlightQueries: 8,
   queryRetries: 2,
@@ -167,6 +193,7 @@ async function runWave(requests, run) {
     if (stoppedBy) { run.tripped = run.tripped ?? stoppedBy; break; }
     const chunk = pending.slice(0, run.budgets.inFlightQueries);
     const rest = pending.slice(run.budgets.inFlightQueries);
+    for (const request of chunk) run.readTerms.add(request.term);
     const responses = await Promise.all(chunk.map((request) => queryWithBackoff(request, run)));
     const continuations = [];
     for (let i = 0; i < chunk.length; i += 1) {
@@ -185,8 +212,8 @@ async function runWave(requests, run) {
 function requestsFor(terms, run) {
   const requests = [];
   for (const term of terms) {
-    if (run.askedTerms.has(term)) continue;
-    run.askedTerms.add(term);
+    if (run.plannedTerms.has(term)) continue;
+    run.plannedTerms.add(term);
     for (const band of run.bands) requests.push({ band, term, limit: run.budgets.rowsPerQueryPage });
   }
   return requests;
@@ -210,11 +237,11 @@ async function runPhase(terms, run, phase) {
  *  cycle in the taxonomy cannot loop here. */
 async function chaseAncestry(rows, run) {
   const found = [];
-  let terms = ancestryTerms(rows, { seen: run.askedTerms });
+  let terms = ancestryTerms(rows, { seen: run.plannedTerms });
   while (terms.length && !run.tripped) {
     const fresh = await runPhase(terms, run, "ancestry");
     found.push(...fresh);
-    terms = ancestryTerms(fresh, { seen: run.askedTerms });
+    terms = ancestryTerms(fresh, { seen: run.plannedTerms });
   }
   return found;
 }
@@ -237,10 +264,13 @@ export async function retrieveSubgraph({
   skip = false,
   lexicon = loadLexicon(),
   vocabulary = null,
-  budgets = RETRIEVAL_BUDGETS,
+  budgets: budgetOverrides = null,
   now = () => Date.now(),
   sleep = sleepFor,
 }) {
+  // A partial override keeps every budget it did not name. A missing cap would
+  // otherwise read as no cap, which is the one thing this module must never do.
+  const budgets = budgetOverrides ? { ...RETRIEVAL_BUDGETS, ...budgetOverrides } : RETRIEVAL_BUDGETS;
   const startedAt = now();
   const plan = buildRetrievalPlan({
     text, fuzzy, lexicon, vocabulary,
@@ -264,7 +294,7 @@ export async function retrieveSubgraph({
     bands: sortedBands,
     rows: [],
     seenRowKeys: new Set(),
-    askedTerms: new Set(),
+    plannedTerms: new Set(), readTerms: new Set(),
     queries: 0,
     failedQueries: 0,
     systemicFailures: 0,
@@ -288,7 +318,7 @@ export async function retrieveSubgraph({
     run.hops = hop;
     const inherited = await chaseAncestry(fresh, run);
     if (run.tripped) break;
-    wave = expandedTerms([...fresh, ...inherited], { seen: run.askedTerms });
+    wave = expandedTerms([...fresh, ...inherited], { seen: run.plannedTerms });
   }
 
   return {
@@ -315,7 +345,8 @@ function metricsOf({ plan, bands, mode, elapsedMs, run = null }) {
     planTerms: plan.terms.length,
     exactTerms,
     fuzzyTerms: plan.terms.length - exactTerms,
-    termsAsked: run ? run.askedTerms.size : 0,
+    termsPlanned: run ? run.plannedTerms.size : 0,
+    termsRead: run ? run.readTerms.size : 0,
     queries: run?.queries ?? 0,
     rows: run?.rows.length ?? 0,
     hops: run?.hops ?? 0,

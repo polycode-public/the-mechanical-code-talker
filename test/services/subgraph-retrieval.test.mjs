@@ -264,8 +264,9 @@ test("the metrics say how the subgraph was built and how complete it is", async 
   assert.deepEqual(Object.keys(result.metrics).sort(), [
     "bands", "bounded", "elapsedMs", "exactTerms", "failedQueries", "fuzzy", "fuzzyTerms",
     "hops", "mode", "planTerms", "queries", "queriesByPhase", "rows", "rowsByPhase",
-    "systemicFailures", "termsAsked", "throttles", "tripped",
+    "systemicFailures", "termsPlanned", "termsRead", "throttles", "tripped",
   ]);
+  assert.ok(result.metrics.termsRead <= result.metrics.termsPlanned, "a term the budget stopped is planned, not read");
   assert.equal(result.metrics.rows, result.rows.length);
   assert.equal(result.metrics.mode, SUPPLEMENTED_MODE);
   assert.deepEqual(result.metrics.bands, [BAND]);
@@ -308,4 +309,10 @@ test("only a throttle, a 5xx or a timeout counts against the store", () => {
 
 test("the budgets are frozen, so a request cannot widen its own read", () => {
   assert.ok(Object.isFrozen(RETRIEVAL_BUDGETS));
+});
+
+test("naming one budget keeps every other one", async () => {
+  const result = await retrieve({ budgets: { totalRows: 2 } });
+  assert.equal(result.rows.length, 2);
+  assert.equal(result.metrics.tripped, "totalRows");
 });

@@ -44,26 +44,19 @@ const NON_SUBJECT_PARTS_OF_SPEECH = new Set(["verb", "adjective", "determiner", 
 
 const MIN_TERM_LENGTH = 2;
 
-/** Function words that never name a subject, on top of the parser's own
- *  stopword list. That list stays narrow because the code-graph lanes read
- *  meaning into words a general list would throw away. Retrieval pays a Query
- *  per term, so it drops a wider closed set: pronouns, prepositions,
- *  conjunctions and degree words. */
+/** Function words that cannot name a subject, on top of the parser's own
+ *  stopword list: pronouns, auxiliaries and conjunctions.
+ *
+ *  Prepositions and degree words are deliberately absent, though they look like
+ *  the obvious next thing to drop. "above", "below", "between", "always" and
+ *  "never" are all real corpus terms carrying real facts, and a term this list
+ *  refuses is a miss that never had to happen. Asking for a word that grounds
+ *  nothing costs one Query, and the budgets already cap those. */
 const FUNCTION_WORDS = new Set([
-  "about", "above", "across", "after", "again", "against", "all", "along", "already", "also",
-  "although", "always", "among", "and", "another", "around", "as", "back", "be", "because",
-  "been", "before", "behind", "being", "below", "beside", "besides", "between", "beyond",
-  "both", "but", "by", "down", "during", "each", "either", "else", "enough", "even", "ever",
-  "every", "except", "far", "few", "for", "further", "get", "got", "had", "has", "have",
-  "he", "her", "here", "hers", "herself", "him", "himself", "his", "if", "into", "it", "its",
-  "itself", "just", "least", "less", "let", "like", "little", "lot", "lots", "many", "may",
-  "me", "mine", "more", "most", "much", "my", "myself", "near", "neither", "never", "next",
-  "no", "nor", "not", "now", "off", "once", "only", "onto", "or", "other", "others", "our",
-  "ours", "ourselves", "out", "over", "own", "past", "per", "quite", "rather", "really",
-  "same", "she", "since", "so", "some", "still", "such", "than", "that", "their", "theirs",
-  "them", "themselves", "these", "they", "this", "those", "though", "through", "throughout",
-  "thus", "till", "too", "toward", "towards", "under", "unless", "until", "up", "upon", "us",
-  "very", "via", "we", "well", "whether", "while", "with", "within", "without", "yet",
+  "am", "and", "as", "be", "because", "been", "being", "but", "he", "her", "hers", "herself",
+  "him", "himself", "his", "i", "if", "it", "its", "itself", "me", "mine", "my", "myself",
+  "nor", "or", "our", "ours", "ourselves", "she", "so", "that", "their", "theirs", "them",
+  "themselves", "these", "they", "this", "those", "though", "us", "we", "whether", "while",
   "you", "your", "yours", "yourself",
 ]);
 
@@ -73,7 +66,7 @@ const FUNCTION_WORDS = new Set([
 function regularSingularForms(word) {
   const forms = [];
   if (word.length > 4 && /[a-z]ies$/.test(word)) forms.push(`${word.slice(0, -3)}y`);
-  if (/(ses|xes|zes|ches|shes)$/.test(word)) forms.push(word.slice(0, -2));
+  if (/(ses|xes|zes|ches|shes|oes)$/.test(word)) forms.push(word.slice(0, -2));
   // "analysis", "basis", "status", "virus" are singular already, and stripping
   // the s buys a term no corpus stores.
   if (/[a-z]s$/.test(word) && !/(ss|is|us)$/.test(word)) forms.push(word.slice(0, -1));
