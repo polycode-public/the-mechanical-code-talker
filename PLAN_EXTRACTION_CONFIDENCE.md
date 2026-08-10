@@ -357,6 +357,10 @@ the memory-backend plan's T4 posture; the accepted risk is section 7's new sharp
 
 ### E4 — docs and the consumer note (Haiku, after E2 and E3)
 
+**BUILT** (2026-08-10, merged): the findings vocabulary, absence rule, caveat table and
+`findingCaveat` join `docs/adapter-contract.md`; README needed no change (it does not
+document factsTouched fields); the bedrock-meter inbox carries the handoff note.
+
 **Owns** `docs/adapter-contract.md` (the findings vocabulary, the absence rule, the caveat
 templates and `findingCaveat` beside the `factsTouched` contract), `README.md` only if it
 documents `factsTouched` fields, and an append-only note to

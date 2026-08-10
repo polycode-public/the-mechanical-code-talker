@@ -46,9 +46,8 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
   major).
 - Queued: E3 after T4 → T5 after T3+T4 → T6 after T3 → M8 after T12+T3 → T7 after
   T4+E3 → E4 after E2+E3 → T8/T13/T14 → T9/M10/T10/T11.
-- Pushes: 6.0.0 published (batch 2's pipeline green). Batch 3 (miss-round, T0, T2, E2,
-  M3, M6, M7, M9, T4 + 6.0.1) is gate-green at 7840/0 and queued — gitlab.com SSH is
-  down again; retrying at each merge moment.
+- Pushes: 6.0.0 published; batch 3 (miss-round, T0, T2, E2, M3, M6, M7, M9, T4 + 6.0.1,
+  gate 7840/0) is on origin/main. Batch 4 accumulates from E3 onward.
 
 - [ ] **The memory backend, the AWS row service, and the consumer-hosted turn surface — one
   plan** — `PLAN_MEMORY_BACKEND.md`, six operator revision rounds, now also absorbing the
