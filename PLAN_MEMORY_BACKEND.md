@@ -1970,6 +1970,12 @@ Acceptance: the touched e2e and unit files; `npm run test:fast`.
 
 ## 25. Phase T9 — the demo grid
 
+**BUILT** (2026-08-10, merged): `.claim-grid`/`.claim-cell`/`.claim-page` renamed to the
+demo-grid family (the claims table's own naming untouched where it genuinely serves
+claims.html), eyebrow "nine easy pieces", and the ninth cell — "The same chat, saved to
+a server session" → `./chat.html?backend=aws` — with its share sheet, mirroring the
+river deep-link cell's pattern. 57 page e2e tests green in a real browser.
+
 **Owns** `public/index.html` (the rename to `.demo-grid`/`.demo-cell`/`.demo-page`, the
 chat-AWS cell, the eyebrow's count), `public/site.css` (the renamed classes),
 `public/share.mjs` (the chat-AWS share posts, globally unique), `test-e2e/pages-index.test.mjs`

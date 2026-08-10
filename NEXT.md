@@ -34,12 +34,11 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 `PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
-- In flight: T9 demo grid (Sonnet). Landed since the last tracker move: T13, T14, the
-  graph-less config guard, the cap-refusal wording fix, the materialization fold, T8
-  (coordinator-finished), the news.png recapture (the honest empty plate; the OTHER
-  six screenshots are now stale against the slider-bearing pages — full regeneration
-  joins the tail).
-- Queued: T10/M10/T11 tail + the full screenshot regeneration after T9. Deploy blocker: pipelines #760/#761's failed
+- In flight (the closing wave): T10 surface docs (Haiku), M10+T11 combined
+  bedrock-meter handoff (Haiku, one inbox append so the two notes can't clobber), the
+  full screenshot regeneration (Sonnet). T9 landed (nine-button demo grid, chat-AWS
+  deep-link cell). Every build phase of both plans is now merged; after this wave:
+  final gate, push, and the plan docs' closing status pass. Deploy blocker: pipelines #760/#761's failed
   deploys left an orphaned `tmct-prod-prod-rows` table (RETAIN on rollback) that
   collides with re-creation — needs `aws sso login --profile tmct-prod`, then the
   coordinator verifies it's the empty orphan and deletes it. Operator step recorded
