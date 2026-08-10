@@ -1445,6 +1445,11 @@ Acceptance: `node --test test/adapters/memory-row-backend.test.mjs test/adapters
 
 ## 7. Phase M2 — the reference backend and the conformance kit
 
+**BUILT** (2026-08-10, merged): `createRowMemoryBackend` plus the published
+`./memory-backend-conformance` kit (25 kit tests); the kit runs against both a
+physical-delete and a tombstoning backend, and `collectRows` normalizes both `readRows`
+return shapes.
+
 **Owns** `src/adapters/memory/row-backend-memory.mjs` (new: `createRowMemoryBackend()`, the
 simplest complete implementation), `src/tools/memory-backend-conformance.mjs` (new kit:
 `runMemoryBackendConformance(name, makeBackend)` plus row validators, shaped like
@@ -1498,6 +1503,13 @@ Acceptance: `node --test test/adapters/memory-sqlite-conformance.test.mjs` plus 
 memory/store test files; `npm run test:fast`.
 
 ## 9. Phase M4 — the DynamoDB backend, in-tree
+
+**BUILT** (2026-08-10, merged): `createDynamoRowBackend` with the full §3.10 constructor,
+the `./memory-backends` subpath, and the fake document client; the kit passes in both delete
+modes (31 tests + the env-gated live-table pass); rowKey/rowClass/term/json travel as plain
+item attributes beside the composed sk (a rowKey can itself contain `#` or `@`);
+`maxRows`/`maxBytes` bound each `putRows` batch; the no-SDK pin runs the production files
+from a temp directory outside any node_modules ancestry.
 
 **Owns** `src/adapters/memory/row-backend-dynamo.mjs` (new: §3.10's construction and ops
 mapping), `src/adapters/memory/backends-exports.mjs` (new: the `./memory-backends` entry),

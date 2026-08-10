@@ -35,15 +35,15 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
 - In flight: the combined miss-lead round on chat.mjs (Opus), T1 retrieval + calibration
-  (Opus), M4 DynamoDB backend (Sonnet, owns package.json), M1 Backend D dispatch (Opus,
-  owns core.mjs/chat-session.mjs/init.mjs/research-queue-store.mjs), E2 news-gate
-  consumption (Sonnet, owns news-feed.mjs). Landed: M0, M2, E0, E1 (assertion findings,
-  `mgx:nameFor`, `findingCaveat`; core.mjs handed back), the screenshot capture (item
-  closed below).
-- Queued: M3 after M1 → M5/T0/T2/T4 → M6/M7/T3/T12/E3 → M8/T5/T6/T7/E4 → T8/T13/T14/M9 →
-  T9/M10/T10/T11. E3 additionally waits on the miss-round handing chat.mjs back. The
-  M0–M4+M9 push is the npm cut bedrock-meter pins.
-- Pushes: batch 1 (E0+M0, full-suite 7529/7529) is on origin/main; batch 2 (M2+E1+tracker)
+  (Opus), M1 Backend D dispatch (Opus, owns core.mjs/chat-session.mjs/init.mjs/
+  research-queue-store.mjs), E2 news-gate consumption (Sonnet, owns news-feed.mjs), M5 row
+  service handler (Sonnet, owns server/row-service/), T0 corpus bands + loader (Sonnet,
+  owns corpus-bands/loader/cli-verbs/scripts/corpus-bands), T2 corpus breaker (Sonnet).
+  Landed: M0, M2, M4, E0, E1, the screenshot capture (item closed below).
+- Queued: M3 after M1 → T4 after T1 + chat.mjs hand-back → M6/M7/T3/T12/E3 →
+  M8/T5/T6/T7/E4 → T8/T13/T14/M9 → T9/M10/T10/T11. The M0–M4+M9 push is the npm cut
+  bedrock-meter pins.
+- Pushes: batch 1 (E0+M0, full-suite 7529/7529) is on origin/main; batch 2 (M2+E1+M4)
   accumulates locally and ships after the next full-suite run at its push moment.
 
 - [ ] **The memory backend, the AWS row service, and the consumer-hosted turn surface — one
