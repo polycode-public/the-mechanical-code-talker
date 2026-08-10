@@ -10,7 +10,11 @@ configurable deployment knob defaulting to one week, and the per-session row lim
 one hard global table cap. The fourth (same day) made the service's deletes soft: a delete
 marks rows and reclaims nothing, so filling and deleting in a loop cannot burn spend — the cap
 holds, TTL alone removes data, and the operator accepts waiting out the TTL window after an
-attack. The consumer requirements it answers are bedrock-meter's
+attack. The fifth (same day) folded in bedrock-meter's adoption review: reads are consistent by
+default, writes go out concurrently, an oversized row can drop instead of failing the turn, the
+error taxonomy is published, and the spec's own bookkeeping example is corrected — the
+`tmct:needs` row is an extractor defect, and no storage class retires it. The consumer
+requirements it answers are bedrock-meter's
 `GRAPH_BACKEND_SPEC.md` (untracked in their repo, carried over by the operator; its section
 numbers are cited as spec §N throughout). The seam it formalizes already exists in embryo:
 `src/adapters/memory/core.mjs` routes every read and write through one opaque `memoryDir` token
@@ -168,6 +172,16 @@ mode, which the row service uses — §3.10) is that backend's implementation ch
 conformance suite checks the observable behaviour only, so its delete-then-read-empty checks
 pass both ways.
 
+**Failure is typed.** Two named error classes are part of the published contract, exported
+beside the backends (§3.10): `BackendRejected` (`code: "TMCT_BACKEND_REJECTED"` — the input
+was refused: an oversized row, a malformed key, a validation failure) and `BackendUnavailable`
+(`code: "TMCT_BACKEND_UNAVAILABLE"` — the store could not be reached or refused service: a
+network failure, a 429/507/5xx). A consumer whose turn is itself a last-resort fallback — a
+visitor must get an answer even when persistence fails — catches by class or by `code` and
+continues without persistence, the same posture news.html takes (§3.7). Nothing requires
+string-matching an error message. The conformance kit asserts every backend's failures are
+instances of these classes with those codes.
+
 Decisions folded into that shape:
 
 - **Session binding at construction.** The object is already scoped to one opaque session key
@@ -210,20 +224,33 @@ three indexable fields:
 }
 ```
 
-- **`rowClass` is the structural bookkeeping gate** (spec §3.7). Internal rows — the `tmct:needs`
-  queue markers, research-queue entries, the researched-terms set, and anything else that must
-  never compose into a visitor-facing answer — are written with `rowClass: "bookkeeping"`. Read
-  paths exclude them by field, never by string matching on content, and an adapter can partition
-  or filter them at the storage level.
+- **`rowClass` is the structural bookkeeping gate** (spec §3.7). Internal rows — research-queue
+  entries, the researched-terms set, and anything else that must never compose into a
+  visitor-facing answer — are written with `rowClass: "bookkeeping"`. Read paths exclude them by
+  field, never by string matching on content, and an adapter can partition or filter them at the
+  storage level. One correction, from the spec's own author: spec §3.7's example ("the
+  `tmct:needs` queue markers") named the wrong thing. The live `latency tmct:needs result` row
+  is a genuine fact-class row — the article extractor picked a verb out of a relative clause
+  and minted a predicate the phrase table lacked. It is teach-path data, so the bookkeeping
+  gate cannot and does not retire it; §8.4's acceptance passes while that defect lives. The
+  5.0.46 phrase fix corrected the rendering (the local-name fall-through), the extractor still
+  mints the row, and its real fix is the extraction-quality confidence-marker item recorded in
+  `NEXT.md`.
 - **Mutation is additive.** A supersession or retraction projects as its own new row (the
   `retraction` class, or a new fact-version row), never as an in-place rewrite of the superseded
   row's `json`. Two turns superseding concurrently then both land, and assembly applies both;
   last-write-wins can only lose a write when two rows share a key, and additive rows never do.
   `payloadToRows` enforces this shape; M1's integration test races two handles to prove it.
-- **The 4 KB cap fails before the network.** `payloadToRows` rejects an oversized row with a
-  named error carrying the offending fact's provenance, at projection time — before any
-  `putRows`, local or HTTP. The service's own 400 (§3.8) is the backstop, not the discovery
-  point. A single fact that big is an extraction pathology and the turn fails loudly.
+- **The 4 KB cap fails before the network, and the failure posture is a knob.** `payloadToRows`
+  rejects an oversized row with a `BackendRejected` carrying the offending fact's provenance,
+  at projection time — before any `putRows`, local or HTTP. The service's own 400 (§3.8) is
+  the backstop, not the discovery point. The default posture is throw: a single fact that big
+  is an extraction pathology and the turn fails loudly. A backend constructed with
+  `onOversizedRow: "drop"` (§3.10; every shipped constructor takes it, default `"throw"`)
+  changes the posture per fact: the projection logs the dropped row's provenance, skips it,
+  and the turn completes with everything else persisted — for a consumer whose turn is itself
+  the last resort and must never return nothing because one fact was pathological. M0 pins
+  both modes.
 - **The projection lives in one module.** `src/adapters/memory/rows.mjs` owns
   `payloadToRows(payload)` and `rowsToPayload(rows)`, factored from what `persistSqlitePayload`
   does inline today, plus `diffRows(before, after)` returning `{ puts, deletes }`. Round-trip
@@ -429,12 +456,14 @@ toward over-refusal — the safe direction: the service refuses writes it could 
 never accepts writes past the cap. The threats these caps answer, and the ones they don't, are
 enumerated in §3.9.
 
-**Error semantics, pinned for the client and the kit.** 400/413 → `BackendRejected` (the turn
-errors; the session stays networked; a 400 on the session key is a client bug, not a retry
-case); 429, 507, 5xx, and network failure → `BackendUnavailable` (the turn reports it and the
-visit continues without persistence per §3.7 — a full table reads to the visitor exactly like
-an unreachable service, which is what it is). 4xx and 507 refusals apply nothing; a 5xx
-mid-batch may leave rows applied, which is the contract's own half-landed-batch stance (§3.1).
+**Error semantics, pinned for the client and the kit.** The two classes are §3.1's published
+taxonomy, exported from `./memory-backends`. 400/413 → `BackendRejected` (the turn errors; the
+session stays networked; a 400 on the session key is a client bug, not a retry case); 429,
+507, 5xx, and network failure → `BackendUnavailable` (the turn reports it and the visit
+continues without persistence per §3.7 — a full table reads to the visitor exactly like an
+unreachable service, which is what it is). A consumer distinguishes the two by class or by
+`code`, never by message text. 4xx and 507 refusals apply nothing; a 5xx mid-batch may leave
+rows applied, which is the contract's own half-landed-batch stance (§3.1).
 
 **The handler is in-repo, backend-agnostic, and contains no storage code.** `server/row-service/`
 (new, top-level, excluded from the npm `files` array — the published library ships no Lambda)
@@ -495,20 +524,41 @@ createDynamoRowBackend({
                        // TTL through this knob (TTL_DAYS, default 7 — §3.8)
   softDelete = false,  // true → deletes tombstone instead of removing; the row service sets it
                        // (§3.8); either mode satisfies the contract's observable semantics (§3.1)
+  consistentRead = true,   // strongly consistent Query on readRows/readRowsByTerm; the default,
+                           // because cross-container read-after-write is what a session store is
+                           // for. false trades that for half the read cost (a consistent read is
+                           // 2x RCU on the one cold-open Query) — a read-heavy consumer's call
+  writeConcurrency = Infinity,  // putRows sends its PutCommands concurrently, bounded by this;
+                                // batches are 1–5 rows, so the default is the whole batch
+  onOversizedRow = "throw",     // or "drop" — the §3.2 per-fact posture; drop logs the row's
+                                // provenance and persists the rest of the batch
   attributeNames = { pk: "pk", sk: "sk", expiresAt: "expiresAt", deletedAt: "deletedAt" },  // fit an existing table
 })
 ```
 
 - **Ops mapping.** `readRows` → one paginated Query on the pk; `readRowsByTerm` → Query with
-  `begins_with(sk, "fact#<term>#")`; `putRows` → looped PutCommand (per-row atomicity is the
-  contract; batch write APIs' partial-failure bookkeeping buys nothing here); meta → Get/Put
-  under `sk = "meta#<key>"`. Deletes depend on the mode. Default: `deleteRows` → looped
+  `begins_with(sk, "fact#<term>#")`; both set `ConsistentRead` from the `consistentRead`
+  option, true by default — a session written on one Lambda container and read seconds later
+  on another must see its own writes, and an eventually consistent Query fails that
+  intermittently, the worst kind of red. `putRows` → concurrent PutCommands bounded by
+  `writeConcurrency` (per-row atomicity is the contract; batch write APIs' partial-failure
+  bookkeeping buys nothing here). Concurrency is the budget: a serial loop over a 5-fact
+  research fan-out is five sequential round trips, ~30 ms in-region against the spec's
+  p50 ≤ 25 ms; sent together it costs one round-trip time. Meta → Get/Put under
+  `sk = "meta#<key>"`. Deletes depend on the mode. Default: `deleteRows` → looped
   DeleteCommand; `deleteAll` → Query then looped Delete. With `softDelete: true`: `deleteRows`
   → looped UpdateCommand stamping `deletedAt` (the row keeps its `expiresAt`, so TTL removes it
   on the original schedule); `deleteAll` → Query then looped Update over rows and meta; and
   both Query paths add a filter so a `deletedAt`-stamped item never reaches a read — the §3.1
   observable semantics, satisfied by tombstone. Re-marking an already-marked row is an
   idempotent Update.
+- **Fresh backend per invocation.** The consumer guidance, stated once here and repeated in the
+  M10 handoff: construct the backend (and its handle) per Lambda invocation, never cached
+  across invocations on a warm container. The handle caches the assembled payload for its own
+  lifetime (§3.4); per-session binding already stops a handle serving another session, but a
+  handle reused across turns of the SAME session on a warm container serves stale reads
+  whenever another container wrote in between. A fresh construction per invocation costs one
+  consistent Query and buys cross-container correctness by construction.
 - **Lazy SDK, exactly.** The module imports nothing from AWS at load. The first storage call
   runs `await import("@aws-sdk/lib-dynamodb")` once and caches the command constructors.
   `package.json` declares `"peerDependencies": { "@aws-sdk/lib-dynamodb": ">=3" }` with
@@ -518,8 +568,9 @@ createDynamoRowBackend({
   module-load-without-SDK.
 - **Published surface.** A `./memory-backends` export subpath (entry
   `src/adapters/memory/backends-exports.mjs` re-exporting `createRowMemoryBackend`,
-  `createDynamoRowBackend`, and `isRowBackend`), following the `./envelope`/`./news`/
-  `./memory-backend-conformance` precedents; pack manifest regenerated the standard way.
+  `createDynamoRowBackend`, `isRowBackend`, and the §3.1 error classes `BackendRejected` and
+  `BackendUnavailable`), following the `./envelope`/`./news`/`./memory-backend-conformance`
+  precedents; pack manifest regenerated the standard way.
 - **Conformance in-tree, no network.** The full kit runs against `createDynamoRowBackend` over
   an injected fake document client (`test/adapters/fake-dynamo-document-client.mjs`): a
   deliberate mirror of the backend's own call shapes — Query/Put/Delete/Get over a Map keyed
@@ -551,6 +602,14 @@ the table and IAM, their live e2e (cross-container read-back), the S3-path retir
 their §4 latency numbers, measured on their own deployment. The published suite remains
 available to any consumer who chooses a custom store anyway.
 
+Two lines of consumer guidance, theirs by request. Construct the backend fresh per Lambda
+invocation (§3.10) — the handle's payload cache lives as long as the handle, and a warm
+container reusing one across turns of the same session reads stale whenever another container
+wrote in between; the defaults (consistent reads, fresh construction) make their pinned
+cross-container read-back hold by construction. And a fallback turn that must never fail whole
+catches `BackendUnavailable` by class or `code` (§3.1) and continues without persistence, with
+`onOversizedRow: "drop"` covering the one-pathological-fact case the same way.
+
 ---
 
 ## 4. The operational contract as checks
@@ -563,10 +622,11 @@ available to any consumer who chooses a custom store anyway.
 | concurrent supersession survives | yes | two handles supersede the same fact differently; assembly over the union shows both supersessions applied (§3.2's additive rule) |
 | delete-by-key reachability, observable semantics | yes | `deleteAll()` then `readRows()` empty and every meta key null; `deleteRows` then the row absent from reads. Satisfiable by physical removal or by tombstoning with filtered reads (§3.1) — the suite checks what a reader can observe, never the storage |
 | meta round-trip | yes | put/get/absent-is-null for each named key |
-| bookkeeping exclusion | yes | a `rowClass: "bookkeeping"` row round-trips but never surfaces in `rowsToPayload`'s answer-facing individuals |
+| bookkeeping exclusion | yes | a `rowClass: "bookkeeping"` row round-trips but never surfaces in `rowsToPayload`'s answer-facing individuals. This gates internal rows only; it does not touch extractor-minted fact rows like the `tmct:needs` example the spec's author has since corrected (§3.2) |
 | determinism / order independence | yes | one row set, two arrival orders, identical assembled payloads |
-| ≤ 4 KB rows | yes | the projection rejects an oversized row at `payloadToRows` time with a named error |
-| HTTP error mapping | yes (client) | the kit runs against the HTTP client over the local double; a scripted double answers 400/413/429/507/500 and the client must map each per §3.8 |
+| ≤ 4 KB rows | yes | the projection rejects an oversized row at `payloadToRows` time with a `BackendRejected` naming the provenance; in `onOversizedRow: "drop"` mode the same row is logged and skipped and the batch's remainder persists (§3.2) |
+| typed failures | yes | every failure a backend or the client surfaces is an instance of `BackendRejected`/`BackendUnavailable` with its stable `code` (§3.1); the kit asserts the classes and codes |
+| HTTP error mapping | yes (client) | the kit runs against the HTTP client over the local double; a scripted double answers 400/413/429/507/500 and the client must map each per §3.8, onto the exported classes |
 | TTL enforcement | no — adapter-documented | time-driven; the suite asserts only that `expiresAt` round-trips untouched |
 | latency budget | no — consumer-measured | the smoke probe records the service's numbers as measurement; bedrock-meter's e2e measures their own deployment |
 | lazy SDK, no import-time IO | partly — in-tree pin | the kit cannot see imports, but the shipped DynamoDB backend pins it directly: the module loads with the SDK absent, and only the first storage call requires it (§3.10) |
@@ -580,11 +640,14 @@ the contract doc-comment, `isRowBackend`, the row-shape validator), `test/adapte
 (new). Serialized on `core.mjs` knowledge, no `core.mjs` edits yet. **Opus.**
 
 Deliver `payloadToRows`, `rowsToPayload`, `diffRows` per §3.2, factored to match what
-`persistSqlitePayload` stores today (same tables, same fields, expressed as wire rows). Three
-projection rules carry the sharp-edge fixes: supersession and retraction are additive rows;
-research-queue and researched-terms entries are individual `bookkeeping` rows; the 4 KB cap
-throws a named error carrying the fact's provenance. Unit tests: round-trip identity on a
-seeded fixture payload, sort-before-assembly order independence, the 4 KB rejection,
+`persistSqlitePayload` stores today (same tables, same fields, expressed as wire rows), plus
+the §3.1 error classes (`BackendRejected`, `BackendUnavailable`, stable `code` fields) in
+`row-backend.mjs` beside the validator. Three projection rules carry the sharp-edge fixes:
+supersession and retraction are additive rows; research-queue and researched-terms entries are
+individual `bookkeeping` rows; the 4 KB cap throws a `BackendRejected` carrying the fact's
+provenance, or logs and skips the row under the `"drop"` posture (§3.2). Unit tests:
+round-trip identity on a seeded fixture payload, sort-before-assembly order independence, the
+4 KB rejection in throw mode and the logged skip-with-remainder-persisted in drop mode,
 `rowClass` classification for every individual class in the store including a `bookkeeping`
 row, `diffRows` producing the minimal put/delete sets for an append, a supersession, and a
 retraction, and the union of two conflicting supersession projections assembling with both
@@ -660,12 +723,15 @@ The conformance test runs the FULL kit against the backend over the fake client 
 per delete mode, since both must satisfy the same observable semantics — plus the
 backend-specific pins: the module loads with no SDK installed and the first call without it
 fails with the named install hint; the key expressions the backend emits match §3.3's layout
-exactly; `ttlSeconds` stamps `expiresAt` and null stamps nothing; `attributeNames` remaps every
-expression; in default mode `deleteRows`/`deleteAll` remove items; in `softDelete` mode they
-stamp `deletedAt` (the item still present in the fake's map, its `expiresAt` unchanged), every
-read filters stamped items out, and re-marking a marked row is an idempotent no-op-shaped
-Update. Setting `TMCT_DYNAMO_LIVE_TABLE` reruns the same file against a real table by hand; CI
-never sets it.
+exactly; every Query the fake records carries `ConsistentRead: true` by default and `false`
+when the option disables it; a 5-row `putRows` reaches the fake concurrently (in-flight count
+above one) and `writeConcurrency: 1` serializes it; `ttlSeconds` stamps `expiresAt` and null
+stamps nothing; `attributeNames` remaps every expression; failures surface as the exported
+classes with their codes; in default mode `deleteRows`/`deleteAll` remove items; in
+`softDelete` mode they stamp `deletedAt` (the item still present in the fake's map, its
+`expiresAt` unchanged), every read filters stamped items out, and re-marking a marked row is
+an idempotent no-op-shaped Update. Setting `TMCT_DYNAMO_LIVE_TABLE` reruns the same file
+against a real table by hand; CI never sets it.
 
 Acceptance: `node --test test/adapters/memory-dynamo-conformance.test.mjs test/estate/pack.test.mjs`;
 a consumer-style import through the exports map proving `./memory-backends` resolves;
@@ -703,8 +769,9 @@ Acceptance: `node --test test/server/row-service.test.mjs`; `npm run test:fast`.
 **Owns** `src/surfaces/web/http-row-backend.mjs` (new: `createHttpRowBackend({ apiBase,
 sessionKey, fetchImpl })`, the §3.1 contract over fetch — reads under the `x-tmct-session`
 header, mutations addressed to `/api/sessions/<sessionKey>/…` per §3.8's table — `deleteAll`
-as the `{all: true}` delete, the §3.8 error mapping including 507 → `BackendUnavailable`),
-`test/adapters/http-row-backend.test.mjs` (new). **Sonnet**, after M5.
+as the `{all: true}` delete, the §3.8 error mapping onto the exported §3.1 classes, 507 →
+`BackendUnavailable` included), `test/adapters/http-row-backend.test.mjs` (new). **Sonnet**,
+after M5.
 
 Its test file runs the FULL conformance kit against the client pointed at `local.mjs` — three
 real layers (client → handler → reference backend), no fakes — plus the scripted error double
@@ -771,14 +838,20 @@ run the suite, link to the contract doc). **Haiku**, after M6 and M7. Docs gate 
 names: the `./memory-backends` subpath and the `createDynamoRowBackend` constructor (§3.11's
 snippet verbatim), the `attributeNames` fit for their existing single-table layout, the
 `./memory-backend-conformance` kit location, the contract doc, the meta keys and the
-queue-as-rows change, the §4 split between conformance-checked and adapter-documented, that
-tmct's own site now runs the same shipped backend live against a tmct-owned table (theirs
-stays theirs), and the three spec asks answered differently than written — reads are
-session-scoped per §3.5 with the term-read path settled but dormant; deletes are observable
-semantics with two shipped modes (physical by default, `softDelete` tombstoning for
-cost-protected deployments — tmct's own service uses the latter, theirs is their choice); and
-their §7 adapter offer is superseded because the backend ships finished. What stays theirs:
-the table and IAM, the TTL value, their live e2e, the S3-path retirement.
+queue-as-rows change, the §4 split between conformance-checked and adapter-documented, and
+that tmct's own site now runs the same shipped backend live against a tmct-owned table (theirs
+stays theirs). Their four review asks, answered: consistent reads default on (their
+load-bearing one, with the off-knob and the 2x RCU note); `putRows` concurrent with the
+`writeConcurrency` knob; `onOversizedRow: "drop"` plus the exported `BackendRejected`/
+`BackendUnavailable` classes for continue-without-persistence by type; and their §3.7
+correction adopted — the `tmct:needs` row is extractor-minted fact data the bookkeeping gate
+does not touch, its fix tracked as the extraction-quality item, their demo-side guard right to
+stay meanwhile. Also restated: fresh backend per invocation (their own integration note, now
+the documented pattern); reads session-scoped per §3.5 with the term-read path settled but
+dormant; deletes as observable semantics with two shipped modes (physical by default,
+`softDelete` tombstoning — tmct's service uses the latter, theirs is their choice); their §7
+adapter offer superseded because the backend ships finished. What stays theirs: the table and
+IAM, the TTL value, their live e2e, the S3-path retirement.
 
 ---
 
@@ -797,9 +870,11 @@ ships with it and says so, not that it hides.
    bug by definition.
 3. **Cache staleness across a warm process.** Accepted with its bound stated (§3.6): a second
    writer's rows appear at the next cold open; derived rows recompute on load. Two tabs on one
-   news session are two writers and see each other only on reload. No partition version, no
-   ETag in v1; if the staleness bites a real consumer, an `If-None-Match` on GET /api/rows is
-   the cheap add and the endpoint table leaves room for it.
+   news session are two writers and see each other only on reload. The serverless consumer
+   sidesteps it entirely by constructing a fresh backend per invocation (§3.10) — the
+   documented pattern, and what bedrock-meter does. No partition version, no ETag in v1; if
+   the staleness bites a real consumer, an `If-None-Match` on GET /api/rows is the cheap add
+   and the endpoint table leaves room for it.
 4. **`deleteAll` is query-then-mark, non-atomic.** Accepted, ordered, and made retryable: the
    purge marks rows, then meta — never the session's rate-counter rows, so a purge cannot
    reset the mutation-rate limit — and the global counter is untouched throughout (§3.8). The
