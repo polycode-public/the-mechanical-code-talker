@@ -1,7 +1,8 @@
 # PLAN_EXTRACTION_CONFIDENCE.md — extraction says how it read each sentence: named findings, never scores
 
-Status: BUILDING — the operator gave the build go on 2026-08-10; the E-phases run inside the
-memory-backend campaign's slots. It answers three recorded extraction defects and
+Status: BUILT — all five phases landed 2026-08-10 (each carries its build marker below),
+plus one remainder found in E1 and closed the same day: p2p wire facts now carry each
+assertion's findings, with a two-peers/two-orders convergence test. It answers three recorded extraction defects and
 one consumer ask with a single mechanism: the extractor records named, testable findings about
 how a triple was read, and each consumer decides which findings it declines. The trigger is
 `archive/PLAN_NEWSWORTHINESS.md`'s N4 marker: "back to the link" and "normalizefeeditems" headed

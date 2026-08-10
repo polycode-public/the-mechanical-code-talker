@@ -77,18 +77,11 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
   itself landed: +0.084 answer-identity-controlled on changed answers, every cell up, report
   `reports/BENCHMARK_CEFR_ENGLISH_5.0.46.md`; judge reliability on `g-b1-neg-11` is that
   report's own open caveat.)
-- [ ] **The extraction-quality findings: `PLAN_EXTRACTION_CONFIDENCE.md`** — BUILDING inside
-  the campaign (E0 in wave 1). A closed vocabulary of named structural findings per
-  assertion (never a score): three decline reasons (`definitional-frame`,
-  `relative-clause-verb`, `fragment-term`) and three attached findings (`identifier-token`,
-  `clause-fallback`, `pronoun-carry`); the newsworthiness gate rejects finding-bearing rows
-  from heading cards; acceptance is the NYT fixture at 3 hubs / 0 junk with the fixture
-  byte-identical, and the latency sentence declining both its bad edges. Serializes against
-  `PLAN_MEMORY_BACKEND.md`'s M1/M3 on core.mjs; the fluent-meta-commentary residual is
-  recorded with the NER horizon. Closes the scaffolding-prose false positive and
-  bedrock-meter's confidence-marker ask. Remainder found in E1: `p2p-room.mjs`'s wire fact
-  enumerates its fields explicitly, so a finding-bearing row replicates to a peer WITHOUT
-  its findings — the wire fact needs the `extraction` field carried before this item closes.
+- [ ] **The extraction-quality findings: `PLAN_EXTRACTION_CONFIDENCE.md`** — CODE COMPLETE:
+  all five phases plus the E1-found p2p replication remainder are merged (the plan's own
+  build markers carry the numbers; NYT fixture at exactly 3 hubs, latency sentence at one
+  marked edge, caveats on every citation surface). Removed from this list when batch 4's
+  full gate verifies it.
 
 ## Discipline
 
