@@ -34,11 +34,11 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 `PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
-- In flight (the closing wave): T10 surface docs (Haiku), M10+T11 combined
-  bedrock-meter handoff (Haiku, one inbox append so the two notes can't clobber), the
-  full screenshot regeneration (Sonnet). T9 landed (nine-button demo grid, chat-AWS
-  deep-link cell). Every build phase of both plans is now merged; after this wave:
-  final gate, push, and the plan docs' closing status pass. Deploy blocker: pipelines #760/#761's failed
+- The campaign's build work is COMPLETE: every phase of both plans is merged (T10 docs
+  landed with four coordinator corrections; the M10+T11 handoff sits in bedrock-meter's
+  inbox; the DOM-rendered screenshots recaptured — mudiii/adventure keep their accurate
+  committed shots, this machine's headless Chromium has no GL). The final gate suite
+  and push are the remaining coordinator steps. Deploy blocker: pipelines #760/#761's failed
   deploys left an orphaned `tmct-prod-prod-rows` table (RETAIN on rollback) that
   collides with re-creation — needs `aws sso login --profile tmct-prod`, then the
   coordinator verifies it's the empty orphan and deletes it. Operator step recorded
