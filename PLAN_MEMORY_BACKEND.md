@@ -25,7 +25,16 @@ and the wikipedia-derived band deferred to its own future design doc (§3.13); t
 approved in full (§3.8); the build, when it comes, runs as one continuous campaign (§28); T1
 calibrates the retrieval budgets from measurements before anything consumes them (§3.15.1);
 fuzzy retrieval ships on, mode-configurable and per-request togglable (§3.15.2); and T4 is
-guarded by tier-1 alone, the judge spend declined (§20). The consumer
+guarded by tier-1 alone, the judge spend declined (§20). The eighth revision is the
+code-cross-check pass: every cited seam verified against the tree (the per-assertion record
+ids, the seven sqlite tables and their two deliberate orderings, the real dispatch and
+session-threading call sites, the news session's construction, the infra layout), each phase
+thickened with implementation notes from that survey; plus three additions — the news page's
+poll and enrichment cycles move server-side behind async triggers with the page polling a
+`graphVersion` meta value to refresh (§3.21, phases T12–T13), the good-citizen/breaker
+machinery goes shared-state on the worker, and bedrock-meter's adoption items land
+(`basePayload` and per-session bounds on the constructor, the M0–M4+M9 npm cut named inside
+the campaign, the attributeNames fixed-fields rule). The consumer
 requirements it answers are bedrock-meter's
 `GRAPH_BACKEND_SPEC.md` (untracked in their repo, carried over by the operator; its section
 numbers are cited as spec §N throughout). The seam it formalizes already exists in embryo:
@@ -81,9 +90,22 @@ also calls, so seeded and taught facts land in the same store.
 
 **Diffed row writes exist already.** Backend C's `persistSqlitePayload` diffs a mutated payload
 against what the connection last saw and issues per-row INSERT/REPLACE/DELETE, with a cached
-payload patched in lockstep. The sqlite DDL is already row-oriented: `individuals`, `relations`,
-`edges`, `facts`, `meta`. The projection this plan factors out is the same one that code
-performs inline today.
+payload patched in lockstep (`cacheUpsertIndividual` and friends mirror every SQL write). The
+sqlite DDL is row-oriented across seven tables: `individuals` (id, ord, class, label, json —
+the JSON blob is the source of truth, the columns are a queryable projection), `relations` and
+`edges` (the objectProperties groups and their example edges, NUL-delimited (subject, object)
+keys), `facts` (a per-Fact projection written in the same transaction as its `individuals`
+row), `meta` (the payload's top-level scalars: `generated_at`, `memory`, `prefixes`,
+`vocabulary`, `classes`, `proseIndex`), and two DERIVED tables re-materialised per write for
+exactly what moved — `fact_heads` (per-group trust bases) and `fact_object_supersessions` (an
+ordered supersession log per subject+predicate). The payload shape those tables reconstruct is
+`emptyMemory()`'s: `{ generated_at, memory, prefixes, vocabulary, classes, objectProperties,
+individuals, proseIndex }`. Two ordering semantics are deliberate and load-bearing:
+`individuals` keep a stable `ord` (an update preserves array position), and a changed edge
+moves to the END of its group's `examples` (recency). A record's id is per-ASSERTION —
+`<tripleHash>@<sourceId>` (`factGroupId` strips the suffix; two sources asserting one triple
+are two records sharing a group). The projection this plan factors out is the same one that
+code performs inline today, and §3.2's implementation notes carry these exact shapes.
 
 **The sidecars.** The syllogise watermark and node id already dispatch per backend
 (`loadSyllogiseState`/`saveSyllogiseState`, `loadNodeId`/`saveNodeId`). The research queue does
@@ -203,7 +225,9 @@ order on read never carries meaning.
   outbound HTTP of any kind. Wiki-backed search is served by the shipped reference pack and
   the loaded corpus bands (the deferred wikipedia-derived band extends it when its own plan
   lands); every fact a turn can ground comes from a committed or loaded
-  source, and its provenance says which.
+  source, and its provenance says which. The one Lambda WITH egress is the news worker
+  (§3.21), whose whole job is polling external feeds: its outbound HTTP is allow-listed to
+  the source roster and KB hosts, and it carries §3.16's manners in their strongest form.
 - **Every remote call is a good citizen.** Dynamo corpus Queries and external source fetches
   alike run under declared budgets, back off inside them, degrade honestly, and sit behind a
   circuit breaker suited to their runtime (§3.16).
@@ -291,8 +315,10 @@ three indexable fields:
 
 ```js
 {
-  rowKey: "fact:1a2b…",   // stable id; facts are content-addressed by factIdFor, so the same
-                           // triple is the same rowKey on every device
+  rowKey: "fact:1a2b…@src:…",  // stable id; a Fact's record id is per-ASSERTION —
+                           // `<tripleHash>@<sourceId>` (core.mjs's factGroupId model) — so the
+                           // same (triple, asserting source) is the same rowKey on every
+                           // device, and two sources asserting one triple are two rows
   rowClass: "fact",        // closed set: fact | source | utterance | session | rule |
                            //             retraction | edge-group | bookkeeping
   term: "tariff",          // the canonical index term (normFactTerm of the subject) for fact
@@ -315,11 +341,19 @@ three indexable fields:
   5.0.46 phrase fix corrected the rendering (the local-name fall-through), the extractor still
   mints the row, and its real fix is the extraction-quality confidence-marker item recorded in
   `NEXT.md`.
-- **Mutation is additive.** A supersession or retraction projects as its own new row (the
-  `retraction` class, or a new fact-version row), never as an in-place rewrite of the superseded
-  row's `json`. Two turns superseding concurrently then both land, and assembly applies both;
-  last-write-wins can only lose a write when two rows share a key, and additive rows never do.
-  `payloadToRows` enforces this shape; M1's integration test races two handles to prove it.
+- **Mutation is additive, and the mechanism is derivation.** Today's payload mutates BOTH ends
+  of a supersession: the new record carries `mgx:supersedes: [oldId]` and the old record gains
+  `mgx:supersededBy` (core.mjs's `SUPERSEDES_PROP`/`SUPERSEDED_BY_PROP` pair). Projected
+  naively, that rewrites the old row — the LWW hazard. So the projection stores only the
+  FORWARD pointer: a superseding record's row carries its `supersedes` list, the superseded
+  row's stored `json` never changes, and `rowsToPayload` derives every `supersededBy` at
+  assembly from the union of `supersedes` pointers (the same move `fact_object_supersessions`
+  makes queryable in sqlite). A retraction projects as its own `retraction`-class row. Two
+  turns superseding concurrently then both land — distinct new rows, an untouched old row —
+  and assembly applies both; last-write-wins can only lose a write when two rows share a key,
+  and additive rows never do. `payloadToRows` enforces this shape (a projected old row whose
+  only change is `supersededBy` diffs as UNCHANGED); M1's integration test races two handles
+  to prove it.
 - **The 4 KB cap fails before the network, and the failure posture is a knob.** `payloadToRows`
   rejects an oversized row with a `BackendRejected` carrying the offending fact's provenance,
   at projection time — before any `putRows`, local or HTTP. The service's own 400 (§3.8) is
@@ -334,8 +368,23 @@ three indexable fields:
   `payloadToRows(payload)` and `rowsToPayload(rows)`, factored from what `persistSqlitePayload`
   does inline today, plus `diffRows(before, after)` returning `{ puts, deletes }`. Round-trip
   identity (`rowsToPayload(payloadToRows(p))` equals `p` up to key order) is a unit-tested
-  invariant, and `rowsToPayload` sorts by `rowKey` before assembly so arrival order never
-  reaches a resolver (the crdt.md rule).
+  invariant. Assembly order is deterministic without erasing meaning: the payload carries two
+  DELIBERATE orders the sqlite store already preserves — `individuals` keep a stable `ord`,
+  and an edge group's `examples` order is recency (an updated edge moves to the end) — so each
+  row's `json` carries its `ord` (and an edge-group row its examples in order), and
+  `rowsToPayload` reconstructs by `(ord, rowKey)`, never by raw `rowKey` sort alone. That is
+  still a pure function of the row set (the crdt.md rule holds: arrival order never reaches a
+  resolver, because order rides row content), while Fact individuals additionally get the
+  `sortFactIndividualsById` treatment the p2p path already applies.
+- **Derived state is recomputed, never stored.** The sqlite store's two derived tables
+  (`fact_heads`, `fact_object_supersessions`) and the payload's derived scalars (`classes`,
+  `vocabulary` beyond the seed's own entries, `proseIndex`, `generated_at`) are NOT projected
+  as rows: `rowsToPayload` recomputes them at assembly (the `backfillFactHeads`/
+  `buildProseIndex` code paths exist and are the reference). This keeps every stored row small
+  — a 61k-fact store's `vocabulary` or `proseIndex` serialized whole would dwarf the 4 KB cap —
+  and it is the same recompute-on-load rule §3.6 already applies to derived rows. What DOES
+  store beyond individuals and edge groups: the two small true scalars (`memory`, `prefixes`)
+  as meta values.
 
 ### 3.3 The index key, settled now
 
@@ -435,7 +484,10 @@ news.html (engine in-page, seed graph as basePayload, never persisted)
   awaits the PUT. The cost is one round trip per mutating turn — the diff batches a whole
   poll's stored facts into one `putRows` call — roughly 20–60 ms from the UK to eu-west-2 and
   100–300 ms from far geographies, paid once per poll cycle or teach, on a page whose polls
-  already spend seconds ingesting. Honesty over latency, chosen deliberately.
+  already spend seconds ingesting. Honesty over latency, chosen deliberately. (This describes
+  the page's own writes — teaches, and the M8→T13 intermediate state's in-page polls; from
+  T13 the poll/enrich cycles run server-side per §3.21 and the page's writes are teaches and
+  triggers.)
 - **Unreachable service: the visit runs without persistence, and says so.** The page boots
   regardless — the seed is a static asset and the in-page payload assembly needs no store. If
   the cold-open GET fails, or a write fails mid-visit, the page states through the existing
@@ -479,7 +531,9 @@ path, and the first write under a fresh key creates the session implicitly.
 | DELETE /api/sessions/:uuid/rows | deleteRows / deleteAll | 204 | **soft delete, never physical**: body `{rowKeys:[…]}` marks the named rows deleted (an UpdateItem stamping `deletedAt` — §3.10's soft-delete mode) for diff-driven removal (a retraction or forget dropping rows, derived-row invalidation); body `{all: true}` marks every session row and meta entry. Nothing is removed from the table, the global counter never decrements, and TTL alone reclaims the items (§29.4) |
 | GET /api/meta/:key | readMeta | 200 `{value}` / 404 | key in `x-tmct-session`; client maps 404 to null; a soft-deleted meta entry reads as absent |
 | PUT /api/sessions/:uuid/meta/:key | putMeta | 204 | body `{value}` |
-| GET /api/corpus/:band/rows?term=X&fuzzy=0\|1 | `queryBandTerm` (§3.14) | 200 `{rows:[…]}` | lands with T6. Read-only, no session key, band name validated against the configured band list (404 otherwise); one sort-key prefix Query per requested term, `fuzzy=1` adding the term's deterministic variants (§3.15.2); page-capped; serves the pages' corpus enrichment and nothing writes through it |
+| GET /api/corpus/:band/rows?term=X&fuzzy=0\|1 | `queryBandTerm` (§3.14) | 200 `{rows:[…]}` | lands with T6. Read-only, no session key, band name validated against the configured band list (404 otherwise); one sort-key prefix Query per requested term, `fuzzy=1` adding the term's deterministic variants (§3.15.2); page-capped; the public corpus read (and the smoke probe's target) |
+| POST /api/sessions/:uuid/poll | — (async trigger, §3.21) | 202 `{cycleId}` | lands with T12. Validates, stamps the cycle marker in session meta, async-invokes the news worker, returns immediately; 409 while a cycle is already running for the session; 429 over the cycle rate; body may carry `{sources:[…]}` to narrow the roster |
+| POST /api/sessions/:uuid/enrich | — (async trigger, §3.21) | 202 `{cycleId}` | lands with T12. Same shape; body may carry `{fuzzy: 0\|1}` — §3.15.2's per-request rung riding the trigger, read by the worker's corpus source |
 
 `readRowsByTerm` stays dormant client-side, and the handler already serves it
 (`GET /api/rows?class=fact&term=X` → a sort-key prefix query) because the sk layout (§3.3) makes
@@ -595,6 +649,9 @@ every attack below is bounded to the attacker's own sessions and the account's b
 | stored XSS through fact text (a taught fact carrying markup, read back into the DOM) | render-side escaping is already the page's rule — answer text lands via text nodes, never markup injection — and M8's e2e pins it: teach a fact containing a script tag through the real flow, reload from the service double, assert zero script execution and the literal text on screen. Isolation (above) bounds a miss to self-XSS even before the pin |
 | enumeration / cross-session reads | structural: 122 bits of key entropy, the format check as the floor, no endpoint that lists or returns keys, and an unknown key reading as an empty session (a probe learns nothing) |
 | corpus read flooding (the one sessionless route) | the corpus read (§3.8) serves public reference data, so the exposure is cost, not confidentiality: the same per-IP WAF rule covers `/api/*` whole, the route is one page-capped Query per term (fuzzy adds a capped variant count, §3.15.2), reserved concurrency queues the rest, and the read is `ConsistentRead: false` — eventually consistent is fine for a never-mutated band and halves the read cost |
+| cycle-trigger flooding (a poll trigger buys a whole worker run) | one running cycle per session (409), the per-session cycle rate (default 12/hour), triggers counted in the mutation rate, the same per-IP WAF rule, and the worker's own reserved concurrency (default 5) as the compute ceiling — a flood of triggers queues and 409s, it cannot fan out workers (§3.21) |
+| worker egress abuse (the one Lambda with outbound HTTP) | the allow-list is the source roster and KB hosts, compiled into the worker — no caller-supplied URL is ever fetched except through `/news add`'s existing preflight, which keeps its https-only and validation rules; the shared per-source courtesy throttle in `_meta` bounds the aggregate rate at the sources regardless of worker count, and the per-source breakers stop a failing source being hammered (§3.21) |
+| version-poll flooding (the page's refresh loop) | `GET /api/meta/graphVersion` is one eventually-consistent point read (~$0.125/million); the page's own backoff stretches the interval while idle, and the WAF rule bounds a hostile poller like any other `/api/*` caller |
 
 ### 3.10 The DynamoDB backend ships in the library
 
@@ -618,7 +675,22 @@ createDynamoRowBackend({
                                 // batches are 1–5 rows, so the default is the whole batch
   onOversizedRow = "throw",     // or "drop" — the §3.2 per-fact posture; drop logs the row's
                                 // provenance and persists the rest of the batch
-  attributeNames = { pk: "pk", sk: "sk", expiresAt: "expiresAt", deletedAt: "deletedAt" },  // fit an existing table
+  basePayload = null,           // a read-only overlay assembled beneath the session's rows
+                                // (§3.4's mechanics): seed graphs, a consumer's rich-corpus
+                                // overlay. NEVER written back — the diff runs against
+                                // base ⊕ rows by construction, and the M1 seeded-base test
+                                // is the guarantee's pin
+  maxRows = null,               // per-session bounds at the library seam, enforced by the
+  maxBytes = null,              // backend before any network call: a putRows that would
+                                // exceed either rejects with BackendRejected. null = unbounded
+                                // (the row service uses its own global cap instead, §3.8);
+                                // a consumer embedding tmct on a public surface sets these so
+                                // one unbounded visitor partition cannot degrade every play
+  attributeNames = { pk: "pk", sk: "sk", expiresAt: "expiresAt", deletedAt: "deletedAt" },
+                                // remaps the four STORAGE attribute names only, to fit an
+                                // existing table; the field names INSIDE the record —
+                                // rowClass, term, json — are fixed contract vocabulary and
+                                // do not remap
 })
 ```
 
@@ -679,7 +751,11 @@ const session = createSession({ memoryBackend /* … */ });
 ```
 
 They own the table (or a keyspace of an existing one — `attributeNames` fits their single-table
-layout), the IAM on their Lambda role, and the TTL value. tmct owns every line of storage code
+layout, and it remaps exactly four storage attribute names: `pk`, `sk`, `expiresAt`,
+`deletedAt`; the record's own field names — `rowClass`, `term`, `json` — are fixed contract
+vocabulary that no option renames). Their ~1,400-fact read-only corpus overlay is the
+`basePayload` option — assembled beneath the session's rows, never written back, no
+session-row writes spent seeding it. They own the IAM on their Lambda role and the TTL value. tmct owns every line of storage code
 and its tests; the first draft's hundred-line Store-seam adaptation is superseded, because
 nothing needs adapting when the backend ships finished. Their spec's §7 offer — they build the
 adapter and its conformance tests — is answered differently: the backend and its suite run ship
@@ -890,16 +966,17 @@ The mode resolves the same way every tmct option does, most specific first:
 4. **default** — on.
 
 **Where news.html meets it.** The page never calls the turn endpoint (§30); its corpus
-contact is the enrichment path. In AWS mode a `dynamo-corpus` KB source joins the page's
-enrichment roster (registered through the same source registry the other KB sources use),
-fetching the corpus read route for each fact-ungrounded term — the loaded demo band, term-
-scoped, read-only. The page surfaces a visible fuzzy toggle beside its other enrichment
-controls: on, the source's requests carry `fuzzy=1`, the route queries the term's
-deterministic variants too, and whatever grounds joins the session's rows with band
-provenance — the operator's "include the fuzzy-matched terms in the subgraph", at the page's
-enrichment grain. The toggle goes live at T8, which is when the source can exist: it needs
-T0's bands and T6's route, and until then the page has no corpus-touching request. Local mode
-never touches the corpus; the toggle renders only in AWS mode.
+contact is the enrichment path, which runs server-side once §3.21's worker lands. The
+`dynamo-corpus` KB source joins the enrichment roster (registered through the same source
+registry the other KB sources use) — in the worker it queries the band partitions directly
+(`queryBandTerm`, no HTTP hop); in the M8→T13 intermediate state, and for the local double,
+the same source fetches the T6 corpus read route. The page surfaces a visible fuzzy toggle
+beside its other enrichment controls: on, the enrich trigger's body carries `{fuzzy: 1}`
+(§3.8), the worker's source queries each fact-ungrounded term's deterministic variants too,
+and whatever grounds joins the session's rows with band provenance — the operator's "include
+the fuzzy-matched terms in the subgraph", at the page's enrichment grain. The toggle goes
+live at T8 (it needs T0's bands and T6's route); local mode never touches the corpus, and the
+toggle renders only in AWS mode.
 
 ### 3.16 Good citizens and circuit breakers, on both transports
 
@@ -1059,6 +1136,66 @@ unique text), About pointing at chat.html's existing about page, no new claims b
 screenshot, no OG image — a different perspective on the same demo, not a new capability. The
 chip shows the page name; the deep link stays on the href (the river cell's overflow lesson).
 
+### 3.21 The server-side news cycle
+
+The deployed news page's polling and enrichment move server-side (operator directive): a press
+triggers a Lambda, the cycle runs asynchronously against the session's own row partition, and
+the page refreshes by polling the graph. The engine code needs no change to run there —
+`pollNewsSources(ctx)` and `enrichTopTerms(ctx)` already take an injected `ctx` carrying
+`memoryDir`, a `providers.newsFetchers` map, and the `shouldAbort` seam read between sources
+and between articles (news.mjs's own documented contract) — the worker builds that ctx over
+`createDynamoRowBackend` instead of `createInMemoryStore` and calls the same functions.
+
+**The trigger endpoints** (§3.8's table): POST poll and POST enrich validate exactly like every
+mutating route (key shape, content type, rate), write a cycle marker into session meta
+(`cycle`: `{cycleId, kind, state: "running", startedAt, sources: {…per-source progress}}`),
+async-invoke the news worker Lambda (an `InvocationType: "Event"` self-invoke or a second
+function — the CDK phase decides which, the contract is only that the 202 returns before the
+cycle runs), and answer `202 {cycleId}`. One cycle per session at a time: a trigger while
+`state: "running"` is a 409, unless the marker is stale past the worker's own timeout, in
+which case the trigger replaces it (a crashed worker never wedges a session).
+
+**The worker.** `server/news-worker/handler.mjs`: fresh backend per invocation (§3.10),
+`loadMemory`, build the ctx with REAL fetchers (`createNewsFetcher` over the source roster,
+`getResearchProvider` for KB lookups, the `dynamo-corpus` source of §3.15.2 querying the band
+partitions directly — it is server-side, so no HTTP hop through the corpus route), run the
+cycle, `persistMemory` the delta as it lands per source (facts appear row by row, not at the
+end), update the per-source progress in the cycle marker as each source completes, and finish
+by writing `state: "done"` (or `"failed"` with the reason). Every mutating write also bumps
+`graphVersion` (below). The worker honours `shouldAbort` wired to its own remaining-time
+budget, so a Lambda nearing its timeout stops between articles and marks the cycle done-partial
+— the same honest abort the page's stop button performs today.
+
+**Egress, refined.** The turn Lambda's no-egress rule (§2) stands untouched. The news worker
+is the one Lambda WITH outbound HTTP, allow-listed to the source roster and KB hosts it serves
+(the five contemporary feeds, the KB lookup origins) — polling external feeds is its entire
+job. It carries §3.16's manners upgraded to their strongest form: the per-source courtesy
+throttle and the per-source breaker state live in `_meta` items (sk `breaker#source#<id>`,
+`throttle#<id>`), so ALL worker invocations share one throttle per source instead of each
+Lambda pacing independently — the 2 s courtesy gate, made global.
+
+**The page's refresh loop.** Every mutating service write (worker or page) bumps a monotonic
+`graphVersion` meta value (an atomic `ADD` beside the write). The page polls
+`GET /api/meta/graphVersion` — one cheap read on the existing meta route, ~2 s interval with
+backoff toward ~10 s while nothing changes — and refetches `GET /api/rows` only when the
+version moves, rebuilding the feed client-side from the fresh rows (assembly and rendering
+stay in-page; the engine is unchanged). The cycle marker (`GET /api/meta/cycle`) drives the
+same phase UI the page shows today — per-source chips, "polling…", the request-log lines —
+now reporting the worker's progress. No push infrastructure; polling a version counter is the
+whole mechanism.
+
+**Caps.** One running cycle per session (the 409); N cycles per session per hour (deployment
+parameter, default 12 — a poll is worth many row writes); the worker's own reserved
+concurrency (deployment parameter, default 5) separate from the row service's and the turn
+service's; the worker Lambda timeout sized to a full roster poll with the abort budget inside
+it. Trigger requests count toward the session's mutation rate.
+
+**Sequencing, honestly.** M8 lands the row-backend wiring with the page still ingesting
+in-page — a working intermediate state where a poll's facts arrive as one PUT from the
+browser. T13 then moves the cycle server-side: the press becomes a trigger, the in-page
+ingest path stays as the local-double test path and the engine's own code, and the deployed
+page's polls run in the worker from that phase on.
+
 ---
 
 ## 4. The operational contract as checks
@@ -1102,6 +1239,29 @@ row, `diffRows` producing the minimal put/delete sets for an append, a supersess
 retraction, and the union of two conflicting supersession projections assembling with both
 applied.
 
+Implementation notes (from the code survey):
+
+- The payload to project is `emptyMemory()`'s shape: `{generated_at, memory, prefixes,
+  vocabulary, classes, objectProperties, individuals, proseIndex}`. Project `individuals`
+  (each with its `ord` carried in the row json) and `objectProperties` groups (one
+  `edge-group` row per prop, examples in stored order — order is recency by design); store
+  `memory` and `prefixes` as meta; RECOMPUTE `classes`, `vocabulary`'s derived entries,
+  `proseIndex` (via `buildProseIndex`), and `generated_at` at assembly — never as rows (§3.2's
+  derive-not-store rule; a 61k store's proseIndex serialized whole dwarfs the 4 KB cap).
+- Fact rows: `rowClass` from `ind.class === FACT_CLASS`; `rowKey` is the RECORD id
+  (`<tripleHash>@<sourceId>` — `factGroupId` strips the group); `term` =
+  `normFactTerm(individualKey(ind, "subject"))` mirroring `factProjectionValues`. The
+  supersession derivation (§3.2) replaces both `SUPERSEDED_BY_PROP` stamping and the
+  `fact_object_supersessions`/`fact_heads` tables — those are sqlite's queryable
+  materialisations of what assembly recomputes (`backfillFactHeads` is the reference
+  recompute).
+- Reuse the fixture payloads `test/adapters/memory-backend-sqlite.test.mjs` and
+  `memory-core.test.mjs` already build; `memory-retraction.test.mjs` shows the retraction
+  shapes `diffRows` must emit, and `memory-fact-heads.test.mjs` the head recompute the
+  assembly inherits.
+- One byte-level trap: `core.mjs` contains characters that make GNU grep treat it as binary —
+  survey it with `grep -a` or node, not bare grep.
+
 Acceptance: `node --test test/adapters/memory-rows.test.mjs`; `npm run test:fast`.
 
 ## 6. Phase M1 — Backend D dispatch
@@ -1122,6 +1282,30 @@ scalar sidecars landing in meta and the queue landing as rows, a seeded-base cas
 supersessions land, and byte-identical answers between a sqlite-backed and a row-backed
 session running the same taught turns (the storage-seam-not-behaviour-change pin).
 
+Implementation notes (from the code survey):
+
+- The dispatch set is wider than the two loaders. Cover: `openMemoryBackend` (object
+  passthrough when `isRowBackend`), `openExistingMemoryBackend` and
+  `openConfiguredMemoryBackend` (string-only paths — unchanged, but their docblocks gain the
+  object caveat), `readOnlyMemorySnapshot` (works via `loadMemory`, so row handles come free —
+  add the test), `closeSqliteMemoryStore` (already a guarded no-op for foreign handles; the
+  row handle's `close()` needs its own call site in the session teardown), `isMemoryOrSqliteHandle`
+  (widen or add `isRowHandle` beside it — blocks.mjs and friends guard raw path joins with it).
+- `chat-session.mjs:418` coerces the choice with `String(memoryBackend || …)` BEFORE
+  `openMemoryBackend` — an injected object must be tested with `isRowBackend` ahead of that
+  line or it stringifies. Two session behaviours also branch on the choice string: the W3
+  bootstrap seed fires only on the default token (row backends skip it — correct, note it in
+  the docblock) and `discardsWrites`/`whereItGoes` copy needs a third arm for a persistent
+  row backend ("kept in your configured store").
+- `research-queue-store.mjs` is 76 lines writing one `research-queue.json` beside the store —
+  the row path replaces the file with `bookkeeping` rows per §3.1; keep the file path for
+  string/sqlite tokens byte-identically.
+- `test/adapters/chat-memory-backend.test.mjs` and `memory-backend-default.test.mjs` pin
+  today's selection precedence — extend them rather than writing parallel selection tests.
+- The sqlite handle's cross-connection cache guard (`PRAGMA data_version` in
+  `readSqlitePayload`) has no row-backend equivalent by design — sharp edge #3's accepted
+  staleness; cite it in the wrapped handle's docblock so nobody "fixes" it ad hoc.
+
 Acceptance: `node --test test/adapters/memory-row-backend.test.mjs test/adapters/memory-rows.test.mjs`;
 `npm run test:fast`; CLI smoke `printf 'hi\n/exit\n' | node bin/tmct.mjs`.
 
@@ -1139,6 +1323,14 @@ The kit's checks are the "yes" rows of §4's table. It must run against a bare b
 with no tmct internals loaded, so a third party can wire it into their own `node --test` run
 exactly as the spec asks.
 
+Implementation notes: `conformance.mjs`'s public surface is `runConformance(name,
+makeProvider)` plus `assertResult`/`assertIndividual`-style validators — mirror that surface
+shape. One naming caution: a `./memory` subpath ALREADY exists (it maps to
+`src/adapters/memory/core.mjs`), so the new subpaths are `./memory-backends` and
+`./memory-backend-conformance` exactly — never a bare `./memory-…` collision — and the
+consumer-style import test resolves both through the exports map beside the existing
+`./memory` entry.
+
 Acceptance: `node --test test/tools/memory-backend-conformance.test.mjs test/estate/pack.test.mjs`;
 a consumer-style import through the exports map (the `agentbench-envelope.test.mjs` resolve
 trick) proving the subpath resolves.
@@ -1154,6 +1346,19 @@ The refactor must leave every existing sqlite test green with no assertion edits
 stored bytes for the same payload (checked by a before/after dump comparison in the new test).
 This phase is what makes "the sqlite backend passes it" (spec §8.1) literally true rather than
 true-by-analogy.
+
+Implementation notes (from the code survey): `persistSqlitePayload` is subtler than a diff
+loop — the refactor must preserve, byte for byte: the unchanged-row skip (`existing.json ===
+json` continues without a write), `ord` assignment (existing rows keep theirs; new rows take
+`MAX(ord)+1`), the NUL-delimited edge keys and the per-group edge diff scoped by
+`edges_by_prop`, the `facts` projection upsert riding the SAME transaction as its
+`individuals` row (`FACT_PROJECTION_UPSERT_SQL`), the touched-groups/touched-pairs
+re-materialisation of `fact_heads` and `fact_object_supersessions` for exactly what moved,
+and the cache mirror calls (`cacheUpsertIndividual` et al) in lockstep. The existing pins to
+keep green unedited: `test/adapters/memory-backend-sqlite.test.mjs`,
+`memory-backend-default.test.mjs`, `memory-fact-heads.test.mjs`, `memory-versioning.test.mjs`,
+`memory-retraction.test.mjs`, `memory-facts-read-perf.test.mjs` (the read-path perf pin —
+the refactor must not regress the cached-read shortcut or `PRAGMA data_version` guard).
 
 Acceptance: `node --test test/adapters/memory-sqlite-conformance.test.mjs` plus the existing
 memory/store test files; `npm run test:fast`.
@@ -1242,6 +1447,13 @@ polled with the same patience the version check uses). **Sonnet**, after M5;
 the stack change deploys through the existing job on the next main push, no new pipeline
 surface. The first deploy lands the table empty; there is nothing to migrate.
 
+Implementation notes: the CDK app is self-contained under `infra/` with its own
+`package.json`/`tsconfig.json`; the constructs join `WebsiteStack`
+(`infra/lib/website-stack.ts:128`), whose stack instance CI deploys as
+`tmct-prod-prod-website` — new constructs land inside that class, no new stack, and the
+distribution object the behavior attaches to is the one the class already owns (beside its
+viewer-request CloudFront Function). `apex-stack.ts` is untouched.
+
 Acceptance: `npx tsc --noEmit` in `infra/`; `npm run build:row-service` emits a bundle;
 `node --test test/server/row-service.test.mjs` still green; the smoke probe runs against
 `local.mjs` in a dry-run mode so the script itself is tested without AWS.
@@ -1255,6 +1467,18 @@ discarding the stored key), `src/services/news-viz.mjs` (the honest persistence 
 consent moment and beside stop & forget — including the session-pointer-in-this-browser line;
 the persistence-unavailable status line), `test/adapters/news-browser-entry.test.mjs`,
 `test-e2e/pages-news-feed.test.mjs`. **Sonnet**, after M1 and M6.
+
+Implementation notes (from the code survey): `createNewsSession`
+(news-browser-entry.mjs:133) builds `memoryDir = createInMemoryStore();
+applySeedPayload(memoryDir, seedPayload)` — the AWS-mode swap replaces exactly those two
+lines with the wrapped row backend carrying `seedPayload` as `basePayload`, and everything
+downstream threads the same `memoryDir` token untouched. Preserve the session's `store`
+wrapper verbatim: its `foldedRows` cache with `foldedRows = null` invalidation on every
+`appendFacts`/`removeFacts` is the page's fold-once-per-write-epoch performance contract.
+`revokeConsent` is at :498 — it already raises the `forgotten` flag and resets state; it
+gains the `deleteAll()` call and the key discard. The consent preference rides `prefStore`
+(`localStoragePrefStore()` under `NEWS_START_PREF_KEY`) — the session UUID joins it as a
+second key, same store, never a third mechanism.
 
 The e2e mounts `local.mjs` on the same static server the snapshot is served from, under
 `/api/` — same-origin, fixture-true, never AWS. Pins: zero `/api/` requests before the start
@@ -1474,6 +1698,49 @@ an execution plan). **Haiku**, after T5 and T9. Docs gate only.
 retrieval budgets, the breaker, what their embedded path can adopt (the retrieval module and
 bands work identically over their table), and what stays theirs. **Haiku**, last.
 
+## 27a. Phase T12 — the news worker and the cycle triggers
+
+**Owns** `server/news-worker/handler.mjs` and `server/news-worker/local.mjs` (new; §3.21's
+worker — the real `pollNewsSources`/`enrichTopTerms` over a fresh dynamo backend, the cycle
+marker lifecycle, per-source progress, `graphVersion` bumps, the abort-on-remaining-time
+budget; the local double runs the same worker in-process over the reference backend with
+fixture fetchers), the two trigger routes in `server/row-service/handler.mjs` (validate,
+stamp, async-invoke — with the invocation seam injectable so the local double invokes
+in-process), the shared-throttle/breaker `_meta` items through T2's module,
+`npm run build:news-worker`, `test/server/news-worker.test.mjs` (new; a full cycle over the
+double: 202-then-rows-appear, per-source progress in the marker, the 409 while running, a
+stale marker replaced, the abort budget stopping between articles with `state` done-partial,
+`graphVersion` monotonic across the cycle's writes, the shared throttle read by two
+concurrent "invocations"). **Sonnet**, after M5 and T0; parallel with T3.
+
+Implementation notes: the ctx the worker builds is `createNewsSession`'s own shape
+(news-browser-entry.mjs:213 — `{memoryDir, store, cache, lexicon, config, state, providers,
+now, shouldAbort}`) minus the page concerns; reuse `createNewsFetcher` and the source registry
+exactly as `rebuildFetchers()` does, and keep the store wrapper's fold-cache invalidation
+(the `foldedRows = null` on every append/remove) — the worker folds the assembled store the
+same way the page does. The `news-fixture:` replay fetchers the e2e uses are the local
+double's fetchers.
+
+Acceptance: the test file; `npm run test:fast`.
+
+## 27b. Phase T13 — the page on the server-side cycle
+
+**Owns** `src/surfaces/web/news-browser-entry.mjs` (the poll/enrich presses become trigger
+POSTs in AWS mode; the `graphVersion` polling loop with backoff; rows refetched on version
+change and the feed rebuilt; the cycle marker driving the existing phase UI; stop cancels by
+writing the marker's stop request — the worker's `shouldAbort` reads it between sources),
+`src/services/news-viz.mjs` (the phase UI reading worker progress; the fuzzy toggle riding
+the enrich trigger per §3.15.2), `test-e2e/pages-news-feed.test.mjs` (the AWS-mode cycle
+against the M5 double + T12's in-process worker: press poll → 202 → rows appear without a
+page-side ingest, the version poll backing off while idle, stop honoured between sources,
+the fuzzy toggle's flag observed by the double). **Sonnet**, after M8 and T12.
+
+Between M8 and this phase the deployed page ingests in-page (§3.21's sequencing note) — a
+working state, not a broken one; this phase is the flip.
+
+Acceptance: the e2e file; `node --test test/adapters/news-browser-entry.test.mjs`;
+`npm run test:fast`.
+
 ---
 
 ## 28. Concurrency and model tiers
@@ -1481,7 +1748,11 @@ bands work identically over their table), and what stays theirs. **Haiku**, last
 **The campaign shape, decided:** when the operator's build go comes, every phase below runs as
 one continuous campaign under the standing merge/gate/push cadence — no review pauses between
 phase groups. The gates are the phases' own acceptance lists and the full suite at each push
-moment, nothing else.
+moment, nothing else. One boundary inside the campaign is named for consumers: the push that
+lands **M0–M4 plus M9's contract doc** is a publishable npm cut — the library half whole
+(projection, dispatch, kit, sqlite conformance, DynamoDB backend, docs) with nothing of the
+service required — and bedrock-meter's backend phases pin that version. The campaign does not
+pause there; the cut is a version number their side can depend on, not a review gate.
 
 | phase | files | tier | after | parallel with |
 | --- | --- | --- | --- | --- |
@@ -1508,11 +1779,14 @@ moment, nothing else.
 | T9 demo grid | index.html, site.css, share.mjs, page specs | Sonnet | T8 | — |
 | T10 docs (surface) | contract doc, README, site copy | Haiku | T5, T9 | — |
 | T11 handoff (surface) | bedrock-meter inbox | Haiku | all | — |
+| T12 news worker + triggers | server/news-worker/, row-service handler | Sonnet | M5, T0 | T3 |
+| T13 page on the server cycle | news-browser-entry.mjs, news-viz.mjs, news e2e | Sonnet | M8, T12 | T9 |
 
 `core.mjs` serializes M0-knowledge → M1 → M3. `chat.mjs` serializes T4 → T7 and either
-against anything else touching it. `package.json` is touched in M2 and M4 only. The full
-suite runs at the coordinator's push moments; each phase's acceptance list is its blast
-radius.
+against anything else touching it. `news-browser-entry.mjs`/`news-viz.mjs` serialize
+M8 → T13 (and T8's corpus toggle lands between them or with T13 — same files, one owner at a
+time). `package.json` is touched in M2 and M4 only. The full suite runs at the coordinator's
+push moments; each phase's acceptance list is its blast radius.
 
 ---
 
