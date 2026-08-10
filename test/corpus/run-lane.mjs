@@ -14,6 +14,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { stringify as stringifyToml } from "smol-toml";
 import { driveSessionTurns } from "../helpers/session.mjs";
 import { normalizeFeedItems } from "../../src/domain/feed-normalize.mjs";
+import { SUPPLEMENTED_MODE, SEED_SESSION_MODE } from "../../src/domain/retrieval-modes.mjs";
 import * as predicates from "./predicates.mjs";
 
 const CORPUS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -32,6 +33,7 @@ export async function lanePredicates(laneName) {
 
 export const EXPECT_MODES = ["exact", "regex", "predicate", "same-as-turn"];
 export const MEMORY_BACKENDS = ["file", "memory", "sqlite"];
+export const RETRIEVAL_MODES = [SUPPLEMENTED_MODE, SEED_SESSION_MODE];
 
 /** Parse a lane's JSONL into row objects, with the offending line number in
  *  any parse error. */
@@ -140,6 +142,18 @@ export function validateRow(row, predicateNames = Object.keys(predicates)) {
         flag(`setup.memoryBackend: must be one of ${MEMORY_BACKENDS.join("|")}`);
       }
       if (s.seed !== undefined && typeof s.seed !== "boolean") flag("setup.seed: must be a boolean");
+      if (s.retrieval !== undefined) {
+        const r = s.retrieval;
+        if (typeof r !== "object" || r === null || Array.isArray(r)) {
+          flag("setup.retrieval: must be a {mode, bounded, bands} object");
+        } else {
+          if (!RETRIEVAL_MODES.includes(r.mode)) flag(`setup.retrieval.mode: must be one of ${RETRIEVAL_MODES.join("|")}`);
+          if (r.bounded !== undefined && typeof r.bounded !== "boolean") flag("setup.retrieval.bounded: must be a boolean");
+          if (r.bands !== undefined && (!Array.isArray(r.bands) || !r.bands.every(isNonEmptyString))) {
+            flag("setup.retrieval.bands: must be an array of non-empty band names");
+          }
+        }
+      }
       if (s.env !== undefined && (typeof s.env !== "object" || s.env === null || Array.isArray(s.env)
         || !Object.values(s.env).every((v) => typeof v === "string"))) {
         flag("setup.env: must be an object of string values");
@@ -261,6 +275,7 @@ export async function runChatRow(row, preds = predicates) {
       env: { ...(setup.seed ? {} : { TMCT_NO_SEED: "1" }), ...(setup.env ?? {}) },
       ...(setup.fixture ? { ephemeral: true } : {}),
       ...(setup.memoryBackend ? { memoryBackend: setup.memoryBackend } : {}),
+      ...(setup.retrieval ? { retrieval: setup.retrieval } : {}),
       ...(setup.newsFixtures?.length || setup.newsKbFixtures?.length
         ? { newsProviders: newsProvidersFromFixtures(setup.newsFixtures, setup.newsKbFixtures) }
         : {}),
