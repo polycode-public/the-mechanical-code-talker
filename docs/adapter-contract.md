@@ -381,33 +381,33 @@ One route wraps the engine:
 
 | method | path | request | success | notes |
 | --- | --- | --- | --- | --- |
-| POST | /api/sessions/:uuid/turn | `{text, retrieval?: {fuzzy}}` | 200 `{reply, factsTouched, narration}` | session key rides the path (strict v4 format); body ≤ 4 KB; optional `retrieval.fuzzy` overrides the retrieval mode (§3.15.2 names the rungs); first learning turn creates the session implicitly; turn rate is per-session (30/hour default); 429 when rate limit is hit; 507 when the global table cap is reached or the backend is down — the turn still answers, learned facts are not persisted, and the reply says so |
+| POST | /api/sessions/:uuid/turn | `{text, retrieval?: {fuzzy}}` | 200 `{reply, factsTouched, narration}` | session key rides the path (strict v4 format); body ≤ 4 KB; optional `retrieval.fuzzy` toggles fuzzy corpus retrieval per request; first learning turn creates the session implicitly; turn rate is per-session (30/hour default), 429 over it; when the global table cap or an unreachable store refuses the write, the turn still answers 200 — learned facts are not persisted and the reply says so |
 
 ## The handler sequence
 
 `POST /api/sessions/:uuid/turn` invokes:
 
-1. **Validate** — key shape, body size, content type (same rules as the row service §3.8);
+1. **Validate** — key shape, body size, content type (the same rules the row service applies to its own routes);
 2. **Load session** — construct a fresh row backend for the session; call `loadMemory` to assemble the working payload;
-3. **Retrieve** — fetch a bounded subgraph from corpus bands (§3.15) unless a circuit breaker says skip;
+3. **Retrieve** — fetch a bounded, deterministic subgraph from the corpus bands under fixed budgets, unless a circuit breaker says skip;
 4. **Run** — call `runTurn` with seed + corpus subgraph + session assembled together (same engine, byte-identical to the library);
-5. **Persist** — `persistMemory` writes only the rows the turn changed (delta writes; soft-delete rules apply as in §3.8);
+5. **Persist** — `persistMemory` writes only the rows the turn changed (delta writes; the service's soft-delete rules apply);
 6. **Reply** — return `{reply, factsTouched, narration}` where `reply` is the text answer, `factsTouched` keeps its published shape, and `narration` matches what `--narrate` would emit.
 
 Retrieved corpus facts are read-only per turn. Only what the engine learns persists to the session. A fact cited in the answer names its source: session facts cite their `teach:` provenance, corpus facts cite their `corpus:<band>@<version>` provenance.
 
 ## Rate and concurrency
 
-Each session has its own 30-turns-per-hour counter (default, deployment parameter). An atomic counter row tracks it; TTL manages cleanup. The edge rate limit (§3.9) covers all `/api/*` requests per IP. The turn Lambda's reserved concurrency (default 5) is separate from the row service's (10).
+Each session has its own 30-turns-per-hour counter (default, deployment parameter). An atomic counter row tracks it; TTL manages cleanup. On tmct's own deployment a per-IP edge rate limit covers all `/api/*` requests, and the account-wide Lambda concurrency cap bounds compute for every function in the stack.
 
 Concurrent turns on one session are allowed. Fact rows are content-addressed, so concurrent writers land distinct rows or the same row with identical content. Metadata (watermark, node id) use last-write-wins; a regression costs one recompute. No turn-serialization guarantee is required from the consumer.
 
 ## Error semantics
 
-Errors map to the row backend's two classes (§3.1, section 5):
+Errors map to the row backend's two classes (section 5 above):
 
 - **400 / 413** → `BackendRejected` (the input was invalid: an oversized row, malformed session key, oversized request body);
-- **429 / 507 / 5xx** → `BackendUnavailable` (the turn still answers, learned facts are not persisted; the consumer's page degrades gracefully).
+- **429 / 507 / 5xx** → `BackendUnavailable` (a 429 turn was refused outright; a persist-side failure still answers 200 with learned facts unpersisted and the reply saying so; the consumer's page degrades gracefully).
 
 A consumer catches by class or by `code`, never by message text.
 

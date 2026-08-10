@@ -106,8 +106,8 @@ derive by rule from both. Every answer is either grounded or an honest miss.
 ## Host it yourself
 
 tmct is a library first. You can embed it as a backend, running the engine
-server-side over your own fact store (DynamoDB, PostgreSQL, SQLite, or a
-custom backend). Load corpus data from your own sources using the shipped
+server-side over your own fact store (DynamoDB, SQLite, in-memory, or a
+custom backend that passes the published conformance kit). Load corpus data from your own sources using the shipped
 `tmct corpus` CLI verb; the reference bands (WordNet, ConceptNet, Wikidata)
 are built in-tree. The deployed demos at tmct.polycode.co.uk show this
 architecture end to end: the chat and ledger pages run the engine in-page
