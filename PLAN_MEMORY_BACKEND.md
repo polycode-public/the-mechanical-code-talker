@@ -1,11 +1,13 @@
 # PLAN_MEMORY_BACKEND.md — a pluggable session-memory backend: injected row stores, a conformance kit, and the deployed news demo running on a tmct-owned AWS row service
 
-Status: DESIGN, revised twice. The first draft made news.html an IndexedDB consumer; the operator
-redirected it (2026-08-10): the deployed news demo must BE the AWS-backed architecture, fronted by
-a new row service in tmct's own stack. The second revision (same day) moved every backend into the
-library: there is no consumer-written adapter — tmct builds, tests, demos, and ships the DynamoDB
-backend in-tree, and a consumer's integration is configuration. The consumer requirements it
-answers are bedrock-meter's
+Status: DESIGN, revised three times. The first draft made news.html an IndexedDB consumer; the
+operator redirected it (2026-08-10): the deployed news demo must BE the AWS-backed architecture,
+fronted by a new row service in tmct's own stack. The second revision (same day) moved every
+backend into the library: there is no consumer-written adapter — tmct builds, tests, demos, and
+ships the DynamoDB backend in-tree, and a consumer's integration is configuration. The third
+(same day) reshaped the service surface: session keys ride the mutating request paths, TTL is a
+configurable deployment knob defaulting to one week, and the per-session row limit gave way to
+one hard global table cap. The consumer requirements it answers are bedrock-meter's
 `GRAPH_BACKEND_SPEC.md` (untracked in their repo, carried over by the operator; its section
 numbers are cited as spec §N throughout). The seam it formalizes already exists in embryo:
 `src/adapters/memory/core.mjs` routes every read and write through one opaque `memoryDir` token
@@ -258,9 +260,11 @@ cached for the process's lifetime, with row-level writes thereafter.
 Against the spec's budget (§4): at the stated demo envelope (≤ ~40 facts/session, ≤ 4 KB rows)
 a cold open is one paginated query returning the session's rows, in-region ~5–15 ms, and a
 warm turn's backend time is its writes alone. That sits inside p50 ≤ 25 ms with margin and
-replaces two whole-archive S3 round trips plus a whole-store write-back. The row caps (§3.8)
-bound the cold-open response for the browser consumer: 1,000 rows × 4 KB is a 4 MB worst case,
-and a real news session is tens of kilobytes. The stricter reading of "O(rows actually read
+replaces two whole-archive S3 round trips plus a whole-store write-back. With no per-session
+row limit (§3.8's cap is global), a session's size is bounded by its own mutation rate times
+the TTL, so a real news session stays tens of kilobytes and only a session that spent days
+flooding itself can make its own cold open slow — self-harm inside its own isolation, while
+the global cap bounds the table. The stricter reading of "O(rows actually read
 this turn)" — term-indexed partial reads feeding a lazy resolver — is a real engine change
 (async reads inside currently-synchronous folds) and is the named horizon (§17), which is why
 the index key is settled now: when core starts calling `readRowsByTerm`, no adapter or table
@@ -291,7 +295,8 @@ where its session rows live:
 ```
 news.html (engine in-page, seed graph as basePayload, never persisted)
   └─ injected backend: createHttpRowBackend()  — the §3.1 contract over fetch,
-     same-origin /api/*, the page-minted session key in an x-tmct-session header
+     same-origin /api/*; reads carry the page-minted session key in an
+     x-tmct-session header, mutations address /api/sessions/<uuid>/…
        └─ CloudFront behavior /api/* on the existing distribution
             └─ row service Lambda (§3.8)
                  └─ DynamoDB session table (pk = the validated session key)
@@ -306,8 +311,9 @@ news.html (engine in-page, seed graph as basePayload, never persisted)
 - **What lives locally is a pointer, never facts.** localStorage holds exactly two things: the
   existing start-consent preference and the session UUID. The UUID is an address, not data — no
   fact, row, or article text is ever stored on the device — and the page's copy says exactly
-  that. The key is never read from the URL or any cross-origin channel: localStorage or a fresh
-  mint, nothing else.
+  that. The key is never sourced from the URL or any cross-origin channel: localStorage or a
+  fresh mint, nothing else. (Outbound, the key does appear in the page's own mutating request
+  paths — §3.8 states the logging consequence and its mitigation.)
 - **Writes are synchronous.** A turn is not done until its rows are durable: `persistMemory`
   awaits the PUT. The cost is one round trip per mutating turn — the diff batches a whole
   poll's stored facts into one `putRows` call — roughly 20–60 ms from the UK to eu-west-2 and
@@ -323,7 +329,8 @@ news.html (engine in-page, seed graph as basePayload, never persisted)
 - **The copy tells the truth.** The consent moment and the page's persistence note say: facts
   taught or polled here are stored against an anonymous session on our server, addressed by a
   random key kept in this browser, expiring after seven days; "stop & forget" deletes them now.
-  "Stop & forget" wires its purge to `deleteAll()` (DELETE /api/rows with `{all: true}`),
+  "Stop & forget" wires its purge to `deleteAll()` (DELETE /api/sessions/:uuid/rows with
+  `{all: true}`),
   discards the stored UUID, keeps its existing in-page retraction behaviour, and the e2e
   extends to assert the server side reports zero rows afterwards (against the local double).
   chat.html's local-only promise is untouched.
@@ -342,47 +349,73 @@ A new, tmct-owned service in the site's own stack, storing rows through the libr
 DynamoDB backend (§3.10). bedrock-meter's deployment is separate: same shipped backend, their
 own table (§3.11).
 
-**Endpoints.** All same-origin under `/api/`, JSON only. There are no session endpoints: every
-request carries the client-minted session key in an `x-tmct-session` header, and the first
-write under a fresh key creates the session implicitly.
+**Endpoints.** All same-origin under `/api/`, JSON only. There are no session endpoints: reads
+carry the client-minted session key in an `x-tmct-session` header, mutations address it in the
+path, and the first write under a fresh key creates the session implicitly.
 
 | method + path | contract call | success | notes |
 | --- | --- | --- | --- |
-| GET /api/rows | readRows | 200 `{rows:[…]}` | an unknown key reads as an empty session; one response — the row cap makes pagination unnecessary, and the handler 500s loudly rather than truncating if that assumption ever breaks |
-| PUT /api/rows | putRows | 204 | body `{puts:[row…]}`; whole batch validated before any apply; first write under a fresh key is the implicit mint |
-| DELETE /api/rows | deleteRows / deleteAll | 204 | body `{rowKeys:[…]}` for diff-driven removal (a retraction or forget dropping rows, derived-row invalidation); body `{all: true}` purges the session — rows, then meta, then the counter rows (§16.4) |
-| GET /api/meta/:key | readMeta | 200 `{value}` / 404 | client maps 404 to null |
-| PUT /api/meta/:key | putMeta | 204 | body `{value}` |
+| GET /api/rows | readRows | 200 `{rows:[…]}` | key in `x-tmct-session`; an unknown key reads as an empty session; one response — the global cap and the mutation-rate cap bound any one session's realistic size, and the handler 500s loudly rather than truncating if the one-response assumption ever breaks |
+| PUT /api/sessions/:uuid/rows | putRows | 204 | body `{puts:[row…]}`; whole batch validated before any apply; first write under a fresh key is the implicit mint; 507 when the global table cap (below) is reached, nothing applied |
+| DELETE /api/sessions/:uuid/rows | deleteRows / deleteAll | 204 | body `{rowKeys:[…]}` for diff-driven removal (a retraction or forget dropping rows, derived-row invalidation); body `{all: true}` purges the session — rows, then meta, then the session's rate-counter rows, decrementing the global counter as it goes (§16.4) |
+| GET /api/meta/:key | readMeta | 200 `{value}` / 404 | key in `x-tmct-session`; client maps 404 to null |
+| PUT /api/sessions/:uuid/meta/:key | putMeta | 204 | body `{value}` |
 
 `readRowsByTerm` stays dormant client-side, and the handler already serves it
 (`GET /api/rows?class=fact&term=X` → a sort-key prefix query) because the sk layout (§3.3) makes
 it one line; nothing calls it until the term-lazy horizon lands.
 
-**Sessions and auth.** The client mints a UUIDv4 and sends it on every request in
-`x-tmct-session`. The handler validates the format strictly — the exact v4 shape, version and
-variant bits included, rejecting anything else with a 400 — so a chosen low-entropy key is
-impossible and the keyspace is the full 122 random bits. A missing or malformed header is a
-400 before any storage call. There are no cookies, no accounts, no tokens, nothing
-identifying: the session is anonymous by construction, the key is the only credential, its
-holder is its owner, and TTL is the garbage collector. The service serves no CORS headers, so
-no cross-origin page can call it from a browser; non-browser callers are bounded by the edge
-rate limit and the caps (§3.9).
+**Sessions and auth.** The client mints a UUIDv4; reads send it in `x-tmct-session`, mutations
+carry it as the `:uuid` path segment. The handler validates the format strictly wherever the
+key appears — the exact v4 shape, version and variant bits included, rejecting anything else
+with a 400 — so a chosen low-entropy key is impossible and the keyspace is the full 122 random
+bits. A missing or malformed key is a 400 before any storage call, and a mutating request that
+carries both the path segment and the header must have them match, or 400. There are no
+cookies, no accounts, no tokens, nothing identifying: the session is anonymous by construction,
+the key is the only credential, its holder is its owner, and TTL is the garbage collector. The
+service serves no CORS headers, so no cross-origin page can call it from a browser; non-browser
+callers are bounded by the edge rate limit and the caps (§3.9).
 
-**Caps, fixed here.** At most 1,000 rows per session (a PUT that would exceed it → 409, nothing
-applied); at most 4,096 bytes of `json` per row (400); at most 256 KB request body (413); at
-most 120 mutating requests per session per hour (429; an atomic counter row with its own TTL —
-the one place the service uses DynamoDB's `ADD`); Lambda reserved concurrency 10 as the blunt
-account-level bound. Every row, meta value, and counter row carries `expiresAt` = its own
-write time + 7 days (env-configurable), enforced by DynamoDB-native TTL — implicit sessions
-have no mint moment, so expiry is per row and a session is gone when its last row is. The
-threats these caps answer, and the ones they don't, are enumerated in §3.9.
+**The logging consequence of keys in paths.** Mutating URLs contain session keys, and URLs land
+in access logs. The distribution's access logging stays off — it is off today and nothing
+consumes it — and the handler's own logging redacts the `:uuid` path segment before any line is
+written, so no log stores a usable key. Header-borne GETs stay out of URL logging by nature. If
+distribution logging is ever enabled for some other need, this mitigation is the line item that
+must be revisited first.
 
-**Error semantics, pinned for the client and the kit.** 400/409/413 → `BackendRejected` (the
-turn errors; the session stays networked; a 400 on the session header is a client bug, not a
-retry case); 429, 5xx, and network failure → `BackendUnavailable` (the turn reports it and
-the visit continues without persistence per §3.7). 4xx validation failures apply nothing; a
-5xx mid-batch may leave rows applied, which is the contract's own half-landed-batch stance
-(§3.1).
+**Caps, fixed here.** At most 4,096 bytes of `json` per row (400); at most 256 KB request body
+(413); at most 120 mutating requests per session per hour (429; an atomic `ADD` counter row
+with its own TTL); Lambda reserved concurrency 10 as the blunt account-level bound; and one
+**hard global table cap** in place of any per-session row limit — the table as a whole holds at
+most `TABLE_ROW_CAP` rows (deployment parameter, default 2,000,000), and a PUT that would
+exceed it is refused with a 507 and a named error, nothing applied. The arithmetic behind the
+default: 2 M rows × 4 KB worst case is 8 GB — about $2/month stored at the absolute ceiling
+(on-demand storage rates), roughly $12 of write units if an attacker filled it once, and the
+billing alarm (§3.9) pages far below either. The mechanism is the service's own atomic counter
+item (a reserved partition no valid v4 key can collide with, e.g. pk `_meta`, sk `counter`),
+incremented by row count inside every write path and decremented on deletes and purges.
+DescribeTable's `ItemCount` is explicitly rejected as the mechanism: it refreshes roughly every
+six hours, and a cap enforced on six-hour-old data is not a cap. The counter is one hot item;
+at reserved concurrency 10 and the edge rate limit, its write rate is bounded far below
+DynamoDB's per-item throughput, noted and fine at this scale. Every row, meta value, and
+counter row carries `expiresAt` = its own write time + the configured TTL (`TTL_DAYS`,
+default 7 — §3.10's `ttlSeconds` at the backend seam), enforced by DynamoDB-native TTL —
+implicit sessions have no mint moment, so expiry is per row and a session is gone when its
+last row is. TTL reaping happens outside the service's write paths, so the counter drifts
+upward relative to the real row count; the reconciliation is a scheduled daily reconcile run
+(an EventBridge rule invoking the same Lambda in a reconcile mode) that counts the table with
+a paginated `Scan` (`Select: COUNT`) and rewrites the counter. Cost: pennies at expected
+occupancy, ≈ $0.30 per run if the table ever sits at the full 8 GB cap. Between reconciles the
+drift direction is toward over-refusal — the safe direction: the service refuses writes it
+could have taken, never accepts writes past the cap. The threats these caps answer, and the
+ones they don't, are enumerated in §3.9.
+
+**Error semantics, pinned for the client and the kit.** 400/413 → `BackendRejected` (the turn
+errors; the session stays networked; a 400 on the session key is a client bug, not a retry
+case); 429, 507, 5xx, and network failure → `BackendUnavailable` (the turn reports it and the
+visit continues without persistence per §3.7 — a full table reads to the visitor exactly like
+an unreachable service, which is what it is). 4xx and 507 refusals apply nothing; a 5xx
+mid-batch may leave rows applied, which is the contract's own half-landed-batch stance (§3.1).
 
 **The handler is in-repo, backend-agnostic, and contains no storage code.** `server/row-service/`
 (new, top-level, excluded from the npm `files` array — the published library ships no Lambda)
@@ -417,10 +450,10 @@ every attack below is bounded to the attacker's own sessions and the account's b
 | risk | mitigation |
 | --- | --- |
 | write flooding (implicit creation makes every fresh-UUID write a mint) | a WAF rate-based rule on the distribution scoped to `/api/*` — per-IP, 300 requests per 5 minutes; the one new edge construct, roughly $8/month; writes also queue behind Lambda reserved concurrency 10 |
-| storage flooding inside the caps (many sessions, each individually legal) | the arithmetic is bounded and stated: one IP sustaining the WAF ceiling creates ≤ ~86,000 sessions/day, each capped at 4 MB, all reaped by the 7-day per-row TTL; on-demand billing plus the billing alarm below turns the residue into a page, never a surprise invoice |
+| storage flooding | the hard global cap (§3.8) bounds the whole table at `TABLE_ROW_CAP` rows — 8 GB absolute worst case at the default — enforced by the service's own atomic counter, with the daily reconcile correcting TTL drift toward over-refusal. The accepted consequence, stated plainly: with no per-session bound, one determined session (or many) can consume the entire global budget and deny persistence to every visitor until the TTL reclaims rows — the page then degrades to §3.7's unpersisted mode for everyone. The per-IP edge rate limit and the per-session mutation rate bound how fast the budget can be eaten, the 7-day TTL bounds how long the denial lasts, and the billing alarm plus kill switch below remain the operational backstops |
 | cost attack (Lambda invocations, table writes) | reserved concurrency 10 caps compute; the on-demand table plus a CloudWatch estimated-charges alarm (threshold set in the stack, $20/month to start); the kill switch is removing the `/api/*` behavior from the distribution — one CDK deploy or a console action — after which the page degrades to §3.7's unpersisted mode and keeps working |
 | cross-site request forgery | effectively gone by construction: there is no ambient credential — no cookie rides a cross-site request, and a cross-origin page cannot know the victim's UUID. The no-CORS posture and the `application/json` content-type check stay as hygiene |
-| session-key theft | the key is page-readable by design (localStorage, sent in a header), so exfiltrating it requires running script in the page — the stored-XSS row below — and the prize is one anonymous, 7-day, self-owned session; no cross-session pivot exists. The key never appears in a URL, a response body, or any cross-origin channel |
+| session-key theft | the key is page-readable by design (localStorage, sent in headers and mutating paths), so exfiltrating it requires running script in the page — the stored-XSS row below — and the prize is one anonymous, 7-day, self-owned session; no cross-session pivot exists. The key never appears in a response body or any cross-origin channel; it does appear in the page's own same-origin mutating URLs, which is why access logging stays off and the handler redacts the path segment (§3.8) |
 | session fixation / chosen keys | the strict UUIDv4 format check rejects any attacker-shaped or low-entropy key, and the page only ever uses a key it minted itself or one from its own localStorage — never from the URL or another origin |
 | stored XSS through fact text (a taught fact carrying markup, read back into the DOM) | render-side escaping is already the page's rule — answer text lands via text nodes, never markup injection — and M8's e2e pins it: teach a fact containing a script tag through the real flow, reload from the service double, assert zero script execution and the literal text on screen. Isolation (above) bounds a miss to self-XSS even before the pin |
 | enumeration / cross-session reads | structural: 122 bits of key entropy, the format check as the floor, no endpoint that lists or returns keys, and an unknown key reading as an empty session (a probe learns nothing) |
@@ -435,7 +468,8 @@ createDynamoRowBackend({
                    // and credentials; tmct bundles no credentials and builds no client
   tableName,
   sessionKey,      // the pk; opaque, consumer-chosen (the row service passes the caller's validated key)
-  ttlSeconds = null,                                        // null → no expiresAt stamped
+  ttlSeconds = null,   // null → no expiresAt stamped; the row service passes its configured
+                       // TTL through this knob (TTL_DAYS, default 7 — §3.8)
   attributeNames = { pk: "pk", sk: "sk", expiresAt: "expiresAt" },  // fit an existing table
 })
 ```
@@ -502,7 +536,7 @@ available to any consumer who chooses a custom store anyway.
 | bookkeeping exclusion | yes | a `rowClass: "bookkeeping"` row round-trips but never surfaces in `rowsToPayload`'s answer-facing individuals |
 | determinism / order independence | yes | one row set, two arrival orders, identical assembled payloads |
 | ≤ 4 KB rows | yes | the projection rejects an oversized row at `payloadToRows` time with a named error |
-| HTTP error mapping | yes (client) | the kit runs against the HTTP client over the local double; a scripted double answers 400/409/413/429/500 and the client must map each per §3.8 |
+| HTTP error mapping | yes (client) | the kit runs against the HTTP client over the local double; a scripted double answers 400/413/429/507/500 and the client must map each per §3.8 |
 | TTL enforcement | no — adapter-documented | time-driven; the suite asserts only that `expiresAt` round-trips untouched |
 | latency budget | no — consumer-measured | the smoke probe records the service's numbers as measurement; bedrock-meter's e2e measures their own deployment |
 | lazy SDK, no import-time IO | partly — in-tree pin | the kit cannot see imports, but the shipped DynamoDB backend pins it directly: the module loads with the SDK absent, and only the first storage call requires it (§3.10) |
@@ -609,23 +643,29 @@ a consumer-style import through the exports map proving `./memory-backends` reso
 §3.8, calling an injected §3.1 backend — no storage code; the AWS entry constructs the M4
 backend), `server/row-service/local.mjs` (new: the handler on `node:http` over the M2 reference
 backend — the test double every later phase uses), `server/row-service/README.md` (one page:
-run locally, env vars `TABLE_NAME`/`TTL_DAYS`, what deploys it),
+run locally, env vars `TABLE_NAME`/`TTL_DAYS`/`TABLE_ROW_CAP`, what deploys it),
 `test/server/row-service.test.mjs` (new). **Sonnet**, after M2 and M4.
 
-The handler tests drive every endpoint through `local.mjs`: the session-header gate (a valid
-v4 accepted; missing, malformed, wrong-version, and wrong-variant keys each 400 before any
-storage call), implicit creation on a fresh key's first write, an unknown key reading as an
-empty session, each cap answering its status code with nothing applied on 4xx, the
-mutation-rate counter, batch validation before any apply, the JSON-only content-type rejection
-(§3.9), the `{all: true}` purge beside the keyed delete, and the delete ordering of §16.4.
+The handler tests drive every endpoint through `local.mjs`: the session-key gate (a valid v4
+accepted in header and in path; missing, malformed, wrong-version, and wrong-variant keys each
+400 before any storage call; a mutating request whose path segment and header disagree is a
+400), implicit creation on a fresh key's first write, an unknown key reading as an empty
+session, each cap answering its status code with nothing applied on refusal — including the
+global table cap: `local.mjs` takes a `TABLE_ROW_CAP` override so the test fills a tiny cap
+and asserts the 507 with nothing applied, the counter decrementing on keyed deletes and on
+purge, and writes resuming once rows are deleted — the mutation-rate counter, the TTL knob
+(`TTL_DAYS` reaching the backend as `ttlSeconds`, stamped on written rows; unset stamping
+nothing), batch validation before any apply, the JSON-only content-type rejection (§3.9), the
+`{all: true}` purge beside the keyed delete, and the delete ordering of §16.4.
 
 Acceptance: `node --test test/server/row-service.test.mjs`; `npm run test:fast`.
 
 ## 11. Phase M6 — the HTTP client backend, conformance over the wire
 
 **Owns** `src/surfaces/web/http-row-backend.mjs` (new: `createHttpRowBackend({ apiBase,
-sessionKey, fetchImpl })`, the §3.1 contract over fetch, the `x-tmct-session` header on every
-request, `deleteAll` as the `{all: true}` delete, the §3.8 error mapping),
+sessionKey, fetchImpl })`, the §3.1 contract over fetch — reads under the `x-tmct-session`
+header, mutations addressed to `/api/sessions/<sessionKey>/…` per §3.8's table — `deleteAll`
+as the `{all: true}` delete, the §3.8 error mapping including 507 → `BackendUnavailable`),
 `test/adapters/http-row-backend.test.mjs` (new). **Sonnet**, after M5.
 
 Its test file runs the FULL conformance kit against the client pointed at `local.mjs` — three
@@ -637,12 +677,14 @@ Acceptance: `node --test test/adapters/http-row-backend.test.mjs`; `npm run test
 ## 12. Phase M7 — infra and deploy
 
 **Owns** `infra/lib/website-stack.ts` (the table, the Lambda from the built bundle, the
-function URL + OAC, `addBehavior("/api/*", …)`, reserved concurrency, TTL env),
-`package.json` (`build:row-service`: esbuild `handler.mjs` → `server/row-service/dist/`, SDK
-external), `.gitlab-ci.yml` (`deploy:website` gains the `build:row-service` step),
-`scripts/post-deploy-smoke.mjs` (the live probe: put one row under a fresh UUID → read it
-back → delete `{all: true}`, against the deployed origin, polled with the same patience the
-version check uses). **Sonnet**, after M5;
+function URL + OAC, `addBehavior("/api/*", …)`, reserved concurrency, the two deployment
+parameters — `TTL_DAYS` default 7 and `TABLE_ROW_CAP` default 2,000,000 — as Lambda env, and
+the daily EventBridge rule invoking the Lambda in reconcile mode to recount the table and
+rewrite the global counter per §3.8), `package.json` (`build:row-service`: esbuild
+`handler.mjs` → `server/row-service/dist/`, SDK external), `.gitlab-ci.yml` (`deploy:website`
+gains the `build:row-service` step), `scripts/post-deploy-smoke.mjs` (the live probe: put one
+row under a fresh UUID → read it back → delete `{all: true}`, against the deployed origin,
+polled with the same patience the version check uses). **Sonnet**, after M5;
 the stack change deploys through the existing job on the next main push, no new pipeline
 surface. The first deploy lands the table empty; there is nothing to migrate.
 
@@ -663,7 +705,8 @@ the persistence-unavailable status line), `test/adapters/news-browser-entry.test
 The e2e mounts `local.mjs` on the same static server the snapshot is served from, under
 `/api/` — same-origin, fixture-true, never AWS. Pins: zero `/api/` requests before the start
 press; the start press writes exactly one new localStorage key, a valid UUIDv4, and every
-`/api/` request carries it in `x-tmct-session`; a poll's stored facts arrive as one PUT; a
+`/api/` request carries it — reads in `x-tmct-session`, mutations in the
+`/api/sessions/<uuid>/…` path; a poll's stored facts arrive as one PUT; a
 reload rebuilds the feed from the double's rows under the same key; stop & forget leaves the
 double reporting zero rows and the stored key discarded; killing the double mid-visit flips
 the page to the persistence-unavailable status line, the visit continues, and localStorage
@@ -718,11 +761,12 @@ ships with it and says so, not that it hides.
    ETag in v1; if the staleness bites a real consumer, an `If-None-Match` on GET /api/rows is
    the cheap add and the endpoint table leaves room for it.
 4. **`deleteAll` is query-then-delete, non-atomic.** Accepted, ordered, and made retryable:
-   the delete runs rows, then meta, then the counter rows, and the purge is idempotent — a
-   crash mid-way leaves a smaller session and a retried DELETE finishes the job; the client
-   retries the idempotent `{all: true}` DELETE once on 5xx; TTL reaps whatever survives both,
-   and the page discards its stored key regardless, so the visitor's pointer to the residue
-   is gone even when a fragment waits for TTL.
+   the delete runs rows, then meta, then the session's rate-counter rows — the handler
+   decrementing the global counter by what it removed as it goes — and the purge is
+   idempotent: a crash mid-way leaves a smaller session and a retried DELETE finishes the
+   job; the client retries the idempotent `{all: true}` DELETE once on 5xx; TTL reaps
+   whatever survives both, and the page discards its stored key regardless, so the visitor's
+   pointer to the residue is gone even when a fragment waits for TTL.
 5. **The 4 KB cap as a runtime failure.** Mitigated at the earliest honest point (§3.2): the
    projection throws before the network with the offending fact's provenance named, the M0
    boundary test pins it, and the service 400 is the backstop. Discovery stays possible at
@@ -732,6 +776,13 @@ ships with it and says so, not that it hides.
    queue and dedup entries are individual bookkeeping rows, additive under concurrency. The
    two values left in meta are a watermark whose regression costs one recompute and a nodeId
    written once.
+7. **The global counter drifts.** TTL reaping deletes rows outside the service's write paths,
+   so the counter over-counts between reconciles, and the two writes inside a mutating request
+   (the rows, then the `ADD`) are not one transaction, so a crash between them mis-counts by
+   one batch. Both drift in the same direction — over-refusal, never past the cap — and the
+   daily reconcile (§3.8) rewrites the counter from a real count. Accepted with that direction
+   stated; a table refusing writes it could take for at most a day is the cheap side of the
+   trade.
 
 And the two build risks carried from the first draft: **the M3 sqlite refactor** rewrites
 Backend C's persistence internals under a byte-identical-storage pin — the before/after dump
