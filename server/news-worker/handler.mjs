@@ -1,0 +1,533 @@
+// handler.mjs — the news worker: runs poll/enrich/ingest cycles and the feed
+// materializer against a session's own row partition. `createNewsWorker` is
+// the engine-neutral core: it builds the same ctx shape the in-page news
+// session built (news.mjs's own documented contract) over an injected row
+// backend instead of an in-memory store, and calls the SAME
+// pollNewsSources/enrichTopTerms/buildFeed the page called — no engine
+// change, only a different memoryDir.
+//
+// `local.mjs` wires this core over the reference row backend with
+// fixture-injected fetchers, the double every later test runs against. The
+// AWS Lambda entry below (`handler`, esbuild bundles this file directly)
+// wires it over the real DynamoDB backend, the real news fetchers and KB
+// providers, and a shared per-source courtesy throttle kept in the table's
+// own `_meta` partition so every invocation of every session paces the same
+// source together, not once per invocation.
+
+import { wrapRowBackend, loadMemory, readFactRows, appendFacts, removeFacts } from "../../src/adapters/memory/core.mjs";
+import { createDynamoRowBackend } from "../../src/adapters/memory/row-backend-dynamo.mjs";
+import { loadLexicon } from "../../src/domain/grammar/lexicon.mjs";
+import { ingestText } from "../../src/services/extract-facts.mjs";
+import { isNewsProvenance } from "../../src/domain/news-feed.mjs";
+import { factSentence } from "../../src/domain/fact-phrase.mjs";
+import {
+  resolveNewsConfig, createNewsState, pollNewsSources, enrichTopTerms, buildFeed,
+  ingestUploadedFactRows, filterRankedTermEntries,
+} from "../../src/services/news.mjs";
+import { rankedTerms, ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
+import { createNewsFetcher, newsSourceRecords, normalizeNewsSourceIds } from "../../src/adapters/corpus/news-sources.mjs";
+import { getResearchProvider } from "../../src/adapters/corpus/wikipedia-live.mjs";
+import { DEFAULT_MIN_INTERVAL_MS } from "../../src/adapters/corpus/courtesy.mjs";
+
+export const MAX_FACT_LINES_PER_CARD = 24;
+export const MAX_FEED_DOCUMENT_BYTES = 350 * 1024;
+export const DEFAULT_WORKER_BUDGET_MS = 20_000;
+export const DEFAULT_CYCLE_STALE_MS = 5 * 60_000;
+export const RANKED_TERMS_LIMIT = 20;
+const RANK_OVERFETCH = 4;
+const REQUEST_LOG_KEPT = 50;
+const REQUEST_LOG_IN_FEED = 20;
+
+const META_NEWS_STATE_KEY = "newsState";
+export const META_CYCLE_KEY = "cycle";
+export const META_FEED_KEY = "feed";
+export const META_FEED_VERSION_KEY = "feedVersion";
+export const META_GRAPH_VERSION_KEY = "graphVersion";
+const META_SEED_STAMP_KEY = "seedStamp";
+
+function isoNow() {
+  return new Date().toISOString();
+}
+
+function safeJsonParse(raw, fallback) {
+  if (raw === null || raw === undefined) return fallback;
+  try { return JSON.parse(raw); } catch { return fallback; }
+}
+
+async function readIntMeta(backend, key) {
+  const n = Number(await backend.readMeta(key));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Reads-then-writes a meta counter by one and returns the new value. Not
+ *  atomic — the row backend's meta contract is a plain string upsert with no
+ *  numeric primitive — but every writer of one session's `graphVersion` or
+ *  `feedVersion` is itself serialized behind the trigger routes' one-running-
+ *  cycle lock, so a read-then-write is the whole of what this needs. */
+async function bumpIntMeta(backend, key) {
+  const next = (await readIntMeta(backend, key)) + 1;
+  await backend.putMeta(key, String(next));
+  return next;
+}
+
+function trimmedRequestLog(log) {
+  return Array.isArray(log) ? log.slice(0, REQUEST_LOG_KEPT) : [];
+}
+
+function trimStateForPersistence(state) {
+  return { ...state, requestLog: trimmedRequestLog(state.requestLog) };
+}
+
+/** The store triple every news.mjs call takes, folding `readFactRows` once
+ *  per write epoch the same way the in-page session did. `graphVersion`
+ *  bumps once per cycle instead — most of the engine's own writes go
+ *  through `ingestText` directly against `memoryDir`, never through this
+ *  wrapper, so a per-call hook here would miss them; `runCycle` bumps it
+ *  itself once it knows whether the cycle's own result actually wrote
+ *  anything. */
+function foldingStore() {
+  let foldedRows = null;
+  return {
+    loadMemory,
+    readFactRows(memory) {
+      if (!foldedRows) foldedRows = readFactRows(memory);
+      return foldedRows;
+    },
+    async appendFacts(...args) {
+      foldedRows = null;
+      return appendFacts(...args);
+    },
+    async removeFacts(...args) {
+      foldedRows = null;
+      return removeFacts(...args);
+    },
+  };
+}
+
+/** Whether a cycle's own result touched the graph, read off the counts
+ *  poll/enrich/ingest already return — true for any fact written, derived,
+ *  or evicted. */
+function cycleWroteFacts(cycleResult) {
+  return (cycleResult?.facts || 0) > 0 || (cycleResult?.derived || 0) > 0 || (cycleResult?.evicted || 0) > 0;
+}
+
+/** Wraps a fetchers map so every fetch asks the shared per-source gate
+ *  first. A refused fetch reads as "nothing new this round" (the same shape
+ *  a real 304 gives pollNewsSources) rather than a failure — a courtesy
+ *  skip is not the source's fault and must never count against its health. */
+function gatedFetchers(fetchersById, sourceGate) {
+  if (!sourceGate) return fetchersById;
+  const gated = new Map();
+  for (const [id, fetcher] of fetchersById) {
+    gated.set(id, {
+      id: fetcher.id,
+      async fetchItems() {
+        const allowed = await sourceGate.shouldFetch(id);
+        if (!allowed) return { items: [], bytes: 0, notModified: true };
+        let outcome = null;
+        try { outcome = await fetcher.fetchItems(); } catch { outcome = null; }
+        await sourceGate.noteOutcome(id, outcome !== null);
+        return outcome;
+      },
+    });
+  }
+  return gated;
+}
+
+function sourcesFromPollResult(list) {
+  const out = {};
+  for (const entry of list || []) out[entry.sourceId] = { status: entry.status, newItems: entry.newItems || 0 };
+  return out;
+}
+
+/** The teach panel's server-side path: the same `ingestText`/
+ *  `ingestUploadedFactRows` the page ran in-page, run once against this
+ *  invocation's ctx. */
+async function runIngest(ctx, body) {
+  const { memoryDir, store, lexicon, now } = ctx;
+  const nowVal = typeof now === "function" ? now() : now;
+  const text = typeof body?.text === "string" ? body.text.trim() : "";
+  if (text) {
+    const result = await ingestText(text, {
+      memoryDir, sourceTag: `teach:upload:ingest-trigger@${nowVal}`, optimistic: true, lexicon, observedAt: nowVal, findings: true,
+    });
+    return { facts: result.extracted.length + result.optimistic.length, aborted: false };
+  }
+  const rows = Array.isArray(body?.rows) ? body.rows : [];
+  const downgraded = ingestUploadedFactRows(rows, { fileLabel: "ingest-trigger", now: nowVal })
+    .filter((r) => r.subject && r.predicate && r.object);
+  if (downgraded.length) await store.appendFacts(memoryDir, downgraded);
+  return { facts: downgraded.length, aborted: false };
+}
+
+/** One card, trimmed to the display bound: the first `MAX_FACT_LINES_PER_CARD`
+ *  fact sentences in the card's own deterministic order, with the full count
+ *  carried alongside so a trimmed card can say "…and N more" rather than
+ *  pretend completeness. */
+export function serializeCard(item, rowsById) {
+  const factLines = item.factIds.map((id) => rowsById.get(id)).filter(Boolean).map((row) => factSentence(row));
+  const observedMs = Date.parse(item.builtAt);
+  return {
+    id: item.id,
+    hub: item.hub,
+    paragraph: item.paragraph,
+    tier: item.tier,
+    newName: item.newName,
+    sources: item.sources,
+    backgroundParagraph: item.backgroundParagraph,
+    factLines: factLines.slice(0, MAX_FACT_LINES_PER_CARD),
+    factCount: factLines.length,
+    observedMs: Number.isFinite(observedMs) ? observedMs : 0,
+    changedCount: item.changedCount,
+  };
+}
+
+export function feedDocumentBytes(document) {
+  return Buffer.byteLength(JSON.stringify(document), "utf8");
+}
+
+/** The 350 KB enforced bound: when the ordinary 24-line-per-card trim still
+ *  is not enough, whole cards' `factLines` drop from the feed's own tail
+ *  upward — deterministic, since the items are already sorted — until the
+ *  document fits. `trimmed: true` marks the document whenever this runs, so
+ *  a reader can tell a trimmed card from a genuinely quiet one. */
+export function enforceFeedSizeBound(document) {
+  if (feedDocumentBytes(document) <= MAX_FEED_DOCUMENT_BYTES) return document;
+  const items = document.items.map((item) => ({ ...item }));
+  let index = items.length - 1;
+  let candidate = { ...document, items, trimmed: true };
+  while (feedDocumentBytes(candidate) > MAX_FEED_DOCUMENT_BYTES && index >= 0) {
+    if (items[index].factLines.length) items[index] = { ...items[index], factLines: [] };
+    index -= 1;
+    candidate = { ...document, items, trimmed: true };
+  }
+  return candidate;
+}
+
+/** The materialized feed document (the plan's own §3.22 shape): every card,
+ *  tile stat, ranked term and status line the page renders, so the page
+ *  computes nothing. Runs at the end of every cycle and standalone in
+ *  "materialize" mode — load rows, build, write, bump, nothing fetched. */
+async function materializeFeed(ctx, rawBackend) {
+  const { memoryDir, store, config, state } = ctx;
+  const nowVal = typeof ctx.now === "function" ? ctx.now() : ctx.now;
+  const feedBuild = await buildFeed(ctx);
+  const memory = await store.loadMemory(memoryDir);
+  const rows = store.readFactRows(memory);
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+
+  let factsFromNews = 0;
+  for (const row of rows) if (isNewsProvenance(row.provenance)) factsFromNews += 1;
+
+  const items = feedBuild.items.map((item) => serializeCard(item, rowsById));
+
+  const ledger = ledgerFromPayload(state.ledger);
+  const rankedRaw = rankedTerms(ledger, {
+    limit: RANKED_TERMS_LIMIT * RANK_OVERFETCH, now: nowVal, ttlMs: config.negativeCacheTtlHours * 3600000,
+  });
+  const rankedTermsOut = filterRankedTermEntries(rows, rankedRaw).slice(0, RANKED_TERMS_LIMIT);
+
+  const document = enforceFeedSizeBound({
+    items,
+    rankedTerms: rankedTermsOut,
+    stats: { graphSize: rows.length, factsFromNews },
+    sourceStatus: state.health || [],
+    requestLog: trimmedRequestLog(state.requestLog).slice(0, REQUEST_LOG_IN_FEED),
+    builtAt: feedBuild.builtAt,
+  });
+
+  await rawBackend.putMeta(META_FEED_KEY, JSON.stringify(document));
+  const version = await bumpIntMeta(rawBackend, META_FEED_VERSION_KEY);
+  return { version, trimmed: !!document.trimmed };
+}
+
+/** The engine-neutral core every worker entry point wires up: the same
+ *  `{ runCycle }` shape whether the session backend is the reference double
+ *  or real DynamoDB, whether the fetchers are fixtures or the real registry.
+ *
+ *  `createSessionBackend(sessionKey)` — a §3.1 row backend for this session.
+ *  `createFetchers(config)` — sourceId -> `{ id, fetchItems() }`, built fresh
+ *  per cycle so a narrowed `body.sources` (poll) takes effect.
+ *  `getResearchProvider({ source })` — the KB lookup seam enrich walks.
+ *  `seedPayload` — the base payload `loadMemory` overlays session rows onto
+ *  (the full xl seed in production; §3.22's grounding-parity reasoning).
+ *  `seedStamp` — when set, a session whose own stamp disagrees is purged
+ *  before this cycle runs, rather than mixing rows across seed versions.
+ *  `sourceGate` — optional `{ shouldFetch(id), noteOutcome(id, ok) }`, the
+ *  shared per-source courtesy throttle and breaker.
+ *  `budgetMs`/`nowMs` — the abort-on-remaining-time budget: `shouldAbort`
+ *  reads true once `nowMs()` crosses `nowMs() at entry + budgetMs`. */
+export function createNewsWorker({
+  createSessionBackend,
+  createFetchers = () => new Map(),
+  getResearchProvider: getProvider = () => null,
+  seedPayload = null,
+  seedStamp = "",
+  sourceGate = null,
+  now = isoNow,
+  nowMs = () => Date.now(),
+  budgetMs = DEFAULT_WORKER_BUDGET_MS,
+  log = () => {},
+} = {}) {
+  if (typeof createSessionBackend !== "function") {
+    throw new TypeError("createNewsWorker needs a createSessionBackend(sessionKey) function");
+  }
+
+  async function runCycle({ sessionKey, cycleId, mode, body = {} }) {
+    let rawBackend = await createSessionBackend(sessionKey);
+
+    if (seedStamp) {
+      const storedStamp = await rawBackend.readMeta(META_SEED_STAMP_KEY);
+      if (storedStamp && storedStamp !== seedStamp) {
+        await rawBackend.deleteAll();
+        rawBackend = await createSessionBackend(sessionKey);
+      }
+      await rawBackend.putMeta(META_SEED_STAMP_KEY, seedStamp);
+    }
+
+    const handle = wrapRowBackend(rawBackend, { basePayload: seedPayload });
+    const store = foldingStore();
+    const config = resolveNewsConfig();
+    if (Array.isArray(body?.sources) && body.sources.length) config.sources = normalizeNewsSourceIds(body.sources);
+
+    const state = safeJsonParse(await rawBackend.readMeta(META_NEWS_STATE_KEY), null) || createNewsState();
+    const deadlineMs = nowMs() + budgetMs;
+
+    const ctx = {
+      memoryDir: handle,
+      store,
+      cache: { rows: null },
+      lexicon: loadLexicon(),
+      config,
+      state,
+      providers: {
+        // Only "poll" ever reads newsFetchers — building the map is not
+        // free (one courtesy gate per source), so enrich/ingest/materialize
+        // skip it entirely rather than build fetchers nothing will call.
+        newsFetchers: mode === "poll" ? gatedFetchers(createFetchers(config), sourceGate) : new Map(),
+        getResearchProvider: getProvider,
+      },
+      now,
+      shouldAbort: () => nowMs() >= deadlineMs,
+    };
+
+    const marker = mode === "materialize" ? null : { cycleId, kind: mode, state: "running", startedAt: typeof now === "function" ? now() : now, sources: {} };
+
+    let cycleResult = { aborted: false };
+    let failure = null;
+    try {
+      if (mode === "poll") {
+        cycleResult = await pollNewsSources(ctx);
+        if (marker) marker.sources = sourcesFromPollResult(cycleResult.sources);
+      } else if (mode === "enrich") {
+        cycleResult = await enrichTopTerms(ctx);
+      } else if (mode === "ingest") {
+        cycleResult = await runIngest(ctx, body);
+      } else if (mode === "materialize") {
+        cycleResult = { aborted: false };
+      } else {
+        throw new Error(`unknown news worker mode ${JSON.stringify(mode)}`);
+      }
+    } catch (error) {
+      failure = error;
+    }
+
+    if (!failure && cycleWroteFacts(cycleResult)) await bumpIntMeta(rawBackend, META_GRAPH_VERSION_KEY);
+    await rawBackend.putMeta(META_NEWS_STATE_KEY, JSON.stringify(trimStateForPersistence(state)));
+
+    let feedResult = null;
+    if (!failure) {
+      try {
+        feedResult = await materializeFeed(ctx, rawBackend);
+      } catch (error) {
+        failure = error;
+      }
+    }
+
+    if (marker) {
+      await rawBackend.putMeta(META_CYCLE_KEY, JSON.stringify({
+        ...marker,
+        state: failure ? "failed" : (cycleResult.aborted ? "done-partial" : "done"),
+        finishedAt: typeof now === "function" ? now() : now,
+        ...(failure ? { reason: failure.message } : {}),
+      }));
+    }
+
+    log({ sessionKey, cycleId, mode, aborted: !!cycleResult.aborted, failed: !!failure });
+    if (failure) throw failure;
+    return { cycleId, mode, aborted: !!cycleResult.aborted, feedVersion: feedResult?.version };
+  }
+
+  return { runCycle };
+}
+
+/** The in-memory shared per-source gate: one courtesy throttle and one
+ *  breaker per source id, held across every `runCycle` call this process
+ *  makes — the local double's analogue of the `_meta` items every real
+ *  worker invocation shares through DynamoDB. */
+export function createInMemorySourceGate({
+  minIntervalMs = DEFAULT_MIN_INTERVAL_MS,
+  failureThreshold = 3,
+  cooldownMs = 5 * 60_000,
+  nowMs = () => Date.now(),
+} = {}) {
+  const lastFetchAt = new Map();
+  const breakers = new Map();
+  return {
+    async shouldFetch(id) {
+      const breaker = breakers.get(id);
+      if (breaker?.open && nowMs() - breaker.openedAt < cooldownMs) return false;
+      const last = lastFetchAt.get(id) || 0;
+      if (nowMs() - last < minIntervalMs) return false;
+      lastFetchAt.set(id, nowMs());
+      return true;
+    },
+    async noteOutcome(id, ok) {
+      if (ok) { breakers.delete(id); return; }
+      const breaker = breakers.get(id) || { failures: 0, open: false, openedAt: 0 };
+      breaker.failures += 1;
+      if (breaker.failures >= failureThreshold) { breaker.open = true; breaker.openedAt = nowMs(); }
+      breakers.set(id, breaker);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The AWS entry point. Bundled directly as the worker Lambda's code
+// (`npm run build:news-worker`), invoked asynchronously by the row service's
+// trigger routes (event mode) or by the turn handler (materialize mode).
+
+const WORKER_SAFETY_MARGIN_MS = 2000;
+const CORPUS_BREAKER_META_PARTITION_KEY = "_meta";
+
+let cachedDynamoClientPromise = null;
+async function loadDocumentClient() {
+  if (!cachedDynamoClientPromise) {
+    cachedDynamoClientPromise = (async () => {
+      const { DynamoDBClient } = await import("@aws-sdk/client-dynamodb");
+      const { DynamoDBDocumentClient } = await import("@aws-sdk/lib-dynamodb");
+      return DynamoDBDocumentClient.from(new DynamoDBClient({}));
+    })();
+  }
+  return cachedDynamoClientPromise;
+}
+
+/** The full xl seed bundled alongside the Lambda's own code — the same
+ *  payload `scripts/build-chat-seed.mjs` writes for the browser, imported
+ *  lazily so a test importing this module for `createNewsWorker` alone never
+ *  touches a file that only exists after a deploy build. */
+let cachedSeedPayloadPromise = null;
+async function loadXlSeedPayload() {
+  if (!cachedSeedPayloadPromise) {
+    cachedSeedPayloadPromise = import("../../public/chat-seed.json", { with: { type: "json" } }).then((m) => m.default);
+  }
+  return cachedSeedPayloadPromise;
+}
+
+function isConditionalCheckFailure(error) {
+  return error?.name === "ConditionalCheckFailedException";
+}
+
+/** The shared per-source courtesy throttle and breaker over raw DynamoDB
+ *  items, the same `_meta`-partition pattern the corpus breaker and the row
+ *  service's own counters use: a conditional `UpdateCommand` settles every
+ *  race between concurrent worker invocations touching the same source. */
+function createDynamoSourceGate({ client, tableName, minIntervalMs = DEFAULT_MIN_INTERVAL_MS, failureThreshold = 3, cooldownMs = 5 * 60_000 }) {
+  async function shouldFetch(id) {
+    const { UpdateCommand, GetCommand } = await import("@aws-sdk/lib-dynamodb");
+    const now = Date.now();
+    const breakerItem = await client.send(new GetCommand({
+      TableName: tableName, Key: { pk: CORPUS_BREAKER_META_PARTITION_KEY, sk: `breaker#source#${id}` }, ConsistentRead: true,
+    }));
+    const openedAt = breakerItem.Item?.openedAt;
+    if (typeof openedAt === "number" && now - openedAt < cooldownMs) return false;
+    try {
+      await client.send(new UpdateCommand({
+        TableName: tableName,
+        Key: { pk: CORPUS_BREAKER_META_PARTITION_KEY, sk: `throttle#${id}` },
+        UpdateExpression: "SET lastFetchAt = :now",
+        ConditionExpression: "attribute_not_exists(lastFetchAt) OR lastFetchAt <= :floor",
+        ExpressionAttributeValues: { ":now": now, ":floor": now - minIntervalMs },
+      }));
+      return true;
+    } catch (error) {
+      if (isConditionalCheckFailure(error)) return false;
+      throw error;
+    }
+  }
+
+  async function noteOutcome(id, ok) {
+    const { UpdateCommand } = await import("@aws-sdk/lib-dynamodb");
+    if (ok) {
+      await client.send(new UpdateCommand({
+        TableName: tableName,
+        Key: { pk: CORPUS_BREAKER_META_PARTITION_KEY, sk: `breaker#source#${id}` },
+        UpdateExpression: "REMOVE openedAt SET failures = :zero",
+        ExpressionAttributeValues: { ":zero": 0 },
+      }));
+      return;
+    }
+    const now = Date.now();
+    const result = await client.send(new UpdateCommand({
+      TableName: tableName,
+      Key: { pk: CORPUS_BREAKER_META_PARTITION_KEY, sk: `breaker#source#${id}` },
+      UpdateExpression: "ADD failures :one",
+      ExpressionAttributeValues: { ":one": 1 },
+      ReturnValues: "UPDATED_NEW",
+    }));
+    if ((result.Attributes?.failures || 0) >= failureThreshold) {
+      await client.send(new UpdateCommand({
+        TableName: tableName,
+        Key: { pk: CORPUS_BREAKER_META_PARTITION_KEY, sk: `breaker#source#${id}` },
+        UpdateExpression: "SET openedAt = :now",
+        ExpressionAttributeValues: { ":now": now },
+      }));
+    }
+  }
+
+  return { shouldFetch, noteOutcome };
+}
+
+function buildRealFetchers(config, { fetchImpl = (...args) => globalThis.fetch(...args), now = isoNow } = {}) {
+  const validators = new Map();
+  const fetchersById = new Map();
+  for (const id of normalizeNewsSourceIds(config.sources)) {
+    const record = newsSourceRecords().find((r) => r.id === id);
+    if (!record) continue;
+    fetchersById.set(id, createNewsFetcher(record, { fetchImpl, validators, now }));
+  }
+  return fetchersById;
+}
+
+function newsWorkerConfigFromEnv() {
+  const ttlDays = process.env.TTL_DAYS ? Number(process.env.TTL_DAYS) : 7;
+  return { tableName: process.env.TABLE_NAME, ttlSeconds: ttlDays * 86400, seedStamp: process.env.SEED_STAMP || "" };
+}
+
+/** The Lambda entry point esbuild bundles. `event` is `{ sessionKey, cycleId,
+ *  mode, body }` — the async-invoke payload the row service's trigger routes
+ *  (or the turn handler, for `mode: "materialize"`) send. The abort budget
+ *  reads the invocation's own remaining time, minding a safety margin so the
+ *  cycle stops between whole units of work before the runtime kills it. */
+export const handler = async (event, context) => {
+  const { tableName, ttlSeconds, seedStamp } = newsWorkerConfigFromEnv();
+  const client = await loadDocumentClient();
+  const seedPayload = await loadXlSeedPayload();
+  const remainingMs = typeof context?.getRemainingTimeInMillis === "function"
+    ? context.getRemainingTimeInMillis()
+    : DEFAULT_WORKER_BUDGET_MS + WORKER_SAFETY_MARGIN_MS;
+
+  const worker = createNewsWorker({
+    createSessionBackend: (sessionKey) => createDynamoRowBackend({ client, tableName, sessionKey, softDelete: true, ttlSeconds }),
+    createFetchers: (config) => buildRealFetchers(config, {}),
+    getResearchProvider: ({ source } = {}) => getResearchProvider({ source }),
+    seedPayload,
+    seedStamp,
+    sourceGate: createDynamoSourceGate({ client, tableName }),
+    budgetMs: Math.max(1000, remainingMs - WORKER_SAFETY_MARGIN_MS),
+  });
+
+  return worker.runCycle({
+    sessionKey: event.sessionKey, cycleId: event.cycleId, mode: event.mode, body: event.body || {},
+  });
+};
