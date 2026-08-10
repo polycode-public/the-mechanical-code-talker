@@ -52,6 +52,20 @@ import {
 } from "../../domain/memory/retraction.mjs";
 import { admittedNodes, stableRecordIds } from "../../domain/memory/causal-stability.mjs";
 import { assertIndividualValid } from "./shacl.mjs";
+import { BackendRejected, isRowBackend, rowBackendProblems, BOOKKEEPING_ROW_CLASS } from "./row-backend.mjs";
+// The row-backend contract lives in its own module (a consumer imports it
+// without loading the engine); re-exported here so store consumers keep one
+// import site, the same way the trust and retraction vocabularies are.
+export {
+  BackendRejected, BackendUnavailable, isRowBackend, rowBackendProblems,
+  isValidRow, rowProblems, assertValidRow,
+  ROW_BACKEND_KIND, ROW_BACKEND_CONTRACT_VERSION, ROW_CLASSES, MAX_ROW_BYTES,
+} from "./row-backend.mjs";
+// rows.mjs imports this module back for the class constants. The cycle is
+// fine as long as neither side READS an imported binding while the other's
+// body is still running — rows.mjs builds its class map on first use, and
+// every use here is inside a function.
+import { payloadToRows, rowsToPayload, diffRows } from "./rows.mjs";
 
 // The rollup vocabulary and its tuning constants live with the compaction
 // layer; re-exported here so store consumers keep one import site.
@@ -176,8 +190,8 @@ export function emptyMemory() {
  *  (default) is the live graph; a numeric version resolves a snapshot copy
  *  (see snapshotMemory below). The single source of truth for this path. */
 export function resolveMemoryGraphFile(dir, version = null) {
-  if (isMemoryHandle(dir) || isSqliteHandle(dir)) {
-    throw new Error("resolveMemoryGraphFile: dir is a memory/sqlite handle, not a file path (Backend A only)");
+  if (isMemoryOrSqliteHandle(dir)) {
+    throw new Error("resolveMemoryGraphFile: dir is a store handle, not a file path (Backend A only)");
   }
   if (version === null) return join(dir, MEMORY_GRAPH_REL);
   return join(dir, MEMORY_DIR_REL, `graph.v${version}.json`);
@@ -187,12 +201,14 @@ const memoryGraphFile = (dir) => resolveMemoryGraphFile(dir);
 
 // ---- Storage-backend seam --------------------------------------------------
 // `dir` is either a plain repo-path string (Backend A, file-backed) or a
-// handle from createInMemoryStore() (Backend B) or createSqliteMemoryStore()
-// (Backend C). Only loadMemory/mutateMemory dispatch on backend; every other
+// handle from createInMemoryStore() (Backend B), createSqliteMemoryStore()
+// (Backend C), or wrapRowBackend() over a consumer's own row store
+// (Backend D). Only loadMemory/mutateMemory dispatch on backend; every other
 // function operates on the plain payload object they hand back.
 
 const BACKEND_MEMORY = "memory";
 const BACKEND_SQLITE = "sqlite";
+const BACKEND_ROW = "row";
 
 function isMemoryHandle(dir) {
   return !!dir && typeof dir === "object" && dir.backend === BACKEND_MEMORY;
@@ -200,14 +216,20 @@ function isMemoryHandle(dir) {
 function isSqliteHandle(dir) {
   return !!dir && typeof dir === "object" && dir.backend === BACKEND_SQLITE;
 }
-/** True for a Backend B (in-memory) or Backend C (sqlite) handle — anything
- *  that is NOT a plain repo-path string. Exported so every OTHER module that
- *  takes a `dir` and might reach a raw `node:path`/`node:fs` call (blocks.mjs's
- *  session-block index chief among them) can guard the same way this module
- *  already does, instead of a bare `join(dir, …)` throwing Node's generic
- *  "path argument must be of type string" at a caller with no idea why. */
+/** True for a Backend D handle — the wrapper wrapRowBackend puts around a
+ *  consumer's injected row store. A row store has no path and no connection of
+ *  tmct's own, so callers that reach for either have to branch on this. */
+export function isRowHandle(dir) {
+  return !!dir && typeof dir === "object" && dir.backend === BACKEND_ROW;
+}
+/** True for any store handle — Backend B, C or D — that is NOT a plain
+ *  repo-path string. Exported so every OTHER module that takes a `dir` and
+ *  might reach a raw `node:path`/`node:fs` call (blocks.mjs's session-block
+ *  index chief among them) can guard the same way this module already does,
+ *  instead of a bare `join(dir, …)` throwing Node's generic "path argument
+ *  must be of type string" at a caller with no idea why. */
 export function isMemoryOrSqliteHandle(dir) {
-  return isMemoryHandle(dir) || isSqliteHandle(dir);
+  return isMemoryHandle(dir) || isSqliteHandle(dir) || isRowHandle(dir);
 }
 
 /** Backend B — pure in-memory store: `{ backend: "memory", payload }` held by
@@ -680,9 +702,168 @@ export async function createSqliteMemoryStore(dbPath) {
 
 /** Close a Backend C handle's connection. A no-op for anything else (so a
  *  caller that doesn't know which backend it has can call this unconditionally
- *  at session end). */
+ *  at session end). A Backend D handle is closed through its own `impl.close()`
+ *  instead — openMemoryBackend's returned `close` is the call site. */
 export function closeSqliteMemoryStore(handle) {
   if (isSqliteHandle(handle)) handle.db.close();
+}
+
+// ---- Backend D — a consumer's own row store ------------------------------
+// The consumer constructs the store (row-backend.mjs is the contract) and
+// tmct binds it into the same `memoryDir` token every memory call threads.
+// The payload this handle hands back is `basePayload` overlaid with the rows
+// the store holds; the payload it writes back is the DELTA against what it
+// last assembled, so a turn pays for what it changed and nothing else.
+//
+// `basePayload` is a read-only overlay for a bundled seed graph. Its rows are
+// assembled into every read and are excluded from every write, so a session
+// over a 60k-fact seed still stores only the handful of facts that session
+// taught.
+//
+// No cross-writer cache guard exists here, unlike Backend C's PRAGMA
+// data_version check: a second writer's rows appear at this handle's next cold
+// open, and the derived state recomputes then. A consumer that needs to see
+// another writer's rows immediately constructs a fresh handle per request,
+// which is what the serverless pattern does anyway.
+
+const ROW_META_MEMORY_KEY = "memory";
+const ROW_META_PREFIXES_KEY = "prefixes";
+const ROW_SYLLOGISE_STATE_KEY = "syllogiseState";
+const ROW_NODE_ID_KEY = "nodeId";
+
+/** Bind a row backend as a `memoryDir` token: `{ backend: "row", impl,
+ *  cachedPayload, basePayload }`. `basePayload` is the read-only seed overlay;
+ *  `onOversizedRow` is the projection's posture for a record over the per-row
+ *  cap ("throw", the default, or "drop"), and `log` takes the drop notices. */
+export function wrapRowBackend(impl, { basePayload = null, onOversizedRow = "throw", log = undefined } = {}) {
+  const problems = rowBackendProblems(impl);
+  if (problems.length) {
+    throw new BackendRejected(`not a memory row backend: ${problems.join("; ")}`);
+  }
+  return {
+    backend: BACKEND_ROW,
+    impl,
+    cachedPayload: null,
+    basePayload: cloneMemoryPayload(basePayload),
+    baseRows: null,
+    storedRows: null,
+    onOversizedRow,
+    log,
+  };
+}
+
+/** Drain whatever `readRows()` returned: the contract allows an array or an
+ *  async iterable, so a paginating backend can stream its pages. */
+async function collectRows(source) {
+  const value = await source;
+  if (Array.isArray(value)) return value;
+  const rows = [];
+  for await (const row of value) rows.push(row);
+  return rows;
+}
+
+/** The seed rows under the session's own, keyed so a session row with a base
+ *  row's key wins. */
+function overlayRows(baseRows, sessionRows) {
+  const byKey = new Map();
+  for (const row of baseRows) byKey.set(row.rowKey, row);
+  for (const row of sessionRows) byKey.set(row.rowKey, row);
+  return [...byKey.values()];
+}
+
+/** The seed keys this handle must never write or delete: every base row the
+ *  session store does not already hold a row for. */
+function seedOnlyKeys(handle) {
+  const sessionKeys = new Set(handle.storedRows.map((r) => r.rowKey));
+  return new Set(handle.baseRows.map((r) => r.rowKey).filter((key) => !sessionKeys.has(key)));
+}
+
+async function readRowMeta(handle, key, fallback) {
+  const raw = await handle.impl.readMeta(key);
+  if (raw === null || raw === undefined) return fallback;
+  try { return JSON.parse(raw); } catch { return fallback; }
+}
+
+/** loadMemory's read for Backend D: one `readRows()` per cold open, assembled
+ *  once with the seed overlay, then served from `cachedPayload` with no
+ *  further backend traffic. Bookkeeping rows are held aside — they round-trip
+ *  through the store but never compose into a payload. */
+async function readRowPayload(handle) {
+  if (!handle.cachedPayload) {
+    const empty = emptyMemory();
+    const stored = await collectRows(handle.impl.readRows());
+    handle.baseRows = payloadToRows(handle.basePayload || empty);
+    handle.storedRows = stored.filter((row) => row?.rowClass !== BOOKKEEPING_ROW_CLASS);
+    handle.cachedPayload = rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), {
+      meta: {
+        memory: await readRowMeta(handle, ROW_META_MEMORY_KEY, handle.basePayload?.memory ?? empty.memory),
+        prefixes: await readRowMeta(handle, ROW_META_PREFIXES_KEY, handle.basePayload?.prefixes ?? empty.prefixes),
+      },
+    });
+  }
+  return cloneJson(handle.cachedPayload);
+}
+
+/** A record with its audit stamp removed. `mgx:updatedAt` moves on every
+ *  individual a trust recompute touches, which is every fact in the store on
+ *  every mutate, so comparing raw bytes calls every row changed. */
+function recordWithoutAuditStamp(json) {
+  let record;
+  try { record = JSON.parse(json); } catch { return json; }
+  const ind = record?.individual;
+  if (!Array.isArray(ind?.attributes)) return json;
+  return JSON.stringify({
+    ...record,
+    individual: { ...ind, attributes: ind.attributes.filter((a) => a?.prop !== UPDATED_AT_PROP) },
+  });
+}
+
+/** A row worth a write: something about it changed beyond the audit stamp. A
+ *  row whose only difference is that stamp says nothing new, and writing it
+ *  would let a handle with a stale read overwrite a concurrent writer's real
+ *  change with its own no-op. */
+function movedBeyondAuditStamp(beforeRow, row) {
+  if (!beforeRow) return true;
+  return recordWithoutAuditStamp(beforeRow.json) !== recordWithoutAuditStamp(row.json);
+}
+
+/** persistMemory's write for Backend D: project the mutated payload, diff it
+ *  against what this handle last assembled, and write only the delta. A failed
+ *  write drops the cache so the next read rebuilds from the store rather than
+ *  from a payload that never landed. */
+async function persistRowPayload(handle, payload) {
+  await readRowPayload(handle);
+  const before = overlayRows(handle.baseRows, handle.storedRows);
+  const beforeByKey = new Map(before.map((row) => [row.rowKey, row]));
+  const after = payloadToRows(payload, {
+    priorRows: before,
+    onOversizedRow: handle.onOversizedRow,
+    ...(handle.log ? { log: handle.log } : {}),
+  });
+  const { puts, deletes } = diffRows(before, after);
+  const seedKeys = seedOnlyKeys(handle);
+  const writes = puts
+    .filter((row) => !seedKeys.has(row.rowKey))
+    .filter((row) => movedBeyondAuditStamp(beforeByKey.get(row.rowKey), row));
+  const removals = deletes.filter((key) => !seedKeys.has(key));
+  try {
+    if (writes.length) await handle.impl.putRows(writes);
+    if (removals.length) await handle.impl.deleteRows(removals);
+    await handle.impl.putMeta(ROW_META_MEMORY_KEY, JSON.stringify(payload.memory ?? emptyMemory().memory));
+    await handle.impl.putMeta(ROW_META_PREFIXES_KEY, JSON.stringify(payload.prefixes ?? emptyMemory().prefixes));
+  } catch (e) {
+    handle.cachedPayload = null;
+    handle.storedRows = null;
+    handle.baseRows = null;
+    throw e;
+  }
+  const removed = new Set(removals);
+  const next = new Map(handle.storedRows.filter((row) => !removed.has(row.rowKey)).map((row) => [row.rowKey, row]));
+  for (const row of writes) next.set(row.rowKey, row);
+  handle.storedRows = [...next.values()];
+  handle.cachedPayload = rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), {
+    meta: { memory: payload.memory, prefixes: payload.prefixes },
+  });
 }
 
 /** Resolve a backend token ("memory" | "sqlite" | anything else) into
@@ -691,8 +872,21 @@ export function closeSqliteMemoryStore(handle) {
  *  than silently splitting its memory across two stores. The empty/"default"
  *  token routes to the sqlite store: the flat-file Backend A is retired from
  *  routing (loadMemory/persistMemory still honour a plain dir string for
- *  callers that hold one directly). */
+ *  callers that hold one directly).
+ *
+ *  `backendChoice` may also be an OBJECT: a row backend, which gets wrapped as
+ *  a Backend D handle, or a handle wrapRowBackend already produced (the way a
+ *  caller passes a seed overlay in). Either passes through untouched by config
+ *  resolution — no repo path is read, nothing is created on disk — and the
+ *  returned `close` closes the injected store. */
 export async function openMemoryBackend(repoRoot, backendChoice) {
+  if (isRowHandle(backendChoice)) {
+    return { dir: backendChoice, close: async () => { await backendChoice.impl.close(); } };
+  }
+  if (isRowBackend(backendChoice)) {
+    const handle = wrapRowBackend(backendChoice);
+    return { dir: handle, close: async () => { await handle.impl.close(); } };
+  }
   if (backendChoice === BACKEND_MEMORY) {
     return { dir: createInMemoryStore(), close: async () => {} };
   }
@@ -709,7 +903,9 @@ export async function openMemoryBackend(repoRoot, backendChoice) {
 /** openMemoryBackend for a caller that only wants to READ what a repo already
  *  holds: null when the repo has no store yet, because opening one creates it.
  *  The cold surfaces (the `cli` tool route) answer over a repo they were merely
- *  pointed at, and must leave a repo with no memory exactly as they found it. */
+ *  pointed at, and must leave a repo with no memory exactly as they found it.
+ *  String tokens only — an injected row backend has no repo store to probe for,
+ *  so a caller holding one calls openMemoryBackend directly. */
 export async function openExistingMemoryBackend(repoRoot, backendChoice = "") {
   if (!repoRoot || typeof repoRoot !== "string") return null;
   const dbPath = join(repoRoot, ".tmct", "memory", "graph.sqlite");
@@ -732,7 +928,9 @@ export async function readOnlyMemorySnapshot(memoryDir) {
 /** openMemoryBackend for an entry point that holds only a repo path and has no
  *  CLI-flag tier (the fold's idle pass, `tmct import --file`): resolve the
  *  backend token the way the chat path does minus the flag —
- *  TMCT_MEMORY_BACKEND env > tmct.toml's [memory] backend > the default. */
+ *  TMCT_MEMORY_BACKEND env > tmct.toml's [memory] backend > the default. Config
+ *  can only name a string backend, so an injected row backend never arrives
+ *  here; a caller holding one calls openMemoryBackend directly. */
 export async function openConfiguredMemoryBackend(repoRoot, env = process.env) {
   let backend = String(env?.TMCT_MEMORY_BACKEND || "").trim().toLowerCase();
   if (!backend) {
@@ -1057,7 +1255,7 @@ const resolveManifestFile = (dir) => join(dir, MEMORY_MANIFEST_REL);
  *  `opts.retentionVersions`. Returns `{ skipped, version, prunedVersion }`. */
 export async function snapshotMemory(dir, { retentionVersions } = {}) {
   if (isMemoryOrSqliteHandle(dir)) {
-    throw new Error("snapshotMemory only supports the flat-JSON backend (Backend A) — a memory/sqlite handle has no on-disk graph.json to snapshot");
+    throw new Error("snapshotMemory only supports the flat-JSON backend (Backend A) — a store handle has no on-disk graph.json to snapshot");
   }
   const graphFile = resolveMemoryGraphFile(dir);
   let graphText;
@@ -1101,7 +1299,7 @@ export async function snapshotMemory(dir, { retentionVersions } = {}) {
   return { skipped: false, version: v, prunedVersion };
 }
 
-/** Load the memory graph for a repo dir OR a Backend B/C handle (see the
+/** Load the memory graph for a repo dir OR a Backend B/C/D handle (see the
  *  storage-backend seam above `createInMemoryStore`). A missing Backend-A
  *  store is the bootstrap: return the empty payload (uncached — the first
  *  append creates the file). The result is a raw entities payload;
@@ -1109,6 +1307,7 @@ export async function snapshotMemory(dir, { retentionVersions } = {}) {
 export async function loadMemory(dir) {
   if (isMemoryHandle(dir)) return migrateStoredMemory(dir.payload);
   if (isSqliteHandle(dir)) return migrateStoredMemory(readSqlitePayload(dir));
+  if (isRowHandle(dir)) return migrateStoredMemory(await readRowPayload(dir));
   let text;
   try {
     text = await readFile(memoryGraphFile(dir), "utf8");
@@ -1307,11 +1506,13 @@ function migrateFactAssertionKeys(payload) {
 }
 
 /** Persist a mutated payload back to `dir`: an atomic file write (Backend A),
- *  a no-op assignment (Backend B, already the live object), or a diffed
- *  per-row SQL write (Backend C, persistSqlitePayload). */
+ *  a no-op assignment (Backend B, already the live object), a diffed per-row
+ *  SQL write (Backend C, persistSqlitePayload), or a diffed row write into an
+ *  injected store (Backend D, persistRowPayload). */
 async function persistMemory(dir, payload) {
   if (isMemoryHandle(dir)) { dir.payload = payload; return; }
   if (isSqliteHandle(dir)) { persistSqlitePayload(dir, payload); return; }
+  if (isRowHandle(dir)) { await persistRowPayload(dir, payload); return; }
   await mkdir(dirname(memoryGraphFile(dir)), { recursive: true });
   await atomicWriteJson(memoryGraphFile(dir), payload);
 }
@@ -1324,7 +1525,7 @@ async function persistMemory(dir, payload) {
 export const SYLLOGISE_STATE_REL = join(MEMORY_DIR_REL, "syllogise-state.json");
 const SQLITE_SYLLOGISE_STATE_KEY = "syllogiseState";
 
-/** Load the syllogise watermark for a repo dir OR a Backend B/C handle.
+/** Load the syllogise watermark for a repo dir OR a Backend B/C/D handle.
  *  Null when no complete pass has recorded one. */
 export async function loadSyllogiseState(dir) {
   if (isMemoryHandle(dir)) return dir.syllogiseState ? structuredClone(dir.syllogiseState) : null;
@@ -1332,6 +1533,7 @@ export async function loadSyllogiseState(dir) {
     const row = dir.db.prepare("SELECT v FROM meta WHERE k = ?").get(SQLITE_SYLLOGISE_STATE_KEY);
     return row?.v ? JSON.parse(row.v) : null;
   }
+  if (isRowHandle(dir)) return readRowMeta(dir, ROW_SYLLOGISE_STATE_KEY, null);
   try {
     return JSON.parse(await readFile(join(dir, SYLLOGISE_STATE_REL), "utf8"));
   } catch (e) {
@@ -1341,13 +1543,17 @@ export async function loadSyllogiseState(dir) {
 }
 
 /** Persist the syllogise watermark — atomic file write (Backend A), a cloned
- *  handle field (Backend B), or a meta-table row (Backend C). */
+ *  handle field (Backend B), a meta-table row (Backend C), or a meta value in
+ *  the injected store (Backend D). A watermark is one scalar whose worst race
+ *  costs a redundant re-syllogise, which is why it travels as meta rather than
+ *  as rows. */
 export async function saveSyllogiseState(dir, state) {
   if (isMemoryHandle(dir)) { dir.syllogiseState = structuredClone(state); return; }
   if (isSqliteHandle(dir)) {
     dir.db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)").run(SQLITE_SYLLOGISE_STATE_KEY, JSON.stringify(state));
     return;
   }
+  if (isRowHandle(dir)) { await dir.impl.putMeta(ROW_SYLLOGISE_STATE_KEY, JSON.stringify(state)); return; }
   const file = join(dir, SYLLOGISE_STATE_REL);
   await mkdir(dirname(file), { recursive: true });
   await atomicWriteJson(file, state);
@@ -1369,6 +1575,7 @@ export async function loadNodeId(dir) {
     const row = dir.db.prepare("SELECT v FROM meta WHERE k = ?").get(SQLITE_NODE_ID_KEY);
     return row?.v ? JSON.parse(row.v).nodeId || null : null;
   }
+  if (isRowHandle(dir)) return (await readRowMeta(dir, ROW_NODE_ID_KEY, null))?.nodeId || null;
   try {
     return JSON.parse(await readFile(join(dir, NODE_ID_REL), "utf8")).nodeId || null;
   } catch (e) {
@@ -1378,14 +1585,16 @@ export async function loadNodeId(dir) {
 }
 
 /** Record this store's node id — atomic file write (Backend A), a handle field
- *  (Backend B), or a meta-table row (Backend C). Callers mint through
- *  resolveStoreNodeId, which never overwrites an id a store already holds. */
+ *  (Backend B), a meta-table row (Backend C), or a meta value in the injected
+ *  store (Backend D). Callers mint through resolveStoreNodeId, which never
+ *  overwrites an id a store already holds, so this value is written once. */
 export async function saveNodeId(dir, nodeId) {
   if (isMemoryHandle(dir)) { dir.nodeId = nodeId; return; }
   if (isSqliteHandle(dir)) {
     dir.db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)").run(SQLITE_NODE_ID_KEY, JSON.stringify({ nodeId }));
     return;
   }
+  if (isRowHandle(dir)) { await dir.impl.putMeta(ROW_NODE_ID_KEY, JSON.stringify({ nodeId })); return; }
   const file = join(dir, NODE_ID_REL);
   await mkdir(dirname(file), { recursive: true });
   await atomicWriteJson(file, { nodeId });

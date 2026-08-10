@@ -150,7 +150,9 @@ export async function createSession({
   // retired from routing. "memory" selects Backend B (zero disk I/O,
   // session-scoped). This is `tmct chat --memory-backend <...>`'s
   // already-resolved value; full precedence (this param > TMCT_MEMORY_BACKEND
-  // env > tmct.toml > the sqlite default) resolved below.
+  // env > tmct.toml > the sqlite default) resolved below. A row backend OBJECT
+  // (or a wrapRowBackend handle) selects Backend D and bypasses that
+  // precedence entirely — a caller injecting a store has already chosen.
   memoryBackend = null,
   // The tool-name prefix a host's own follow-up hints should use in place of
   // "tmct_" (e.g. seonix's own tool names) — threaded onto `config` below so
@@ -411,14 +413,23 @@ export async function createSession({
   };
 
   // `memoryDir` is the opaque token every memory/core.mjs call in this file
-  // threads through unchanged — always a Backend B/C handle from
+  // threads through unchanged — always a Backend B/C/D handle from
   // openMemoryBackend now that the flat-file Backend A is retired from
   // routing. Precedence — CLI flag > env > tmct.toml > the sqlite default.
-  const backendChoice = String(memoryBackend || env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
+  //
+  // A caller can also INJECT its own row store as `memoryBackend`: a backend
+  // object, or a handle wrapRowBackend already produced (which is how a seed
+  // overlay arrives). That object goes to openMemoryBackend as-is — config
+  // resolution never sees it, and it must be tested before the String()
+  // coercion below or it stringifies into a meaningless token.
+  const { openMemoryBackend, isRowBackend, isRowHandle } = await import("../adapters/memory/core.mjs");
+  const injectedRowStore = isRowBackend(memoryBackend) || isRowHandle(memoryBackend);
+  const backendChoice = injectedRowStore
+    ? memoryBackend
+    : String(memoryBackend || env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
   // openMemoryBackend is the ONE shared resolver for this seam — init.mjs's
   // corpus seed calls the exact same function, so a repo's seeded facts and
   // its chat-taught facts always land in the same backend.
-  const { openMemoryBackend } = await import("../adapters/memory/core.mjs");
   const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
 
   const empty = graph.individuals.length === 0;
@@ -430,8 +441,9 @@ export async function createSession({
   //
   // Known residual split: seedBootstrapMemory/hasSeededVocabulary resolve
   // their marker file off the STRING `repo` path (correct — the marker is a
-  // file, not store content), so W3 seeding still only fires on the default
-  // token. And sessions.mjs's per-turn utterance mirror still writes an
+  // file, not store content), so W3 seeding only fires on the default token —
+  // an injected row store carries whatever seed its owner bundled and never
+  // gets one written into it here. And sessions.mjs's per-turn utterance mirror still writes an
   // ordinary .tmct/memory/graph.json off the repo string — a file no routed
   // reader opens now that Backend A is retired from routing. Taught FACTS
   // themselves are unaffected: only the conversational transcript mirror
@@ -455,10 +467,14 @@ export async function createSession({
   // A discarding session must not say the conversation is kept. Ephemeral
   // diverts every write to a temp dir and suppresses the graph upsert; the
   // "memory" backend keeps the store in-process. Both end when the process does.
+  // An injected row store is durable but not tmct's file, so it gets its own
+  // line rather than a path this session never writes.
   const discardsWrites = ephemeral || backendChoice === "memory";
   const whereItGoes = discardsWrites
     ? "nothing is written back — this session's facts and log are dropped when it ends"
-    : `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`;
+    : injectedRowStore
+      ? `the conversation is kept in your configured store — log ${logFile}`
+      : `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`;
   const bannerLines = [
     noCodeGraph
       // No code graph: honest, orienting messaging — never an error before the prompt.
