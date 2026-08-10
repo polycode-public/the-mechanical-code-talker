@@ -96,15 +96,17 @@ async function fetchMergedEntities(config) {
 
 /** Fetch the entities payload through the provider seam. With a registered provider, its
  *  result is returned as-is (uncached); a non-object result is a clean ToolError. Default:
- *  read + parse the local graph artifact, cached per file. A missing artifact (ENOENT)
+ *  read + parse the local graph artifact, cached per file. A missing artifact (ENOENT), or
+ *  no config/graphFile at all (a graph-less caller — nothing was ever configured to read),
  *  returns the bootstrap payload, uncached, so a freshly written file is picked up next
  *  fetch. When `config.graphFiles` names more than one file, delegates to
  *  fetchMergedEntities instead. */
 export async function fetchEntities(config) {
+  const cfg = config || {};
   if (provider) {
     let payload;
     try {
-      payload = await provider(config);
+      payload = await provider(cfg);
     } catch (e) {
       if (e instanceof ToolError) throw e;
       throw new ToolError(`graph provider failed (${e?.message || e})`);
@@ -114,25 +116,26 @@ export async function fetchEntities(config) {
     }
     return payload;
   }
-  if (Array.isArray(config.graphFiles) && config.graphFiles.length > 1) {
-    return fetchMergedEntities(config);
+  if (Array.isArray(cfg.graphFiles) && cfg.graphFiles.length > 1) {
+    return fetchMergedEntities(cfg);
   }
-  if (cache && cache.file === config.graphFile) return cache.payload;
+  if (!cfg.graphFile) return emptyEntities();
+  if (cache && cache.file === cfg.graphFile) return cache.payload;
   let text;
   try {
-    text = await readFile(config.graphFile, "utf8");
+    text = await readFile(cfg.graphFile, "utf8");
   } catch (e) {
     if (e?.code === "ENOENT") return emptyEntities();
     throw new ToolError(
-      `cannot read graph artifact at ${config.graphFile} (${e?.code || e?.message || e})`,
+      `cannot read graph artifact at ${cfg.graphFile} (${e?.code || e?.message || e})`,
     );
   }
   let payload;
   try {
     payload = JSON.parse(text);
   } catch {
-    throw new ToolError(`graph artifact ${config.graphFile} is not valid JSON`);
+    throw new ToolError(`graph artifact ${cfg.graphFile} is not valid JSON`);
   }
-  cache = { file: config.graphFile, payload };
+  cache = { file: cfg.graphFile, payload };
   return payload;
 }

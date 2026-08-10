@@ -81,6 +81,20 @@ test("fetchEntities: plain config.graphFile only (no graphFiles at all) is untou
   }
 });
 
+test("fetchEntities: an absent config is the bootstrap-empty payload, never a throw", async () => {
+  clearCache();
+  const payload = await fetchEntities(undefined);
+  assert.equal(payload.bootstrap, true);
+  assert.deepEqual(payload.individuals, []);
+});
+
+test("fetchEntities: a config with no graphFile at all is the same bootstrap-empty payload", async () => {
+  clearCache();
+  const payload = await fetchEntities({});
+  assert.equal(payload.bootstrap, true);
+  assert.deepEqual(payload.individuals, []);
+});
+
 test("fetchEntities: a real id collision across graphFiles gets prefixed via graphNames", async () => {
   clearCache();
   const dir = await tmp();

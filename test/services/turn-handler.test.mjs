@@ -184,6 +184,18 @@ test("the turn rate limit answers 429 once a session's hourly cap is spent", asy
   }
 });
 
+test("a question routed through the ask engine reports the graph's honest emptiness in plain words, never a raw internal error — the turn service has no config or graph file at all", async () => {
+  const service = await createLocalTurnService();
+  try {
+    const result = await postTurn(service, SESSION, { text: "what is a dolphin" });
+    assert.equal(result.status, 200);
+    assert.doesNotMatch(result.json.narration, /Cannot read propert/, "no raw TypeError text leaks into the narration");
+    assert.match(result.json.narration, /the graph at undefined is empty/, "the ask engine's own bootstrap-empty message names the emptiness plainly instead of crashing on a missing config");
+  } finally {
+    await service.close();
+  }
+});
+
 test("vocabularyFromSeed collects single-word terms from a payload's own facts", () => {
   const payload = {
     individuals: [
