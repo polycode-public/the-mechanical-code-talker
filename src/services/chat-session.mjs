@@ -117,6 +117,8 @@ const promptFor = (focus) => (focus ? `tmct(${shortLabel(focus.label)})> ` : PRO
  * logFile, sidecarFile, bannerLines, empty, focus, lastAnswer, turns, promptFor(),
  * turn(line), close() }. `turn(line)` runs one dispatched turn through runTurn and the
  * full sink sequencing, returning { answer, end, prompt }; `close()` is idempotent.
+ * `turn(line, {retrieval})` passes this turn's own corpus-retrieval context,
+ * overriding the session-level `retrieval` option for that turn.
  */
 export async function createSession({
   repoPath,
@@ -168,6 +170,15 @@ export async function createSession({
   // lifetime (four mud.html characters means four sessions, not one session
   // switching identity turn to turn).
   actingSubject,
+  // What the corpus retrieval behind this session's turns did, in
+  // retrieve-subgraph's own metrics shape ({mode, bounded, bands}). It decides
+  // the corpus-scope line an answer carries: what the query pulled in, whether
+  // a budget cut it short, or that the supplement was absent altogether. A
+  // caller that retrieves per turn passes its own context to `turn(line,
+  // {retrieval})` instead, which wins over this one. Omitted (the default)
+  // means no corpus behind this session, and every answer is byte-identical to
+  // a run without the seam.
+  retrieval = null,
   // The session-log filesystem seam: mkdir/createWriteStream, injectable so a
   // test can exercise the unwritable-log guard by rejecting at the seam
   // itself rather than by making a real directory unwritable — chmod-based
@@ -553,10 +564,10 @@ export async function createSession({
      *  (empty when the turn wrote nothing). A throwing runTurn must never abort
      *  the session: a piped/non-interactive driver has no other chance to see
      *  this turn's answer. */
-    async turn(line) {
+    async turn(line, { retrieval: turnRetrieval = null } = {}) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, researchSource: researchSourceOn, vocabHint, tel, biasByBundle, planState, gameConfig, recognitionConfig, researchState, researchConfig, newsState, newsConfig, newsProviders, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, researchSource: researchSourceOn, vocabHint, tel, biasByBundle, planState, gameConfig, recognitionConfig, researchState, researchConfig, newsState, newsConfig, newsProviders, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks, retrieval: turnRetrieval ?? retrieval });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);

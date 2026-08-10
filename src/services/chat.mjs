@@ -80,6 +80,7 @@ import { splitChoiceQuestion, routeChoiceRelation, lemmaFoldVariants, headNounOf
 import { subClassParents, subClassChildren, descendantSet, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
 import { ANSWER_STOP_SET } from "../domain/hub-terms.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
+import { ENUMERATION_LANES, answerAssertsASet, retrievalMarkerLine } from "../domain/retrieval-marker.mjs";
 import { adventureTurn, unclaimedAdventureOpening, foldWorldState } from "./adventure.mjs";
 import { spiderFlyTurn } from "./spider-fly-turn.mjs";
 import { mudiiiTurn } from "./mudiii-turn.mjs";
@@ -358,6 +359,25 @@ function withCanonicalLine(result) {
   if (!canonical) return result;
   const suffix = `Canonical: ${canonical.english} — ${canonical.machine}`;
   const answer = `${result.answer}\n\n${suffix}`;
+  const logLines = Array.isArray(result.logLines)
+    ? result.logLines.map((l) => (l === result.answer ? answer : l))
+    : result.logLines;
+  return { ...result, answer, logLines };
+}
+
+/** The corpus-scope line, on the same append-onto-`answer` mechanism as
+ *  withGoalLine. A turn dispatched with no retrieval context gets nothing —
+ *  the local shell, the browser page and every existing caller pass none, so
+ *  their answers are byte-identical to a run without this seam.
+ *
+ *  Applied FIRST in the trailer chain, so the goal and canonical lines stay at
+ *  the end of the answer where the suites that strip them anchor. The scope
+ *  line belongs against the answer body anyway: it says what the answer was
+ *  read from, where the other two describe the turn. */
+function withRetrievalNote(result, retrieval) {
+  const line = retrievalMarkerLine(retrieval, { enumerationLane: result?.record?.enumerationLane ?? null });
+  if (!line) return result;
+  const answer = `${result.answer}\n\n${line}`;
   const logLines = Array.isArray(result.logLines)
     ? result.logLines.map((l) => (l === result.answer ? answer : l))
     : result.logLines;
@@ -9253,7 +9273,23 @@ function uniqueFacts(rows) {
  *  it as its own "Goal (inferred)" line; every other consumer reads named
  *  fields and is unaffected. */
 export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null, focusLabel = null) {
-  return withDeducedGoal(await factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle, cache, focusLabel), envelope, query);
+  return withEnumerationLane(
+    withDeducedGoal(await factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle, cache, focusLabel), envelope, query),
+    ENUMERATION_LANES.FACT_SET,
+  );
+}
+
+/** Stamp the enumeration lane on a fact reader's return when its answer reports
+ *  a set's extent, so the corpus-scope trailer can find it.
+ *
+ *  Both cascades below render their hits the same way — a capped list of fact
+ *  lines plus a held remainder — across twenty-odd return sites. Deciding here,
+ *  from the rendered answer, rather than tagging each site keeps one rule in
+ *  one place, and covers a reader added to either cascade later. */
+function withEnumerationLane(res, lane) {
+  if (!res || res.miss || typeof res.text !== "string") return res;
+  if (!answerAssertsASet(res.text, res)) return res;
+  return { ...res, enumerationLane: lane };
 }
 
 /** Attach the additive `goal` field to a fact reader's return: the same
@@ -11017,7 +11053,10 @@ function inheritsChain(graph, startId) {
  *  plus factAnswer's same additive `goal` field when one is deducible
  *  (withDeducedGoal). */
 export async function factReadBack(memoryDir, query, envelope, miss, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
-  return withDeducedGoal(await factReadBackReaders(memoryDir, query, envelope, miss, graph, focusLabel, biasByBundle, cache), envelope, query);
+  return withEnumerationLane(
+    withDeducedGoal(await factReadBackReaders(memoryDir, query, envelope, miss, graph, focusLabel, biasByBundle, cache), envelope, query),
+    ENUMERATION_LANES.FACT_READBACK,
+  );
 }
 
 async function factReadBackReaders(memoryDir, query, envelope, miss, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
@@ -15470,6 +15509,9 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let via = "composed";
   let recordMiss = miss;
   let factPending = null; // a truncated fact listing's held remainder (for "more" paging)
+  // Set by the lanes here whose answer reports a set's extent, and read by the
+  // corpus-scope trailer. Null on every point answer and every miss.
+  let enumerationLane = null;
   // Set when the memory-facts lane (W4, below) answered from a corpus-weak-only
   // hit set (factAnswer's KNOW_ABOUT_RE reader, `weakOnly`) — the hedged
   // "possibly" answer still stands as `answer`, but `via` is deliberately left
@@ -15524,6 +15566,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // A cold "what else" carries miss:true — it resolved no subject, so the
       // turn is a miss in better words, exactly like the isa ladder's closers.
       answer = whatElse.text; via = "fact:what-else"; recordMiss = whatElse.miss ?? false; handled = true;
+      if (!recordMiss) enumerationLane = ENUMERATION_LANES.WHAT_ELSE;
       if (whatElse.pending) factPending = whatElse.pending;
       deduced = "surface additional remembered facts beyond the primary definition";
       note(trace, "lane: (0) WHAT ELSE — \"what else is/about X\" recognized off the raw query, before the relaxation cascade could quietly drop \"else\" and reduce it to a plain \"what is X\"");
@@ -16058,6 +16101,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       if (!fact.miss && !fact.weakOnly) {
         via = "fact";
         recordMiss = false;
+        if (fact.enumerationLane) enumerationLane = fact.enumerationLane;
       } else if (fact.weakOnly) {
         factLaneWeakOnly = true;
       }
@@ -16397,6 +16441,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
         via = "fact";
         recordMiss = false;
+        if (fact.enumerationLane) enumerationLane = fact.enumerationLane;
         if (fact.pending) factPending = fact.pending;
         note(trace, "lane: (4h) CHILD PACK — a clean miss on a lexicon term pulled the term's triples from the shipped child pack into memory, and the question was re-answered from the store");
         note(trace, `source: child pack ${CHILD_PACK_NAME} — ${learned.count} fact(s) appended as ${childProvenanceTag(key)}, answer served from .tmct/memory Facts`);
@@ -16646,6 +16691,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // turn "asked about" (the SchemaClass meta-node is documentation, not a code entity),
   // so record + expand them, not the schema match.
   const finalAnsweredIds = conceptInstances ? conceptInstances.map((i) => i.id) : answeredIds;
+  // `lane`: the dialogue-act lane — a lane's own override, else the
+  // question-shape lookup — resolved to an ISO act by runTurn's withLast.
+  const lane = dialogueLaneOverride ?? askDialogueLane(envelope?.parsed, query, recordMiss);
+  // A set question answered out of the fact store reports a set's extent even
+  // when the set turned out to hold one member, so the question's own shape
+  // decides here and the rendered-answer rule only widens it.
+  if (!enumerationLane && !recordMiss && via === "fact" && lane === "ask-set") {
+    enumerationLane = ENUMERATION_LANES.FACT_SET;
+  }
   const record = {
     type: "turn", ts, query, via, resolvedIds, answeredIds: finalAnsweredIds, miss: recordMiss,
     // English gloss + machine-parsable notation — off ask.mjs's own
@@ -16655,6 +16709,9 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // Premise-derived trust for a LIVE-CHASE-ONLY entailment answer; omitted
     // entirely when this turn didn't answer via one of those.
     ...(entailedTrust !== null ? { entailedTrust } : {}),
+    // Set only when this answer reports a set's extent — the corpus-scope
+    // trailer's own gate. Absent on a point answer and on every miss.
+    ...(enumerationLane && !recordMiss ? { enumerationLane } : {}),
     // The automatic /prove fallback's own budget wall — the same marker
     // /prove's own explicit budget wall stamps, so chatbench/infbench can
     // count a budget miss apart from a parse miss.
@@ -16688,21 +16745,21 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // `goal`: the SAME deduced string the debug trace's own "goal:" line
   // carries. Only runAsk ever sets this field, so the always-on goal line is
   // scoped to real ask-engine turns by construction.
-  // `lane`: the dialogue-act lane — a lane's own override, else the
-  // question-shape lookup — resolved to an ISO act by runTurn's withLast.
-  const lane = dialogueLaneOverride ?? askDialogueLane(envelope?.parsed, query, recordMiss);
   return { answer, logLines, record, focus: newFocus, detail, effectiveQuery, goal: deduced, lane, ...(planResult ? { plan: planResult } : {}) };
 }
 
 /** A non-ask, non-dispatch chat turn (count answer, /stats) — the same
  *  { answer, logLines, record, focus } shape, recorded like any other turn. */
-function plainTurn(query, answer, { command, via = "composed", miss = false, focus = null, canonical = null, goal = null } = {}) {
+function plainTurn(query, answer, { command, via = "composed", miss = false, focus = null, canonical = null, goal = null, enumerationLane = null } = {}) {
   const ts = new Date().toISOString();
   return {
     answer,
     logLines: [ts, `> ${query}`, answer, ""],
     record: {
       type: "turn", ts, query, ...(command ? { command } : {}), via, resolvedIds: [], answeredIds: [], miss,
+      // Set only by the lanes whose answers report a set's extent. Absent
+      // everywhere else, so a point answer never grows a corpus-scope line.
+      ...(enumerationLane ? { enumerationLane } : {}),
       // See runAsk's own `record.canonical`; `null` is the honest default
       // here (a bare command confirmation, an orientation card, a count).
       canonical,
@@ -18338,7 +18395,7 @@ export async function runTurn(input, options = {}) {
   return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
 }
 
-async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, researchSource = null, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, newsState = null, newsConfig = null, newsProviders = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null, domainPacks = null } = {}) {
+async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, researchSource = null, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, newsState = null, newsConfig = null, newsProviders = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null, domainPacks = null, retrieval = null } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -18484,7 +18541,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
     // Goal/canonical lines append onto the PRE-narration `finished` result
     // `nextLast` was captured from, so a narrated turn still gets both short
     // lines up top plus the full trace block after.
-    return { ...withNarration(withCanonicalLine(withGoalLine(finished)), trace, fallbackGoal), last: nextLast, discourse: discourseHolder.record };
+    return { ...withNarration(withCanonicalLine(withGoalLine(withRetrievalNote(finished, retrieval))), trace, fallbackGoal), last: nextLast, discourse: discourseHolder.record };
   };
 
   // Slash-optional system commands: a bare leading command word ("stats",
@@ -19005,7 +19062,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       note(trace, `goal: ${goal}`);
       note(trace, `lane: SKOS VIEW — a synonym/related question ${skos.miss ? "matched but the store holds no such facts (honest miss)" : "answered from the store's relation facts"}`);
       if (!skos.miss) note(trace, "source: .tmct/memory Facts (mgx:synonym/mgx:relatedTo/mgx:similarTo, read as skos:altLabel/skos:related)");
-      const skosTurn = plainTurn(workingLine, skos.text, { via: skos.miss ? "miss" : "fact", miss: skos.miss, focus });
+      const skosTurn = plainTurn(workingLine, skos.text, { via: skos.miss ? "miss" : "fact", miss: skos.miss, focus, enumerationLane: skos.miss ? null : ENUMERATION_LANES.SKOS_NEIGHBOURHOOD });
       if (!skos.miss) skosTurn.goal = goal;
       skosTurn.lane = skos.miss ? "honest-miss" : "ask-set";
       return withLast(skosTurn, goal);
@@ -19021,7 +19078,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
     if (memCount != null) {
       note(trace, "goal: get a count of a memory-store kind (facts/utterances)");
       note(trace, "lane: answerMemoryCount — matched a MEMORY_COUNT_NOUNS entry, answered off the .tmct/memory graph header");
-      return withLast(plainTurn(workingLine, memCount, { via: "count", focus }), "get a count of a memory-store kind");
+      return withLast(plainTurn(workingLine, memCount, { via: "count", focus, enumerationLane: ENUMERATION_LANES.MEMORY_COUNT }), "get a count of a memory-store kind");
     }
   }
   // "list facts"/"list utterances"/"how many sessions are there" — enumerate the
@@ -19034,7 +19091,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       const goal = "list or count a memory-store kind (facts/utterances/sessions/sources/rules)";
       note(trace, `goal: ${goal}`);
       note(trace, "lane: answerMemoryClassQuery — matched a memory-store class noun, answered off the .tmct/memory store's own individuals");
-      const turn = plainTurn(workingLine, memClass.text, { via: memClass.miss ? "miss" : "fact", miss: !!memClass.miss, focus });
+      const turn = plainTurn(workingLine, memClass.text, { via: memClass.miss ? "miss" : "fact", miss: !!memClass.miss, focus, enumerationLane: memClass.miss ? null : ENUMERATION_LANES.MEMORY_CLASS });
       // A bare numeric count ("1 source.") stays silent here — only a real list
       // enumeration gets the trailer. answerMemoryClassQuery serves both shapes
       // through one lane. answerTaughtClassCount below is the one count lane that
@@ -19055,7 +19112,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       const goal = "list the words I know that contain a given letter";
       note(trace, `goal: ${goal}`);
       note(trace, "lane: answerWordsWithLetter — matched a closed words-containing-a-letter phrasing over the store's own subject/object terms");
-      const turn = plainTurn(workingLine, lettered.text, { via: lettered.miss ? "miss" : "fact", miss: !!lettered.miss, focus });
+      const turn = plainTurn(workingLine, lettered.text, { via: lettered.miss ? "miss" : "fact", miss: !!lettered.miss, focus, enumerationLane: lettered.miss ? null : ENUMERATION_LANES.LETTER_WORDS });
       if (!lettered.miss) turn.goal = goal;
       turn.lane = lettered.miss ? "honest-miss" : "ask-set";
       if (lettered.pending) turn.detail = { traversal: null, matches: [], pending: lettered.pending };
@@ -19072,7 +19129,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       const goal = "list a declared collection's taught contents";
       note(trace, `goal: ${goal}`);
       note(trace, "lane: answerCollectionContents — matched a container-restricted or bare containment list over mgx:memberOf/mgx:partOf rows");
-      const turn = plainTurn(workingLine, collectionContents.text, { via: collectionContents.miss ? "miss" : "fact", miss: !!collectionContents.miss, focus });
+      const turn = plainTurn(workingLine, collectionContents.text, { via: collectionContents.miss ? "miss" : "fact", miss: !!collectionContents.miss, focus, enumerationLane: collectionContents.miss ? null : ENUMERATION_LANES.COLLECTION_CONTENTS });
       if (!collectionContents.miss) turn.goal = goal;
       if (collectionContents.pending) turn.detail = { traversal: null, matches: [], pending: collectionContents.pending };
       return withLast(turn, goal);
@@ -19086,7 +19143,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
     if (taughtCount != null) {
       note(trace, 'goal: count the taught members of a class ("how many animals are there")');
       note(trace, "lane: answerTaughtClassCount — matched a plain-noun count over taught isa-facts whose OBJECT is that class");
-      return withLast(plainTurn(workingLine, taughtCount, { via: "count", focus }), "count a taught class's members");
+      return withLast(plainTurn(workingLine, taughtCount, { via: "count", focus, enumerationLane: ENUMERATION_LANES.TAUGHT_CLASS_COUNT }), "count a taught class's members");
     }
   }
   // "list all animals"/"list the animals" — enumerate a taught class's members
@@ -19098,7 +19155,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       const goal = "list the taught members of a class";
       note(trace, `goal: ${goal}`);
       note(trace, "lane: answerMembershipList — matched a bare 'list <noun>' over taught isa-facts whose OBJECT is that class");
-      const turn = plainTurn(workingLine, memberList.text, { via: memberList.miss ? "miss" : "fact", miss: !!memberList.miss, focus });
+      const turn = plainTurn(workingLine, memberList.text, { via: memberList.miss ? "miss" : "fact", miss: !!memberList.miss, focus, enumerationLane: memberList.miss ? null : ENUMERATION_LANES.MEMBERSHIP_LIST });
       if (!memberList.miss) turn.goal = goal;
       if (memberList.pending) turn.detail = { traversal: null, matches: [], pending: memberList.pending };
       return withLast(turn, goal);
@@ -19113,7 +19170,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       const goal = "give an example of a taught class's member";
       note(trace, `goal: ${goal}`);
       note(trace, "lane: answerMembershipExample — matched 'example of a <noun>'/'name a <noun>' over taught isa-facts whose OBJECT is that class");
-      const turn = plainTurn(workingLine, memberExample.text, { via: memberExample.miss ? "miss" : "fact", miss: !!memberExample.miss, focus });
+      const turn = plainTurn(workingLine, memberExample.text, { via: memberExample.miss ? "miss" : "fact", miss: !!memberExample.miss, focus, enumerationLane: memberExample.miss ? null : ENUMERATION_LANES.MEMBERSHIP_EXAMPLE });
       if (!memberExample.miss) turn.goal = goal;
       return withLast(turn, goal);
     }
