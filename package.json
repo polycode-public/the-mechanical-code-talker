@@ -92,9 +92,13 @@
     "wink-nlp": "^2.4.0"
   },
   "peerDependencies": {
+    "@aws-sdk/client-lambda": ">=3",
     "@aws-sdk/lib-dynamodb": ">=3"
   },
   "peerDependenciesMeta": {
+    "@aws-sdk/client-lambda": {
+      "optional": true
+    },
     "@aws-sdk/lib-dynamodb": {
       "optional": true
     }
@@ -183,7 +187,10 @@
     "claim:news": "node scripts/news-rig.mjs",
     "roll": "node scripts/roll.mjs",
     "build:ask-bundle": "node scripts/build-ask-bundle.mjs",
-    "build:row-service": "esbuild server/row-service/handler.mjs --bundle --platform=node --target=node20 --external:@aws-sdk/lib-dynamodb --external:@aws-sdk/client-dynamodb --outfile=server/row-service/dist/handler.js",
+    "build:row-service": "esbuild server/row-service/handler.mjs --bundle --platform=node --target=node20 --external:@aws-sdk/lib-dynamodb --external:@aws-sdk/client-dynamodb --external:@aws-sdk/client-lambda --outfile=server/row-service/dist/handler.js",
+    "build:turn-service": "esbuild server/turn-service/handler.mjs --bundle --platform=node --target=node20 --external:@aws-sdk/lib-dynamodb --external:@aws-sdk/client-dynamodb --outfile=server/turn-service/dist/handler.js",
+    "build:turn-seed": "node server/turn-service/build-seed.mjs",
+    "build:news-worker": "esbuild server/news-worker/handler.mjs --bundle --platform=node --target=node20 --external:@aws-sdk/lib-dynamodb --external:@aws-sdk/client-dynamodb --external:@aws-sdk/client-lambda --outfile=server/news-worker/dist/handler.js",
     "build:chat-bundle": "node scripts/build-chat-bundle.mjs",
     "build:spider-fly-bundle": "node scripts/build-spider-fly-bundle.mjs",
     "build:plan-bundle": "node scripts/build-plan-bundle.mjs",
