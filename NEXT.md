@@ -36,11 +36,12 @@ worktrees under `.claude/worktrees/`; this list tracks the current wave and move
 
 - In flight: T13 refresh loop + cycle UI + page weights (Sonnet, owns news entry/viz/
   e2e + PAGE_WEIGHTS.md), T8 chat/ledger backend modes (Sonnet, owns those pages'
-  entries/viz/e2e), the cap-refusal teach-wording fix (Opus, owns chat.mjs; T6's
-  finding). Landed since the last tracker move: E3, E4, the p2p carry, T3, T12, T7,
-  T5, M8, the news-about rewrite, T6 (corpus route, counter fold, CI wordnet load;
-  the account takes no Lambda reservations). Pipeline fixes for #760 ride the next
-  push.
+  entries/viz/e2e), the graph-less turn config guard (Sonnet, owns source.mjs; the
+  cap-fix agent's finding — the ask engine threw on every turn-service turn and a lazy
+  catch hid it). Landed since the last tracker move: E3, E4, the p2p carry, T3, T12,
+  T7, T5, M8, the news-about rewrite, T6, the cap-refusal wording fix (refused writes
+  now say so; PERSIST_UNAVAILABLE_TEXT byte-pinned). Pipeline fixes for #760 ride the
+  next push.
 - Queued: T14 after T13 → T9 after T8 → T10/M10/T11 tail. After T14: a fresh
   `npm run gen:screenshots` news capture (news.png still shows the pre-flip UI).
   Operator step recorded by T6: wikidata-slice and conceptnet-full stay empty until
