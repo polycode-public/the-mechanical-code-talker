@@ -31,7 +31,7 @@ import {
 } from "../../src/services/subgraph-retrieval.mjs";
 import { createDynamoCorpusBreaker } from "../../src/adapters/memory/dynamo-circuit-breaker.mjs";
 import { FIRST_CLASS_BANDS } from "../../src/adapters/memory/corpus-bands.mjs";
-import { isValidSessionKey } from "../row-service/handler.mjs";
+import { isValidSessionKey, createDynamoGlobalRowCapCounter } from "../row-service/handler.mjs";
 
 export const MAX_TURN_BODY_BYTES = 4 * 1024;
 export const DEFAULT_TURN_RATE_LIMIT_PER_HOUR = 30;
@@ -130,6 +130,26 @@ function foldRetrievalIntoNarration(narration, metrics) {
 }
 
 const GENERIC_TURN_FAILURE_TEXT = (message) => `Something went wrong answering that (${message}). Try rephrasing, or /help.`;
+const CAP_REACHED_TURN_TEXT = "I can answer, but I can't save anything right now — this deployment's storage is at capacity. Nothing you taught this turn was learned.";
+
+/** Every session write a turn's engine call makes goes through `putRows`
+ *  on the handle `wrapRowBackend` returns — so this is the one seam that
+ *  makes a turn's learned facts count toward §3.8's table-wide row cap the
+ *  same way a direct PUT does. `backend` is unwrapped when no counter is
+ *  configured, matching every session read/write it already had. */
+function withGlobalRowCap(backend, globalRowCapCounter) {
+  if (!globalRowCapCounter) return backend;
+  return {
+    ...backend,
+    async putRows(rows) {
+      if (rows.length) {
+        const withinCap = await globalRowCapCounter.incrementGlobalRowCount(rows.length);
+        if (!withinCap) throw new BackendUnavailable("the table has reached its configured row cap");
+      }
+      return backend.putRows(rows);
+    },
+  };
+}
 
 /** The turn service's core: routing, validation, the turn-rate limit, the
  *  corpus breaker, retrieval, and the engine call.
@@ -158,7 +178,14 @@ const GENERIC_TURN_FAILURE_TEXT = (message) => `Something went wrong answering t
  *
  *  `counters.incrementTurnRate(sessionKey)` is the one seam this module
  *  requires: an atomic per-session-per-hour limit, mirroring the row
- *  service's own mutation-rate counter but under its own key and window. */
+ *  service's own mutation-rate counter but under its own key and window.
+ *
+ *  `globalRowCapCounter` (optional, `{incrementGlobalRowCount(n)}` —
+ *  `createDynamoGlobalRowCapCounter`'s shape) is the row service's own
+ *  table-wide cap: a turn's learned facts land on the same table a session's
+ *  direct PUT does, so without this seam they would never count against
+ *  §3.8's `TABLE_ROW_CAP`. Omitted, a turn's writes go uncapped — only ever
+ *  correct for a deployment with no shared cap to honour. */
 export function createTurnServiceHandler({
   createSessionBackend,
   seedPayload = null,
@@ -167,6 +194,7 @@ export function createTurnServiceHandler({
   queryTerm = null,
   breaker = null,
   counters,
+  globalRowCapCounter = null,
   fuzzyEnv = process.env,
   fuzzyConfig = undefined,
   now = () => Date.now(),
@@ -231,7 +259,8 @@ export function createTurnServiceHandler({
     // just wrote to for every turn after this one.
     const basePayload = mergeSeedAndSubgraph(seedPayload, retrieval.rows, { log });
     const sessionBackend = await createSessionBackend(sessionKey);
-    const memoryDir = wrapRowBackend(sessionBackend, { basePayload, onOversizedRow: "drop", log });
+    const cappedBackend = withGlobalRowCap(sessionBackend, globalRowCapCounter);
+    const memoryDir = wrapRowBackend(cappedBackend, { basePayload, onOversizedRow: "drop", log });
 
     let result;
     try {
@@ -244,8 +273,13 @@ export function createTurnServiceHandler({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log({ error: message });
+      // §3.12's posture: a full table still answers the turn, it just
+      // doesn't learn from it — the same "continues without persistence"
+      // shape every BackendUnavailable consumer takes (§3.1), never a
+      // status code the caller would have to branch on.
+      const reply = error instanceof BackendUnavailable ? CAP_REACHED_TURN_TEXT : GENERIC_TURN_FAILURE_TEXT(message);
       return respond(200, {
-        reply: GENERIC_TURN_FAILURE_TEXT(message),
+        reply,
         factsTouched: [],
         narration: foldRetrievalIntoNarration(undefined, retrieval.metrics),
       });
@@ -361,6 +395,7 @@ function turnServiceConfigFromEnv(env = process.env) {
     tableName: env.TABLE_NAME,
     ttlSeconds: ttlDays * 86400,
     turnRateLimit: env.TURN_RATE_LIMIT_PER_HOUR ? Number(env.TURN_RATE_LIMIT_PER_HOUR) : DEFAULT_TURN_RATE_LIMIT_PER_HOUR,
+    tableRowCap: env.TABLE_ROW_CAP ? Number(env.TABLE_ROW_CAP) : 2_000_000,
     bands,
   };
 }
@@ -388,7 +423,7 @@ function lambdaResponseFromResult(result) {
  *  No egress beyond DynamoDB (§2) — every import above is either this
  *  package's own code or the AWS SDK. */
 export const handler = async (event) => {
-  const { tableName, ttlSeconds, turnRateLimit, bands } = turnServiceConfigFromEnv();
+  const { tableName, ttlSeconds, turnRateLimit, tableRowCap, bands } = turnServiceConfigFromEnv();
   const [{ commandClient, convenienceClient }, { seedPayload, vocabulary }] = await Promise.all([
     loadDocumentClients(), loadMidSeed(),
   ]);
@@ -403,6 +438,7 @@ export const handler = async (event) => {
     queryTerm: bands.length ? termQueryOverDocumentClient({ client: convenienceClient, tableName }) : null,
     breaker: bands.length ? createDynamoCorpusBreaker({ client: commandClient, tableName }) : null,
     counters: createDynamoTurnCounters({ client: commandClient, tableName, turnRateLimit }),
+    globalRowCapCounter: createDynamoGlobalRowCapCounter({ client: commandClient, tableName, tableRowCap }),
     log: () => {},
   });
   const result = await turnService.handle(requestFromLambdaEvent(event));

@@ -18,6 +18,10 @@ import {
   BackendRejected, BackendUnavailable, rowProblems,
 } from "../../src/adapters/memory/row-backend.mjs";
 import { createDynamoRowBackend } from "../../src/adapters/memory/row-backend-dynamo.mjs";
+import { normFactTerm } from "../../src/domain/hash.mjs";
+import { fuzzyVariantsFor } from "../../src/domain/retrieval-plan.mjs";
+import { RETRIEVAL_BUDGETS, termQueryOverDocumentClient } from "../../src/services/subgraph-retrieval.mjs";
+import { FIRST_CLASS_BANDS } from "../../src/adapters/memory/corpus-bands.mjs";
 
 export const MAX_ROW_SERVICE_BODY_BYTES = 256 * 1024;
 export const DEFAULT_MUTATION_RATE_LIMIT_PER_HOUR = 120;
@@ -116,6 +120,7 @@ const META_MUTATION_PATH = /^\/api\/sessions\/([^/]+)\/meta\/([^/]+)$/;
 const META_READ_PATH = /^\/api\/meta\/([^/]+)$/;
 const CYCLE_TRIGGER_PATH = /^\/api\/sessions\/([^/]+)\/(poll|enrich|ingest)$/;
 const FEED_READ_PATH = /^\/api\/feed$/;
+const CORPUS_READ_PATH = /^\/api\/corpus\/([^/]+)\/rows$/;
 
 /** The row-service core: routing, validation, caps, error mapping. Takes no
  *  storage dependency but the seams every route needs —
@@ -127,7 +132,13 @@ const FEED_READ_PATH = /^\/api\/feed$/;
  *  onto every row this service writes; the shipped backends do their own
  *  TTL bookkeeping only when constructed with a `ttlSeconds` of their own,
  *  so a consumer wiring `createDynamoRowBackend` behind this handler leaves
- *  it null and lets the service stamp rows once, not twice. */
+ *  it null and lets the service stamp rows once, not twice.
+ *
+ *  `corpusBands` (default none) and `queryCorpusTerm` (a
+ *  `({band, term, limit}) => Promise<{rows, lastEvaluatedKey}>` function,
+ *  e.g. `termQueryOverDocumentClient`'s result) back the one sessionless
+ *  read, `GET /api/corpus/:band/rows` — omitting either leaves every band
+ *  404, the shape a deployment with no corpus table wiring needs. */
 export function createRowServiceHandler({
   createSessionBackend,
   counters,
@@ -135,6 +146,8 @@ export function createRowServiceHandler({
   ttlSeconds = null,
   now = () => Math.floor(Date.now() / 1000),
   log = () => {},
+  corpusBands = [],
+  queryCorpusTerm = null,
 } = {}) {
   if (typeof createSessionBackend !== "function") {
     throw new TypeError("createRowServiceHandler needs a createSessionBackend(sessionKey) function");
@@ -265,6 +278,45 @@ export function createRowServiceHandler({
     return respond(204);
   }
 
+  /** GET /api/corpus/:band/rows?term=X&fuzzy=0|1 — the one sessionless,
+   *  read-only route: public reference-corpus rows for a term. No session
+   *  key, no rate limit beyond the shared per-IP edge rule (§3.9's
+   *  corpus-read-flooding row treats this as a cost surface, not a
+   *  confidentiality one). An unconfigured or unknown band 404s before any
+   *  query. `fuzzy=1` widens the one requested term to its deterministic
+   *  typo-repair variants (the same fixed edit-distance machinery retrieval
+   *  uses), each read with its own single-page Query — this route never
+   *  drains a band partition, it takes one page per term and stops. */
+  async function handleCorpusRead(request, bandParam) {
+    const band = decodeURIComponent(bandParam);
+    if (typeof queryCorpusTerm !== "function" || !corpusBands.includes(band)) {
+      return fail(404, `no such corpus band ${JSON.stringify(band)}`);
+    }
+    const term = normFactTerm(request.query?.term || "");
+    if (!term) return fail(400, "the term query parameter is required");
+    const fuzzy = request.query?.fuzzy === "1";
+
+    const terms = new Set([term]);
+    if (fuzzy) {
+      for (const variant of fuzzyVariantsFor(term, { cap: RETRIEVAL_BUDGETS.fuzzyVariantsPerTerm })) terms.add(variant);
+    }
+
+    const byRowKey = new Map();
+    for (const oneTerm of [...terms].sort()) {
+      let response;
+      try {
+        response = await queryCorpusTerm({ band, term: oneTerm, limit: RETRIEVAL_BUDGETS.rowsPerQueryPage });
+      } catch (error) {
+        return errorFromBackendFailure(error);
+      }
+      for (const row of response?.rows || []) {
+        byRowKey.set(row.rowKey, { rowKey: row.rowKey, rowClass: row.rowClass, term: row.term, json: row.json });
+      }
+    }
+    const rows = [...byRowKey.values()].sort((a, b) => (a.rowKey < b.rowKey ? -1 : a.rowKey > b.rowKey ? 1 : 0));
+    return respond(200, { rows });
+  }
+
   async function handleGetFeed(request) {
     const gate = resolveSessionKey(request, {});
     if (gate.response) return gate.response;
@@ -361,6 +413,9 @@ export function createRowServiceHandler({
 
       if (method === "GET" && FEED_READ_PATH.test(path)) return await handleGetFeed(request);
 
+      const corpusRead = path.match(CORPUS_READ_PATH);
+      if (corpusRead && method === "GET") return await handleCorpusRead(request, corpusRead[1]);
+
       const cycleTrigger = path.match(CYCLE_TRIGGER_PATH);
       if (cycleTrigger && method === "POST") return await handleCycleTrigger(request, cycleTrigger[1], cycleTrigger[2]);
 
@@ -390,60 +445,85 @@ const RATE_SK_PREFIX = "rate#";
 const CYCLE_RATE_SK_PREFIX = "cyclerate#";
 const CYCLE_LOCK_SK_PREFIX = "cyclelock#";
 
-let cachedDynamoClientPromise = null;
-async function loadDocumentClient() {
-  if (!cachedDynamoClientPromise) {
-    cachedDynamoClientPromise = (async () => {
+// Two client SHAPES over one raw DynamoDBClient, cached once per execution
+// environment: the `.send(Command)` client every counter and the row backend
+// itself take, and the `.query()` convenience client `queryCorpusTerm`
+// (`termQueryOverDocumentClient`) takes — the same split turn-service/
+// handler.mjs's own Lambda entry point uses, for the same corpus-band reads.
+let cachedClientsPromise = null;
+async function loadDocumentClients() {
+  if (!cachedClientsPromise) {
+    cachedClientsPromise = (async () => {
       const { DynamoDBClient } = await import("@aws-sdk/client-dynamodb");
-      const { DynamoDBDocumentClient } = await import("@aws-sdk/lib-dynamodb");
-      return DynamoDBDocumentClient.from(new DynamoDBClient({}));
+      const { DynamoDBDocumentClient, DynamoDBDocument } = await import("@aws-sdk/lib-dynamodb");
+      const raw = new DynamoDBClient({});
+      return { commandClient: DynamoDBDocumentClient.from(raw), convenienceClient: DynamoDBDocument.from(raw) };
     })();
   }
-  return cachedDynamoClientPromise;
+  return cachedClientsPromise;
+}
+
+/** One conditional `UpdateCommand` against a raw `_meta` item: the condition
+ *  is either the item doesn't exist yet or the running count still leaves
+ *  room, so a call that would cross `limit` fails the condition and applies
+ *  nothing. The one primitive every counter here shares — the global table
+ *  cap, the per-session mutation/cycle rates, and (via
+ *  `createDynamoGlobalRowCapCounter` below) the turn service's own writes
+ *  against that same global cap. */
+async function conditionalAdd({ client, tableName, sk, amount, limit, expiresAt }) {
+  const { UpdateCommand } = await import("@aws-sdk/lib-dynamodb");
+  try {
+    await client.send(new UpdateCommand({
+      TableName: tableName,
+      Key: { pk: META_PARTITION_KEY, sk },
+      UpdateExpression: expiresAt === undefined
+        ? "ADD #count :amount"
+        : "ADD #count :amount SET #expiresAt = if_not_exists(#expiresAt, :expiresAt)",
+      ConditionExpression: "attribute_not_exists(#count) OR #count <= :threshold",
+      ExpressionAttributeNames: expiresAt === undefined
+        ? { "#count": "count" }
+        : { "#count": "count", "#expiresAt": "expiresAt" },
+      ExpressionAttributeValues: expiresAt === undefined
+        ? { ":amount": amount, ":threshold": limit - amount }
+        : { ":amount": amount, ":threshold": limit - amount, ":expiresAt": expiresAt },
+    }));
+    return true;
+  } catch (error) {
+    if (error?.name === "ConditionalCheckFailedException") return false;
+    throw new BackendUnavailable(`the row-service counter update failed: ${error.message}`, { cause: error });
+  }
+}
+
+/** The one seam a session write from ANY surface needs to count toward
+ *  §3.8's table-wide `TABLE_ROW_CAP`: this service's own PUT /rows route
+ *  uses it directly, and the turn service imports this factory so a turn's
+ *  learned facts land against the exact same reserved counter item — one
+ *  cap, shared by every writer, never a per-surface copy that could drift
+ *  from it. */
+export function createDynamoGlobalRowCapCounter({ client, tableName, tableRowCap }) {
+  return {
+    async incrementGlobalRowCount(n) {
+      return conditionalAdd({ client, tableName, sk: GLOBAL_COUNTER_SK, amount: n, limit: tableRowCap });
+    },
+  };
 }
 
 /** The counters seam over raw DynamoDB items in the same table the row
  *  backend uses, under the reserved `_meta` partition no valid v4 session
- *  key can ever collide with. Both counters are single conditional
- *  `UpdateCommand`s: the condition either the item doesn't exist yet or the
- *  running count still leaves room, so a call that would cross the limit
- *  fails the condition and applies nothing. */
+ *  key can ever collide with. */
 function createDynamoCounters({
   client, tableName, tableRowCap,
   mutationRateLimit = DEFAULT_MUTATION_RATE_LIMIT_PER_HOUR, mutationRateWindowSeconds = MUTATION_RATE_WINDOW_SECONDS,
   cycleRateLimit = DEFAULT_CYCLE_RATE_LIMIT_PER_HOUR, cycleRateWindowSeconds = CYCLE_RATE_WINDOW_SECONDS,
   now = () => Math.floor(Date.now() / 1000),
 }) {
-  async function conditionalAdd({ sk, amount, limit, expiresAt }) {
-    const { UpdateCommand } = await import("@aws-sdk/lib-dynamodb");
-    try {
-      await client.send(new UpdateCommand({
-        TableName: tableName,
-        Key: { pk: META_PARTITION_KEY, sk },
-        UpdateExpression: expiresAt === undefined
-          ? "ADD #count :amount"
-          : "ADD #count :amount SET #expiresAt = if_not_exists(#expiresAt, :expiresAt)",
-        ConditionExpression: "attribute_not_exists(#count) OR #count <= :threshold",
-        ExpressionAttributeNames: expiresAt === undefined
-          ? { "#count": "count" }
-          : { "#count": "count", "#expiresAt": "expiresAt" },
-        ExpressionAttributeValues: expiresAt === undefined
-          ? { ":amount": amount, ":threshold": limit - amount }
-          : { ":amount": amount, ":threshold": limit - amount, ":expiresAt": expiresAt },
-      }));
-      return true;
-    } catch (error) {
-      if (error?.name === "ConditionalCheckFailedException") return false;
-      throw new BackendUnavailable(`the row-service counter update failed: ${error.message}`, { cause: error });
-    }
-  }
+  const { incrementGlobalRowCount } = createDynamoGlobalRowCapCounter({ client, tableName, tableRowCap });
 
   return {
-    async incrementGlobalRowCount(n) {
-      return conditionalAdd({ sk: GLOBAL_COUNTER_SK, amount: n, limit: tableRowCap });
-    },
+    incrementGlobalRowCount,
     async incrementMutationRate(sessionKey) {
       return conditionalAdd({
+        client, tableName,
         sk: `${RATE_SK_PREFIX}${sessionKey}`,
         amount: 1,
         limit: mutationRateLimit,
@@ -452,6 +532,7 @@ function createDynamoCounters({
     },
     async incrementCycleRate(sessionKey) {
       return conditionalAdd({
+        client, tableName,
         sk: `${CYCLE_RATE_SK_PREFIX}${sessionKey}`,
         amount: 1,
         limit: cycleRateLimit,
@@ -531,7 +612,9 @@ function lambdaResponseFromResult(result) {
 function rowServiceConfigFromEnv() {
   const ttlDays = process.env.TTL_DAYS ? Number(process.env.TTL_DAYS) : 7;
   const tableRowCap = process.env.TABLE_ROW_CAP ? Number(process.env.TABLE_ROW_CAP) : 2_000_000;
-  return { tableName: process.env.TABLE_NAME, ttlSeconds: ttlDays * 86400, tableRowCap };
+  const bandsRaw = process.env.TMCT_CORPUS_BANDS;
+  const corpusBands = bandsRaw === undefined ? [...FIRST_CLASS_BANDS] : bandsRaw.split(",").map((b) => b.trim()).filter(Boolean);
+  return { tableName: process.env.TABLE_NAME, ttlSeconds: ttlDays * 86400, tableRowCap, corpusBands };
 }
 
 let cachedLambdaClientPromise = null;
@@ -567,8 +650,8 @@ function createLambdaNewsWorkerInvoker({ functionName }) {
  *  anything else is a function-URL HTTP request through the same handler
  *  every other consumer of this file exercises. */
 export const handler = async (event) => {
-  const { tableName, ttlSeconds, tableRowCap } = rowServiceConfigFromEnv();
-  const client = await loadDocumentClient();
+  const { tableName, ttlSeconds, tableRowCap, corpusBands } = rowServiceConfigFromEnv();
+  const { commandClient: client, convenienceClient } = await loadDocumentClients();
   const counters = createDynamoCounters({ client, tableName, tableRowCap });
 
   if (event?.mode === "reconcile") {
@@ -581,6 +664,8 @@ export const handler = async (event) => {
     counters,
     invokeNewsWorker: createLambdaNewsWorkerInvoker({ functionName: process.env.NEWS_WORKER_FUNCTION_NAME }),
     ttlSeconds,
+    corpusBands,
+    queryCorpusTerm: corpusBands.length ? termQueryOverDocumentClient({ client: convenienceClient, tableName }) : null,
     log: () => {},
   });
   const result = await rowService.handle(requestFromLambdaEvent(event));

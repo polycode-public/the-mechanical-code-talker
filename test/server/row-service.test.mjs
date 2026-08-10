@@ -6,6 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createLocalRowService } from "../../server/row-service/local.mjs";
+import { bandFactRow } from "../../src/adapters/memory/corpus-bands.mjs";
 
 const SESSION_A = "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1";
 const SESSION_B = "b2b2b2b2-b2b2-4b2b-9b2b-b2b2b2b2b2b2";
@@ -301,5 +302,50 @@ test("an unrouted method or path is a 404", async () => {
     assert.equal(wrongMethod.status, 404);
     const wrongPath = await fetch(`${service.url}/api/nothing-here`);
     assert.equal(wrongPath.status, 404);
+  });
+});
+
+const TARIFF_BAND_ROWS = [
+  bandFactRow({ subject: "tariff", predicate: "rdfs:subClassOf", object: "tax", provenance: "corpus:wordnet-complete", band: "wordnet-complete", ord: 0 }),
+];
+
+test("GET /api/corpus/:band/rows needs no session key and 404s an unconfigured or unknown band", async () => {
+  await withService({ fixtureBand: { name: "wordnet-complete", rows: TARIFF_BAND_ROWS } }, async (service) => {
+    const unknownBand = await fetch(`${service.url}/api/corpus/conceptnet-full/rows?term=tariff`);
+    assert.equal(unknownBand.status, 404);
+  });
+  // No fixture at all: every band is unconfigured, so even the band name a
+  // fixture would have used still 404s.
+  await withService({}, async (service) => {
+    const noBandsConfigured = await fetch(`${service.url}/api/corpus/wordnet-complete/rows?term=tariff`);
+    assert.equal(noBandsConfigured.status, 404);
+  });
+});
+
+test("GET /api/corpus/:band/rows serves an exact-term match with no session header", async () => {
+  await withService({ fixtureBand: { name: "wordnet-complete", rows: TARIFF_BAND_ROWS } }, async (service) => {
+    const response = await fetch(`${service.url}/api/corpus/wordnet-complete/rows?term=tariff`);
+    assert.equal(response.status, 200);
+    const { rows } = await response.json();
+    assert.deepEqual(rows.map((row) => row.rowKey), TARIFF_BAND_ROWS.map((row) => row.rowKey));
+  });
+});
+
+test("GET /api/corpus/:band/rows without a term is a 400", async () => {
+  await withService({ fixtureBand: { name: "wordnet-complete", rows: TARIFF_BAND_ROWS } }, async (service) => {
+    const response = await fetch(`${service.url}/api/corpus/wordnet-complete/rows`);
+    assert.equal(response.status, 400);
+  });
+});
+
+test("fuzzy=1 widens the term to its deterministic typo-repair variants; fuzzy off finds nothing for the same typo", async () => {
+  await withService({ fixtureBand: { name: "wordnet-complete", rows: TARIFF_BAND_ROWS } }, async (service) => {
+    const exactOff = await fetch(`${service.url}/api/corpus/wordnet-complete/rows?term=tarif`);
+    assert.deepEqual((await exactOff.json()).rows, []);
+
+    const fuzzyOn = await fetch(`${service.url}/api/corpus/wordnet-complete/rows?term=tarif&fuzzy=1`);
+    assert.equal(fuzzyOn.status, 200);
+    const { rows } = await fuzzyOn.json();
+    assert.deepEqual(rows.map((row) => row.rowKey), TARIFF_BAND_ROWS.map((row) => row.rowKey));
   });
 });

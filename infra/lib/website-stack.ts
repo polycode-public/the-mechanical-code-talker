@@ -33,6 +33,18 @@ import { Construct } from "constructs";
 // built site, not part of it.
 const ROW_SERVICE_DIST_DIR = join(__dirname, "..", "..", "server", "row-service", "dist");
 
+// The turn service's bundle (`npm run build:turn-service`) plus its
+// cold-boot seed (`npm run build:turn-seed`, written beside the source
+// handler rather than into dist/ — see the mid-seed copy below).
+const TURN_SERVICE_DIST_DIR = join(__dirname, "..", "..", "server", "turn-service", "dist");
+const TURN_SERVICE_MID_SEED_SOURCE = join(__dirname, "..", "..", "server", "turn-service", "mid-seed.json");
+
+// The news worker's bundle (`npm run build:news-worker`) — its xl seed is
+// bundled INSIDE handler.js by esbuild (a static `import()` of
+// public/chat-seed.json, §3.22), so unlike the turn service this directory
+// needs no sibling file staged beside it.
+const NEWS_WORKER_DIST_DIR = join(__dirname, "..", "..", "server", "news-worker", "dist");
+
 export interface WebsiteStackProps extends StackProps {
   readonly envName: string;
   readonly slug: string;
@@ -350,7 +362,9 @@ export class WebsiteStack extends Stack {
       code: lambda.Code.fromAsset(ROW_SERVICE_DIST_DIR),
       memorySize: 256,
       timeout: Duration.seconds(10),
-      reservedConcurrentExecutions: 10,
+      // No reserved concurrency: this account's total concurrency sits at the
+      // Lambda service floor, so any reservation is rejected at deploy time.
+      // The account-wide cap is itself the blunt compute bound here.
       environment: {
         TABLE_NAME: rowTable.tableName,
         TTL_DAYS: String(props.rowServiceTtlDays ?? 7),
@@ -359,8 +373,84 @@ export class WebsiteStack extends Stack {
     });
     rowTable.grantReadWriteData(rowServiceFn);
 
+    // ---------- the news worker: one Lambda, invoked async by the row
+    // service's poll/enrich/ingest trigger routes and by the turn service
+    // (materialize mode) — never invoked directly by a caller.
+    const newsWorkerFn = new lambda.Function(this, "NewsWorkerFn", {
+      functionName: `tmct-${envName}-${slug}-news-worker`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: "handler.handler",
+      code: lambda.Code.fromAsset(NEWS_WORKER_DIST_DIR),
+      memorySize: 512,
+      timeout: Duration.seconds(60),
+      // No reserved concurrency, same account-wide floor as the row service
+      // above — §3.9's "default 5" ceiling is aspirational until the account
+      // can support any reservation at all.
+      environment: {
+        TABLE_NAME: rowTable.tableName,
+        TTL_DAYS: String(props.rowServiceTtlDays ?? 7),
+      },
+    });
+    rowTable.grantReadWriteData(newsWorkerFn);
+    newsWorkerFn.grantInvoke(rowServiceFn);
+    rowServiceFn.addEnvironment("NEWS_WORKER_FUNCTION_NAME", newsWorkerFn.functionName);
+
     const rowServiceUrl = rowServiceFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.AWS_IAM,
+    });
+
+    // ---------- the turn service: its own Lambda, function URL, and the
+    // more specific /api/sessions/*/turn behavior. Registered on the
+    // distribution BEFORE the row service's /api/* catch-all below —
+    // CloudFront matches path patterns in the order they're listed, first
+    // match wins, so the more specific pattern has to come first or every
+    // turn request would be served by the row service instead.
+    if (!existsSync(join(TURN_SERVICE_DIST_DIR, "handler.js"))) {
+      throw new Error(
+        `${TURN_SERVICE_DIST_DIR}/handler.js is missing — run npm run build:turn-service before synth.`,
+      );
+    }
+    if (!existsSync(TURN_SERVICE_MID_SEED_SOURCE)) {
+      throw new Error(
+        `${TURN_SERVICE_MID_SEED_SOURCE} is missing — run npm run build:turn-seed before synth.`,
+      );
+    }
+    // build-seed.mjs writes mid-seed.json beside the source handler, not
+    // into dist/ (esbuild's own output target) — copied in here so the one
+    // asset directory `lambda.Code.fromAsset` packages carries both files
+    // side by side, the shape `loadMidSeed`'s own `import.meta.url`-relative
+    // default expects at runtime.
+    copyFileSync(TURN_SERVICE_MID_SEED_SOURCE, join(TURN_SERVICE_DIST_DIR, "mid-seed.json"));
+
+    const turnServiceFn = new lambda.Function(this, "TurnServiceFn", {
+      functionName: `tmct-${envName}-${slug}-turn-service`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: "handler.handler",
+      code: lambda.Code.fromAsset(TURN_SERVICE_DIST_DIR),
+      memorySize: 512,
+      timeout: Duration.seconds(10),
+      // No reserved concurrency, same account-wide floor as the row service
+      // above — §3.12's "default 5" ceiling is aspirational until the
+      // account can support any reservation at all.
+      environment: {
+        TABLE_NAME: rowTable.tableName,
+        TTL_DAYS: String(props.rowServiceTtlDays ?? 7),
+        TABLE_ROW_CAP: String(props.rowServiceTableRowCap ?? 2_000_000),
+      },
+    });
+    // Read/write: a turn both queries the corpus bands (read) and persists
+    // what it learned into the caller's own session partition (write) —
+    // the same table the row service owns, never a copy of it.
+    rowTable.grantReadWriteData(turnServiceFn);
+
+    const turnServiceUrl = turnServiceFn.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.AWS_IAM,
+    });
+    distribution.addBehavior("/api/sessions/*/turn", origins.FunctionUrlOrigin.withOriginAccessControl(turnServiceUrl), {
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+      cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+      originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
     });
 
     // No caching (every route is a session-scoped read or a mutation) and

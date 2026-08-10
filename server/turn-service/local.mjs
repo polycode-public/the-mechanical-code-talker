@@ -171,6 +171,25 @@ function createInMemoryTurnRateCounter({
   };
 }
 
+/** The same table-wide cap shape `createDynamoGlobalRowCapCounter` gives the
+ *  real deployment, over a plain counter instead of a conditional Dynamo
+ *  write — so a test can push a turn's own writes into the cap without
+ *  standing up the row service's own local double. `null` (the default)
+ *  turns this into a no-op object that always says yes, the same "no cap
+ *  configured" shape an unset `tableRowCap` deployment answers with. */
+function createInMemoryGlobalRowCapCounter(tableRowCap) {
+  let count = 0;
+  return {
+    async incrementGlobalRowCount(n) {
+      if (tableRowCap == null) return true;
+      if (count + n > tableRowCap) return false;
+      count += n;
+      return true;
+    },
+    readGlobalRowCount: () => count,
+  };
+}
+
 function readRequestBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -209,15 +228,20 @@ async function loadFixtureBand({ client, tableName, band, rows }) {
  *  every test run pays to parse.
  *
  *  `turnRateLimit`/`now`/`sleep` mirror the deployment parameters and the
- *  clock hook, for deterministic tests. `breakerStore` and `bandClient` on
- *  the returned object expose the two fakes' underlying Maps, so a test can
- *  seed breaker state (open/half-open) or inspect band writes directly. */
+ *  clock hook, for deterministic tests. `tableRowCap` (default null,
+ *  uncapped) mirrors the row service's own global table cap over an
+ *  in-memory counter, so a test can push a turn's learned writes into the
+ *  cap without a real Dynamo table; `readGlobalRowCount()` on the returned
+ *  object reads it back. `breakerStore` and `bandClient` on the returned
+ *  object expose the two fakes' underlying Maps, so a test can seed breaker
+ *  state (open/half-open) or inspect band writes directly. */
 export async function createLocalTurnService({
   seedPayload = { individuals: [] },
   fixtureBand = null,
   tableName = DEFAULT_TABLE_NAME,
   turnRateLimit = DEFAULT_TURN_RATE_LIMIT_PER_HOUR,
   turnRateWindowSeconds = TURN_RATE_WINDOW_SECONDS,
+  tableRowCap = null,
   now = () => Math.floor(Date.now() / 1000),
   sleep = undefined,
   log = () => {},
@@ -238,6 +262,8 @@ export async function createLocalTurnService({
     return backend;
   };
 
+  const globalRowCapCounter = createInMemoryGlobalRowCapCounter(tableRowCap);
+
   const turnService = createTurnServiceHandler({
     createSessionBackend: getSessionBackend,
     seedPayload,
@@ -245,6 +271,7 @@ export async function createLocalTurnService({
     queryTerm: bands.length ? termQueryOverDocumentClient({ client: bandClient, tableName }) : null,
     breaker: bands.length ? createDynamoCorpusBreaker({ client: metaClient, tableName, clock: () => now() * 1000 }) : null,
     counters: createInMemoryTurnRateCounter({ turnRateLimit, turnRateWindowSeconds, now }),
+    globalRowCapCounter,
     now: () => now() * 1000,
     sleep,
     log,
@@ -282,5 +309,8 @@ export async function createLocalTurnService({
     await new Promise((resolve) => server.close(resolve));
   }
 
-  return { url, close, bandClient, breakerStore: metaClient.store, forceBreakerOpen };
+  return {
+    url, close, bandClient, breakerStore: metaClient.store, forceBreakerOpen,
+    readGlobalRowCount: globalRowCapCounter.readGlobalRowCount,
+  };
 }
