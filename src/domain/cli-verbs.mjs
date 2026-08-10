@@ -213,6 +213,23 @@ export const CLI_VERBS = [
     prose: ["architecture map + per-module context bundles"],
   },
   {
+    mode: "corpus",
+    errorLabel: "corpus load",
+    usage: "tmct corpus load <band> [--table <name>] [--source <path>] [--dry-run]",
+    prose: ["load a shared, read-only corpus band (wikidata-slice, wordnet-complete,"],
+    flags: [
+      { flag: "[--table <name>]", prose: ["conceptnet-full) into a DynamoDB row-backend table from a jsonl of", "wire-row-shaped facts (default table from TMCT_DYNAMO_TABLE); a", "source whose digest already matches the band's manifest is a no-op"] },
+      { flag: "[--source <path>]", prose: ["the band's jsonl (a T0 build pipeline's output, or any jsonl in the", "same wire-row shape)"] },
+      { flag: "[--dry-run]", prose: ["report the row count and source digest without writing anything"] },
+    ],
+  },
+  {
+    mode: "corpus",
+    errorLabel: "corpus clear",
+    usage: "tmct corpus clear <band> [--table <name>]",
+    prose: ["physically delete every row and the manifest for one band"],
+  },
+  {
     mode: null,
     usage: "tmct --help",
     prose: ["show this help"],

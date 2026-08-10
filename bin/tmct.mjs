@@ -1821,6 +1821,67 @@ async function main() {
     return;
   }
 
+  if (mode === "corpus") {
+    // `tmct corpus load|clear <band>` — the credentialed operator verb pair
+    // over the shared, read-only corpus bands (src/adapters/memory/corpus-bands.mjs,
+    // src/services/corpus-loader.mjs). Ambient AWS credentials only (a
+    // profile locally, OIDC in CI) — this dispatch never embeds any.
+    const rest = process.argv.slice(3);
+    const subcommand = rest[0];
+    if (subcommand !== "load" && subcommand !== "clear") {
+      process.stderr.write("tmct corpus — name an action: `tmct corpus load <band>` or `tmct corpus clear <band>`\n");
+      process.exitCode = 1;
+      return;
+    }
+    const band = rest.slice(1).find((a) => !a.startsWith("-"));
+    if (!band) {
+      process.stderr.write(`tmct corpus ${subcommand} — name a band: \`tmct corpus ${subcommand} <band>\`\n`);
+      process.exitCode = 1;
+      return;
+    }
+    const { strFlag } = await import("../src/services/cli-args.mjs");
+    const tableName = strFlag(rest, "--table") || process.env.TMCT_DYNAMO_TABLE;
+    if (!tableName) {
+      process.stderr.write("tmct corpus — no table name given (--table <name> or TMCT_DYNAMO_TABLE)\n");
+      process.exitCode = 1;
+      return;
+    }
+
+    let DynamoDBClient;
+    let DynamoDBDocument;
+    try {
+      ({ DynamoDBClient } = await import("@aws-sdk/client-dynamodb"));
+      ({ DynamoDBDocument } = await import("@aws-sdk/lib-dynamodb"));
+    } catch (cause) {
+      process.stderr.write(
+        "tmct corpus needs \"@aws-sdk/lib-dynamodb\" (>=3) installed alongside tmct; "
+        + `run \`npm install @aws-sdk/lib-dynamodb\` and retry (${cause.message})\n`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const client = DynamoDBDocument.from(new DynamoDBClient({}));
+
+    if (subcommand === "load") {
+      const source = strFlag(rest, "--source");
+      if (!source) {
+        process.stderr.write("tmct corpus load — name a source: `tmct corpus load <band> --source <path>`\n");
+        process.exitCode = 1;
+        return;
+      }
+      const { loadBand } = await import("../src/services/corpus-loader.mjs");
+      const result = await loadBand({ client, tableName, band, source, dryRun: rest.includes("--dry-run") });
+      const verb = { unchanged: "unchanged", loaded: "loaded", "dry-run": "would load" }[result.status];
+      process.stdout.write(`tmct corpus load ${band}: ${verb} (${result.rowCount} row(s), source digest ${result.sourceDigest})\n`);
+      return;
+    }
+
+    const { clearBand } = await import("../src/services/corpus-loader.mjs");
+    const result = await clearBand({ client, tableName, band });
+    process.stdout.write(`tmct corpus clear ${band}: deleted ${result.deleted} item(s)\n`);
+    return;
+  }
+
   // An unknown mode gets the instructive usage line and exit 2. (A bare invocation
   // never lands here — the argv splice above rewrote it to `chat`.)
   process.stderr.write(unknownInvocationMessage(process.argv.slice(2).join(" ")));
