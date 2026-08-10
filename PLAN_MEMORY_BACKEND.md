@@ -2028,6 +2028,13 @@ Acceptance: the test file; `npm run test:fast`.
 
 ## 27b. Phase T13 — the refresh loop, the cycle UI, and the page weights
 
+**BUILT** (2026-08-10, merged): the standing feedVersion watcher (2 s, backing off +2 s/tick
+to a 10 s ceiling, snapping back on change; one shared knownFeedVersion between the watcher
+and the buttons' settle-waits — the split version tracking double-rendered a landing
+cycle), the live per-source cycle UI, the news-side fuzzy toggle on the enrich trigger,
+and the PAGE_WEIGHTS before/after: cold-load wire weight 5,653,036 bytes → 11,374 bytes,
+a ~497x drop. 82 tests across the news files, stable across repeated runs.
+
 **Owns** `src/surfaces/web/news-browser-entry.mjs` (the `feedVersion` polling loop with
 backoff; refetch-on-change; stop writing the marker's stop request — the worker's
 `shouldAbort` reads it between sources), `src/services/news-viz.mjs` (the cycle marker

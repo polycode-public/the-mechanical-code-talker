@@ -34,18 +34,16 @@ continuous campaign per `PLAN_MEMORY_BACKEND.md` §28 with the E-phases slotted 
 `PLAN_EXTRACTION_CONFIDENCE.md` §5. Coordinator: this session. Sub-agents run in auto-assigned
 worktrees under `.claude/worktrees/`; this list tracks the current wave and moves as waves land.
 
-- In flight: T13 refresh loop + cycle UI + page weights (Sonnet, owns news entry/viz/
-  e2e + PAGE_WEIGHTS.md), T8 chat/ledger backend modes (Sonnet, owns those pages'
-  entries/viz/e2e), the graph-less turn config guard (Sonnet, owns source.mjs; the
-  cap-fix agent's finding — the ask engine threw on every turn-service turn and a lazy
-  catch hid it). Landed since the last tracker move: E3, E4, the p2p carry, T3, T12,
-  T7, T5, M8, the news-about rewrite, T6, the cap-refusal wording fix (refused writes
-  now say so; PERSIST_UNAVAILABLE_TEXT byte-pinned). Pipeline fixes for #760 ride the
-  next push.
-- Queued: T14 after T13 → T9 after T8 → T10/M10/T11 tail. After T14: a fresh
-  `npm run gen:screenshots` news capture (news.png still shows the pre-flip UI).
-  Operator step recorded by T6: wikidata-slice and conceptnet-full stay empty until
-  their raw dumps are downloaded and loaded by hand with `tmct corpus load`.
+- In flight: T8 chat/ledger backend modes (Sonnet, resumed once after a stall; scope
+  clarified to chat/ledger only — T13 covered the news side), T14 news chat area
+  (Sonnet, owns news entry/viz + news e2e). Landed since the last tracker move: T13
+  (refresh loop, cycle UI, fuzzy toggle, page weight 5.4 MiB → 11.1 KiB), the
+  graph-less config guard (fetchEntities bootstraps empty instead of crashing; the
+  companion read in graph-load.mjs fixed with it), the cap-refusal wording fix.
+- Queued: T9 after T8 → T10/M10/T11 tail. After T14: a fresh `npm run gen:screenshots`
+  news capture (news.png still shows the pre-flip UI). Operator step recorded by T6:
+  wikidata-slice and conceptnet-full stay empty until their raw dumps are downloaded
+  and loaded by hand with `tmct corpus load`.
   Landed: M0–M7 (M3's byte-identity dump matched), T0 (WordNet band ran for real at
   206,357 rows; ConceptNet/Wikidata pipelines fixture-tested, first scale run is T6's
   CI job), T1, T2, E0, E1, E2, the miss-lead round (whereSet/temporal remainder open
