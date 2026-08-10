@@ -1880,6 +1880,18 @@ Acceptance: the e2e file; `npm run test:fast`.
 
 ## 22. Phase T6 — turn infra, the corpus read route, and the CI load job
 
+**BUILT** (2026-08-10, merged): the turn-service Lambda + function URL (its behavior
+registered ahead of `/api/*` — CloudFront matches in list order), the news-worker function
+with `grantInvoke` from the row service (the construct T12 flagged as homeless), the
+corpus read route, the exported global-cap counter seam with turn writes counted (T3's
+fold), the three build steps in `deploy:website`, a `corpus:load` CI job that loads
+wordnet-complete for real every pipeline, and the smoke probes for turn + corpus reads.
+No Lambda anywhere sets reserved concurrency — the account sits at the service floor and
+any reservation is rejected at deploy (learned from pipeline #760). wikidata-slice and
+conceptnet-full stay empty until an operator downloads their raw dumps and runs
+`tmct corpus load` by hand; the CI job says so plainly. Teach-lane wording when the cap
+refuses a write was found misattributing the cause — fixed as its own follow-on dispatch.
+
 **Owns** the turn Lambda constructs in `infra/` (function, reserved concurrency parameter,
 the `/api/sessions/*/turn` behavior wiring), the corpus read route
 (`GET /api/corpus/:band/rows` per §3.8's table — one `queryBandTerm` call in the row-service
