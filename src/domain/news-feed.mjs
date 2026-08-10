@@ -83,7 +83,9 @@ export function newsWindowRows(rows, { now, windowMs }) {
 // happened to it, so a row under any of these bands background whoever wrote
 // it. Distinct from renderNewsParagraph's own narrower IDENTITY_PREDICATES
 // (below), which only needs the two positive forms for its identity sentence.
-const GATE_IDENTITY_PREDICATES = new Set(["rdf:type", "rdfs:subClassOf", "mgxneg:subClassOf", "owl:disjointWith"]);
+// `mgx:nameFor` joins this set too: "X is the name for Y" defines X, and a
+// definition is never a card head, whatever the row's own findings say.
+const GATE_IDENTITY_PREDICATES = new Set(["rdf:type", "rdfs:subClassOf", "mgxneg:subClassOf", "owl:disjointWith", "mgx:nameFor"]);
 
 // Every determiner a universal quantifier is ever stored under — today only
 // "every" is written (chat.mjs's own teach lane), "all"/"each" kept here so a
@@ -230,16 +232,27 @@ const ENTITY_FRAGMENT_LEAD_WORDS = new Set([
   "against", "among", "within", "without", "per",
 ]);
 
+// The particles a phrasal verb leaves behind when a frame over-reads its
+// remainder as a term ("falls back to the link" surfaces as "back to the
+// link", which names nothing) — mirrors extract-facts.mjs's own
+// PARTICLE_LEAD_WORDS lexically, with no POS-tag rule, since the domain layer
+// never imports the services-layer wink engine. Applies only to a multi-word
+// term; "back" alone is a fine noun.
+const ENTITY_PARTICLE_LEAD_WORDS = new Set(["back", "up", "down", "out", "off", "away", "along", "around"]);
+
 /** Does `term` read as a thing's name rather than a clause fragment? Bounds
  *  the word count and rejects a leading conjunction, auxiliary or
- *  preposition (test E's condition 3, PLAN_NEWSWORTHINESS.md section 2). */
+ *  preposition (test E's condition 3, PLAN_NEWSWORTHINESS.md section 2), plus
+ *  a leading phrasal-verb particle on a multi-word term. */
 function looksLikeEntityTerm(term) {
   const text = String(term ?? "").trim();
   if (!text) return false;
   const words = text.split(/\s+/);
   if (words.length > ENTITY_TERM_MAX_WORDS) return false;
   const first = words[0].toLowerCase().replace(/^[^a-z0-9]+/, "");
-  return Boolean(first) && !ENTITY_FRAGMENT_LEAD_WORDS.has(first);
+  if (!first || ENTITY_FRAGMENT_LEAD_WORDS.has(first)) return false;
+  if (words.length > 1 && ENTITY_PARTICLE_LEAD_WORDS.has(first)) return false;
+  return true;
 }
 
 // The Wikidata research provenance tag (researchSourceTag in
@@ -251,6 +264,21 @@ function looksLikeEntityTerm(term) {
 // this reads real data the day a caller stores one directly.
 const WIKIDATA_RESEARCH_PROVENANCE_RE = /(?:^|:)research:wikidata:/;
 const WIKIDATA_QID_TERM_RE = /^q[1-9]\d*$/;
+
+// The two attached findings a row's own extraction may carry that disqualify
+// it from heading a card or anchoring novelty (PLAN_EXTRACTION_CONFIDENCE.md
+// section 2.5): an identifier-shaped token or a clause-fallback read is a
+// structural tell the row was mis-read, not a report a card should lead
+// with. `pronoun-carry` is deliberately absent — a subject carried from the
+// paragraph's own prose is not a mis-read, and barring it would suppress
+// real hubs. A row with no `extraction` at all (nothing recorded, or an old
+// row from before this plan) never matches.
+const GATE_DECLINING_FINDINGS = new Set(["identifier-token", "clause-fallback"]);
+
+function rowCarriesGateDecliningFinding(row) {
+  const extraction = row.extraction;
+  return Array.isArray(extraction) && extraction.some((finding) => GATE_DECLINING_FINDINGS.has(finding));
+}
 
 function hasWikidataQidAnchor(term, rows) {
   for (const row of rows) {
@@ -284,14 +312,23 @@ export function newsworthyHubs(rows, reported, {
 
   const counts = new Map();
   const subjectRowsByTerm = new Map();
+  // A term with at least one occurrence in a row the gate did not decline —
+  // test E's own condition (below): a term backed ONLY by declined rows never
+  // heads a card, but one clean occurrence is enough even when a tainted one
+  // also mentions it.
+  const hasUndeclinedOccurrence = new Map();
   for (const row of reported) {
     const s = normFactTerm(row.subject);
     const o = normFactTerm(row.object);
+    const declined = rowCarriesGateDecliningFinding(row);
     for (const term of [s, o]) {
       if (!term || STOP_SET.has(term)) continue;
       counts.set(term, (counts.get(term) || 0) + 1);
+      if (!declined) hasUndeclinedOccurrence.set(term, true);
     }
-    if (s && !STOP_SET.has(s)) {
+    // A declined row is excluded from `subjectRowsByTerm` outright — test A's
+    // own anchor never comes from a row the gate declined.
+    if (s && !STOP_SET.has(s) && !declined) {
       let subjRows = subjectRowsByTerm.get(s);
       if (!subjRows) subjectRowsByTerm.set(s, (subjRows = []));
       subjRows.push(row);
@@ -301,6 +338,7 @@ export function newsworthyHubs(rows, reported, {
   function passesEntityTest(term) {
     if (concepts.has(term) || isQuantityTerm(term)) return false;
     if (!readsAsEntityTerm(term)) return false;
+    if (!hasUndeclinedOccurrence.get(term)) return false;
     return isNovelTerm(term, priorSet);
   }
 
