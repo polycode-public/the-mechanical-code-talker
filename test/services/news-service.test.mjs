@@ -532,6 +532,34 @@ test("buildFeed's gate: a research-tagged definition and an identity-only report
   assert.ok(!kumamotoItem.paragraph.includes("tariff"), "an unrelated identity-only report never leaks into another card's background");
 });
 
+test("buildFeed's gate: a card the optimistic tier only reached off an identifier-shaped token never heads, while a clean report from the same poll still does", async () => {
+  // A live wall clock, not FIXED_NOW: this sentence grounds through the
+  // strict recognizer's own assert-lane write for one of its facts, which
+  // stamps its own record with the real clock regardless of the ctx's own
+  // `now` — a frozen historical `now` would then read that record as
+  // observed in the future and band it background for reasons that have
+  // nothing to do with this test.
+  const { ctx } = await makeCtx({ now: () => new Date().toISOString() });
+  const snapshot = snapshotFor(
+    "hacker-news", "1",
+    "Talks Resume Over Ceasefire Terms",
+    "The site uses normalizeFeedItems for parsing.",
+  );
+  ctx.state.items = [snapshot];
+  await ingestNewsSnapshot(ctx, snapshot);
+
+  const rows = await ctx.store.readFactRows(await ctx.store.loadMemory(ctx.memoryDir));
+  const tainted = rows.find((r) => r.subject === "site" && r.object === "normalizefeeditems");
+  assert.ok(tainted, "the identifier-shaped sentence grounds and stores");
+  assert.ok(tainted.extraction?.includes("identifier-token"), "its assertion carries the identifier-token finding");
+
+  const feed = await buildFeed(ctx);
+  const hubs = feed.items.map((it) => it.hub);
+  assert.ok(!hubs.includes("normalizefeeditems"), `an identifier-token row never heads a card: ${JSON.stringify(hubs)}`);
+  assert.ok(!hubs.includes("site"), `the same declined row cannot head via its other endpoint either: ${JSON.stringify(hubs)}`);
+  assert.ok(hubs.includes("talks") || hubs.includes("ceasefire terms"), `a clean report from the same poll still heads: ${JSON.stringify(hubs)}`);
+});
+
 // ---- metrics ----------------------------------------------------------------
 
 test("cycleMetrics computes strict and optimistic grounding rate as two separate columns, plus the plain count deltas", () => {
