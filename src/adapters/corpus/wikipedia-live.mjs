@@ -43,6 +43,11 @@ export const SIMPLE_WIKIPEDIA_ORIGIN = "https://simple.wikipedia.org";
 export const WIKIPEDIA_LIVE_SOURCE_NAME = "wikipedia-live";
 export const SIMPLE_WIKIPEDIA_SOURCE_NAME = "simple-wikipedia";
 
+/** What each of the two goes by in prose a reader sees, the same names their
+ *  citations already carry. */
+export const WIKIPEDIA_SOURCE_LABEL = "Wikipedia";
+export const SIMPLE_WIKIPEDIA_SOURCE_LABEL = "Simple English Wikipedia";
+
 /** The identification string Wikimedia's robot policy asks API clients to
  *  carry, pointing at this project's public site as the contact. Browsers
  *  refuse to override the User-Agent request header, so the API-recognised
@@ -81,6 +86,7 @@ export function createWikipediaLiveProvider({
   userAgent = WIKIMEDIA_USER_AGENT,
   waitForSlot = false,
   sourceName = WIKIPEDIA_LIVE_SOURCE_NAME,
+  label = WIKIPEDIA_SOURCE_LABEL,
 } = {}) {
   const gate = createCourtesyGate({ fetchImpl, timeoutMs, minIntervalMs, userAgent, waitForSlot });
 
@@ -130,6 +136,17 @@ export function createWikipediaLiveProvider({
   return {
     name: sourceName,
     origin,
+    label,
+
+    /** Opens this source's per-turn fetch budget (courtesy.mjs). A caller with
+     *  a turn boundary calls it once at the top of the turn; one that has none
+     *  never calls it and spends no budget. */
+    beginTurn() { gate.beginTurn(); },
+
+    /** The source's own running totals, including how many of its failures
+     *  said the source itself is struggling — what a circuit breaker reads to
+     *  tell a timing-out source from one that simply has no article. */
+    stats() { return gate.stats(); },
 
     /** The tag a fact gained through the research source contract carries. The
      *  research lane stamps its own `research:<topic>@<depth>` tag instead when
@@ -257,6 +274,7 @@ export function createSimpleWikipediaResearchSource(options = {}) {
   return createWikipediaLiveProvider({
     origin: SIMPLE_WIKIPEDIA_ORIGIN,
     sourceName: SIMPLE_WIKIPEDIA_SOURCE_NAME,
+    label: SIMPLE_WIKIPEDIA_SOURCE_LABEL,
     waitForSlot: true,
     ...options,
   });

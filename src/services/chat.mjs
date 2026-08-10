@@ -81,6 +81,7 @@ import { subClassParents, subClassChildren, descendantSet, ancestryChain, cluste
 import { ANSWER_STOP_SET } from "../domain/hub-terms.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { ENUMERATION_LANES, answerAssertsASet, retrievalMarkerLine } from "../domain/retrieval-marker.mjs";
+import { throughSourceBreaker, sourceSkipNoteLine } from "../domain/source-breaker.mjs";
 import { adventureTurn, unclaimedAdventureOpening, foldWorldState } from "./adventure.mjs";
 import { spiderFlyTurn } from "./spider-fly-turn.mjs";
 import { mudiiiTurn } from "./mudiii-turn.mjs";
@@ -376,6 +377,20 @@ function withCanonicalLine(result) {
  *  read from, where the other two describe the turn. */
 function withRetrievalNote(result, retrieval) {
   const line = retrievalMarkerLine(retrieval, { enumerationLane: result?.record?.enumerationLane ?? null });
+  if (!line) return result;
+  const answer = `${result.answer}\n\n${line}`;
+  const logLines = Array.isArray(result.logLines)
+    ? result.logLines.map((l) => (l === result.answer ? answer : l))
+    : result.logLines;
+  return { ...result, answer, logLines };
+}
+
+/** The skipped-source line, on the same append-onto-`answer` mechanism as
+ *  withRetrievalNote, and placed beside it: both say what the answer was read
+ *  from. A turn that asked no external source, or asked one that answered,
+ *  gets nothing — which is every turn until a source starts failing. */
+function withSourceSkipNote(result, sourceSkips) {
+  const line = sourceSkips?.size ? sourceSkipNoteLine(sourceSkips) : null;
   if (!line) return result;
   const answer = `${result.answer}\n\n${line}`;
   const logLines = Array.isArray(result.logLines)
@@ -13223,17 +13238,65 @@ async function cleanMissLiveKey(term, { graph, memoryDir, lexicon, cache }) {
   return key;
 }
 
+/** The name a live source goes by in a breaker and in the skipped-source note.
+ *  A registered stub with no name of its own answers to this one, so a test
+ *  provider is guarded exactly as the shipped one is. */
+const LIVE_SOURCE_FALLBACK_NAME = "wikipedia";
+
+/** Runs one live-source lookup behind that source's circuit breaker, so a
+ *  source that keeps timing out is skipped for the rest of the session
+ *  instead of being asked again every turn. A skipped source adds its name to
+ *  `sourceSkips` and answers null, which is the same shape a miss already
+ *  takes — the turn proceeds byte-identically, and the answer says the source
+ *  was not asked. */
+async function throughLiveSourceBreaker(provider, sourceSkips, work) {
+  const source = String(provider?.name || LIVE_SOURCE_FALLBACK_NAME);
+  const systemicFailuresOf = typeof provider?.stats === "function"
+    ? () => provider.stats().systemicFailures ?? 0
+    : null;
+  return throughSourceBreaker(source, work, { skipped: sourceSkips, label: provider?.label, systemicFailuresOf });
+}
+
 /** The live Wikipedia lookup for an already-gated key: the article, or null
- *  (toggle-off provider, network failure, throttle, drift-guard rejection —
- *  all byte-identical to a live-off run). `onLiveLookup` is a notify-only
- *  hook (the web page's "searching wikipedia…" statusline); its own failure
- *  is swallowed too. */
-async function liveReferenceAnswerForKey(key, onLiveLookup) {
-  try { if (typeof onLiveLookup === "function") onLiveLookup(key); } catch { /* notify-only */ }
+ *  (toggle-off provider, network failure, throttle, drift-guard rejection,
+ *  a breaker-skipped source — all byte-identical to a live-off run).
+ *  `onLiveLookup` is a notify-only hook (the web page's "searching
+ *  wikipedia…" statusline); its own failure is swallowed too. */
+async function liveReferenceAnswerForKey(key, onLiveLookup, sourceSkips = null) {
+  const provider = getLiveReferenceProvider();
   let article = null;
-  try { article = await getLiveReferenceProvider().lookup(key); } catch { article = null; }
+  try {
+    article = await throughLiveSourceBreaker(provider, sourceSkips, async () => {
+      try { if (typeof onLiveLookup === "function") onLiveLookup(key); } catch { /* notify-only */ }
+      // The fetch budget covers this lookup: the search and the read it needs,
+      // and nothing like a retry loop past them.
+      try { provider.beginTurn?.(); } catch { /* an older provider has no budget */ }
+      try { return await provider.lookup(key); } catch { return null; }
+    });
+  } catch { article = null; }
   if (!article) return null;
   return { key, article, text: renderLiveReferenceAnswer(key, article) };
+}
+
+/** The research lane's provider with its source's breaker in front of every
+ *  fetching method. A skipped source answers null to all three, which is the
+ *  lane's own "the source had nothing" path, so a run pauses honestly instead
+ *  of walking a queue against a dead source. The contract fields the lane
+ *  reads (name, origin, provenanceTag) pass straight through. */
+function guardedResearchProvider(provider, sourceSkips) {
+  if (!provider) return provider;
+  try { provider.beginTurn?.(); } catch { /* an older provider has no budget */ }
+  const guard = (work) => throughLiveSourceBreaker(provider, sourceSkips, work);
+  return {
+    ...provider,
+    lookup: (term) => guard(() => provider.lookup(term)),
+    ...(typeof provider.pageByTitle === "function"
+      ? { pageByTitle: (title) => guard(() => provider.pageByTitle(title)) }
+      : {}),
+    ...(typeof provider.linkedTitles === "function"
+      ? { linkedTitles: (title, options) => guard(() => provider.linkedTitles(title, options)) }
+      : {}),
+  };
 }
 
 /** The child-pack half of learn-on-miss, for an already-gated key: look the
@@ -15032,7 +15095,7 @@ const ARCH_OVERVIEW_PHRASES = [
   new RegExp(`^${ARCH_OVERVIEW_LEAD}(?:(?:an?|the)\\s+)?(?:overview|map|diagram)\\s+${ARCH_OVERVIEW_OF_REPO}(?:\\s+here)?\\??$`, "i"),
 ];
 
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint: sessionVocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, codeDomainActive = false }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint: sessionVocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, sourceSkips = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, codeDomainActive = false }) {
   // The session-wide hint names a term this session can PROVE resolves; when
   // the question itself named a subject the lexicon knows, the hint names that
   // instead, so a miss on "how many eyes does a human have" points at "human"
@@ -15245,7 +15308,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       }
       let liveKey = null;
       try { liveKey = cleanMissLiveTerm(wikiTerm, lexicon ?? undefined); } catch { liveKey = null; }
-      const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup) : null;
+      const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup, sourceSkips) : null;
       if (live) {
         await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon, synthesisBudget);
         note(trace, `lane: WIKIPEDIA ASK — answered from a live en.wikipedia.org lookup, cited (article "${live.article.title}", revid ${live.article.revid})`);
@@ -15921,7 +15984,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         // exactly as a live-off run would.
         if (!bareMetaHit && liveReference && refTerm) {
           const liveKey = await cleanMissLiveKey(refTerm, { graph, memoryDir, lexicon, cache });
-          const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup) : null;
+          const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup, sourceSkips) : null;
           if (live) bareMetaHit = { text: live.text, replace: true, live };
         }
       }
@@ -16500,7 +16563,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // miss byte-identical to a live-off run.
     if (miss && recordMiss && via === "composed" && liveReference && refTerm) {
       const liveKey = await cleanMissLiveKey(refTerm, { graph, memoryDir, lexicon, cache });
-      const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup) : null;
+      const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup, sourceSkips) : null;
       if (live) {
         answer = live.text;
         via = "reference";
@@ -16715,7 +16778,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       || (liveReference === "always" ? envelope?.parsed?.object : null);
     let liveKey = null;
     try { liveKey = supplementTerm ? cleanMissLiveTerm(supplementTerm, lexicon ?? undefined) : null; } catch { liveKey = null; }
-    const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup) : null;
+    const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup, sourceSkips) : null;
     if (live) {
       answer = `${answer}\nWikipedia adds: ${live.text}`;
       await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon, synthesisBudget);
@@ -18523,7 +18586,11 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // an answer's typed content is in hand (runAsk, off the ask envelope's
   // `discourse` referents); the caller re-threads whatever comes back.
   const discourseHolder = { record: discourse ?? emptyDiscourseRecord() };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, researchSource, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue, domainPacks: domainPacksValue, newsState, newsConfig, newsProviders };
+  // Every external source this turn asked for and did not get, because its
+  // circuit breaker had already given up on it. A name lands here only when
+  // the skip changed what served the answer, and the trailer says so.
+  const sourceSkips = new Set();
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, researchSource, onLiveLookup, sourceSkips, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue, domainPacks: domainPacksValue, newsState, newsConfig, newsProviders };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
@@ -18576,7 +18643,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
     // Goal/canonical lines append onto the PRE-narration `finished` result
     // `nextLast` was captured from, so a narrated turn still gets both short
     // lines up top plus the full trace block after.
-    return { ...withNarration(withCanonicalLine(withGoalLine(withRetrievalNote(finished, retrieval))), trace, fallbackGoal), last: nextLast, discourse: discourseHolder.record };
+    return { ...withNarration(withCanonicalLine(withGoalLine(withSourceSkipNote(withRetrievalNote(finished, retrieval), sourceSkips))), trace, fallbackGoal), last: nextLast, discourse: discourseHolder.record };
   };
 
   // Slash-optional system commands: a bare leading command word ("stats",
@@ -18757,7 +18824,10 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       holder: researchHolder,
       memoryDir,
       lexicon,
-      provider: getResearchProvider({ minIntervalMs: resolvedResearchConfig.minIntervalMs, source: effectiveResearchSource }),
+      provider: guardedResearchProvider(
+        getResearchProvider({ minIntervalMs: resolvedResearchConfig.minIntervalMs, source: effectiveResearchSource }),
+        sourceSkips,
+      ),
       config: { ...resolvedResearchConfig, source: effectiveResearchSource },
       planActive: Boolean(planHolder.state && !planHolder.state.done),
       pagerActive: Boolean(Array.isArray(last?.detail?.pending?.items) && last.detail.pending.items.length),

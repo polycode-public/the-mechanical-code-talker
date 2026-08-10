@@ -231,6 +231,14 @@ export function createWikidataLiveProvider({
   return {
     name: sourceName,
     origin,
+    label: WIKIDATA_SOURCE_LABEL,
+
+    /** Opens this source's per-turn fetch budget (courtesy.mjs). */
+    beginTurn() { gate.beginTurn(); },
+
+    /** The source's own running totals, including the failures that said the
+     *  source itself is struggling — what a circuit breaker reads. */
+    stats() { return gate.stats(); },
 
     /** The tag every fact this source contributes carries. */
     provenanceTag(term) {

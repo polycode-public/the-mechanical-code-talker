@@ -146,3 +146,74 @@ test("cachedFetch({remember:false}) still respects the minimum interval between 
   assert.equal(await gate.cachedFetch("a", work, { remember: false }), "fresh", "the first call gets the open slot");
   assert.equal(await gate.cachedFetch("b", work, { remember: false }), null, "a second key inside the interval is throttled, not answered fresh");
 });
+
+test("the gate counts a throttle, a 5xx, a dead transport and a maxlag rejection as the source failing", async () => {
+  const throttled = createCourtesyGate({ fetchImpl: async () => response({}, { status: 429 }), minIntervalMs: 0 });
+  assert.equal(await throttled.fetchJson("https://example.com/a"), null);
+  assert.equal(throttled.stats().systemicFailures, 1);
+
+  const broken = createCourtesyGate({ fetchImpl: async () => response({}, { status: 503 }), minIntervalMs: 0 });
+  assert.equal(await broken.fetchJson("https://example.com/a"), null);
+  assert.equal(broken.stats().systemicFailures, 1);
+
+  const dead = createCourtesyGate({ fetchImpl: async () => { throw new Error("connection refused"); }, minIntervalMs: 0 });
+  assert.equal(await dead.fetchJson("https://example.com/a"), null);
+  assert.equal(dead.stats().systemicFailures, 1);
+
+  const lagging = createCourtesyGate({
+    fetchImpl: async () => response({ error: { code: "maxlag" } }, { headers: { "retry-after": "5" } }),
+    minIntervalMs: 0,
+  });
+  assert.equal(await lagging.fetchJson("https://example.com/a"), null);
+  assert.equal(lagging.stats().systemicFailures, 1);
+});
+
+test("a 404 and an unreadable body are answers, not the source failing", async () => {
+  const missing = createCourtesyGate({ fetchImpl: async () => response({}, { status: 404 }), minIntervalMs: 0 });
+  assert.equal(await missing.fetchJson("https://example.com/a"), null);
+  assert.equal(missing.stats().systemicFailures, 0);
+  assert.equal(missing.stats().fetches, 1);
+
+  const unparseable = createCourtesyGate({
+    fetchImpl: async () => response(() => new Error("not json")),
+    minIntervalMs: 0,
+  });
+  assert.equal(await unparseable.fetchJson("https://example.com/a"), null);
+  assert.equal(unparseable.stats().systemicFailures, 0);
+});
+
+test("a 2xx never counts against the source, and the counters climb across calls", async () => {
+  const gate = createCourtesyGate({ fetchImpl: async () => response({ ok: true }), minIntervalMs: 0 });
+  await gate.fetchJson("https://example.com/a");
+  await gate.fetchJson("https://example.com/b");
+  assert.deepEqual(
+    { fetches: gate.stats().fetches, systemicFailures: gate.stats().systemicFailures },
+    { fetches: 2, systemicFailures: 0 },
+  );
+});
+
+test("a turn spends its declared fetch budget and then stops fetching, and the stop is not a failure", async () => {
+  let calls = 0;
+  const gate = createCourtesyGate({
+    fetchImpl: async () => { calls += 1; return response({ ok: true }); },
+    minIntervalMs: 0,
+    maxFetchesPerTurn: 2,
+  });
+  gate.beginTurn();
+  assert.notEqual(await gate.fetchJson("https://example.com/a"), null);
+  assert.notEqual(await gate.fetchJson("https://example.com/b"), null);
+  assert.equal(await gate.fetchJson("https://example.com/c"), null, "the third fetch is past the turn's budget");
+  assert.equal(calls, 2, "the budget stops the round trip before it leaves");
+  assert.equal(gate.stats().budgetExhausted, true);
+  assert.equal(gate.stats().systemicFailures, 0);
+
+  gate.beginTurn();
+  assert.notEqual(await gate.fetchJson("https://example.com/d"), null, "the next turn starts with a full budget");
+  assert.equal(gate.stats().budgetExhausted, false);
+});
+
+test("a caller that never declares a turn spends no budget", async () => {
+  const gate = createCourtesyGate({ fetchImpl: async () => response({ ok: true }), minIntervalMs: 0, maxFetchesPerTurn: 1 });
+  for (let i = 0; i < 5; i += 1) assert.notEqual(await gate.fetchJson(`https://example.com/${i}`), null);
+  assert.equal(gate.stats().fetches, 5);
+});

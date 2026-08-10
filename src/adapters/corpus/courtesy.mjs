@@ -8,12 +8,28 @@
 // keeps hits AND misses so a term is never asked twice. Every failure of any
 // kind reads as null, so the caller's honest miss stands.
 //
+// The gate also counts what its fetches cost and what they hit: how many round
+// trips a turn has spent, and how many of its failures said the source itself
+// is struggling. The first bounds a turn (`beginTurn` opens the budget window,
+// and a turn past its cap stops fetching and misses honestly); the second is
+// what a source's circuit breaker reads through `stats()`, so an empty answer
+// and a timing-out source never look alike to it.
+//
 // No node builtins — this module ships in the browser bundles unchanged; the
 // only I/O is fetch.
 
+import { isSystemicSourceStatus } from "../../domain/source-breaker.mjs";
+
+/** The abort timeout on every single fetch: one source's slowness costs a turn
+ *  this much and no more. */
 export const DEFAULT_TIMEOUT_MS = 4000;
 export const DEFAULT_MIN_INTERVAL_MS = 2000;
 export const RETRY_AFTER_FLOOR_MS = 5000;
+/** How many round trips one turn may spend on a single source. A live
+ *  reference lookup costs two (search, then read), a research step three at
+ *  most, so the cap sits above what an honest turn needs and below what a
+ *  retrying loop could spend. Only counted once a caller declares a turn. */
+export const DEFAULT_MAX_FETCHES_PER_TURN = 6;
 // Action-API requests carry maxlag so an overloaded replica set answers with
 // an error we back off from instead of adding to its load (Wikimedia's own
 // recommended default for non-interactive clients).
@@ -43,6 +59,7 @@ export function createCourtesyGate({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   minIntervalMs = DEFAULT_MIN_INTERVAL_MS,
   retryAfterFloorMs = RETRY_AFTER_FLOOR_MS,
+  maxFetchesPerTurn = DEFAULT_MAX_FETCHES_PER_TURN,
   userAgent,
   waitForSlot = false,
   validators = null,
@@ -52,6 +69,11 @@ export function createCourtesyGate({
   let lastLookupAt = 0;
   let coolOffUntil = 0;
   let inFlight = false;
+  let fetches = 0;
+  let systemicFailures = 0;
+  let fetchesThisTurn = 0;
+  let turnBudgetOpen = false;
+  let budgetExhausted = false;
 
   const identifyingHeaders = () => {
     if (!userAgent) return null;
@@ -98,6 +120,12 @@ export function createCourtesyGate({
    *  else could have earned a 304 in the first place). `asJson` picks the
    *  body shape: parsed JSON (with the maxlag check) or raw text. */
   async function fetchRaw(url, { asJson }) {
+    if (turnBudgetOpen && fetchesThisTurn >= maxFetchesPerTurn) {
+      budgetExhausted = true;
+      return null;
+    }
+    fetches += 1;
+    fetchesThisTurn += 1;
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
     try {
@@ -105,13 +133,27 @@ export function createCourtesyGate({
       if (controller) opts.signal = controller.signal;
       const headers = { ...(identifyingHeaders() ?? {}), ...(conditionalHeaders(url) ?? {}) };
       if (Object.keys(headers).length) opts.headers = headers;
-      const res = await doFetch(url, opts);
+      let res;
+      try {
+        res = await doFetch(url, opts);
+      } catch {
+        // Nothing came back at all: a dropped connection, a refused host, or
+        // this fetch's own abort timer. Every one of those is the source
+        // failing, not answering.
+        systemicFailures += 1;
+        return null;
+      }
       if (res.status === 429) {
         openCoolOff(res.headers?.get?.("retry-after"));
+        systemicFailures += 1;
         return null;
       }
       if (res.status === 304) return validators ? { notModified: true } : null;
-      if (!res.ok) return null;
+      if (!res.ok) {
+        // A 404 for a term nobody wrote about is an answer; a 5xx is not.
+        if (isSystemicSourceStatus(res.status)) systemicFailures += 1;
+        return null;
+      }
       rememberValidators(url, res);
       if (asJson) {
         const body = await res.json();
@@ -119,12 +161,17 @@ export function createCourtesyGate({
         // Retry-After header — back off exactly as a 429 asks.
         if (body?.error?.code === "maxlag") {
           openCoolOff(res.headers?.get?.("retry-after"));
+          systemicFailures += 1;
           return null;
         }
         return body;
       }
       return await res.text();
     } catch {
+      // The response arrived and its body did not. A body cut off by this
+      // fetch's own timer is the source failing; an unparseable one is just
+      // an answer we cannot use.
+      if (controller?.signal?.aborted) systemicFailures += 1;
       return null;
     } finally {
       if (timer !== null) clearTimeout(timer);
@@ -188,5 +235,22 @@ export function createCourtesyGate({
     return value;
   }
 
-  return { fetchJson, fetchText, cachedFetch };
+  /** Opens this gate's per-turn fetch budget and resets its count. A caller
+   *  that never calls this spends no budget at all — a library consumer with
+   *  no turn boundary keeps today's behaviour, and the cap applies exactly
+   *  where a turn declares itself. */
+  function beginTurn() {
+    turnBudgetOpen = true;
+    fetchesThisTurn = 0;
+    budgetExhausted = false;
+  }
+
+  /** What this gate has spent and hit since it was created. `fetches` and
+   *  `systemicFailures` only ever climb, so a caller reads them either side of
+   *  one lookup and takes the difference. */
+  function stats() {
+    return { fetches, systemicFailures, fetchesThisTurn, budgetExhausted };
+  }
+
+  return { fetchJson, fetchText, cachedFetch, beginTurn, stats };
 }

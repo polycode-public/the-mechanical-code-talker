@@ -59,6 +59,7 @@ import {
 } from "../adapters/corpus/news-sources.mjs";
 import { DEFAULT_MIN_INTERVAL_MS } from "../adapters/corpus/courtesy.mjs";
 import { researchFacts } from "../adapters/corpus/research-source.mjs";
+import { throughSourceBreaker, sourceSkipStatusLine } from "../domain/source-breaker.mjs";
 import { ingestText, readsAsEntityTerm } from "./extract-facts.mjs";
 
 export { NEWS_SOURCE_RECORDS, DEFAULT_NEWS_SOURCE_IDS, DEFAULT_NEWS_KB_IDS };
@@ -644,11 +645,37 @@ async function ingestResearchArticle(ctx, term, provider, article) {
   return { facts: distinct.size, derived };
 }
 
+/** One KB lookup behind its source's circuit breaker. A source that has been
+ *  timing out or throttling is skipped without a round trip, and the skip is
+ *  reported so the cycle can tell "this source had nothing" from "this source
+ *  was never asked". The negative cache catches the first; the breaker
+ *  catches the second, and neither ever stands in for the other. */
+async function lookupThroughBreaker(ctx, provider, sourceId, term, skipped) {
+  const source = String(provider?.name || sourceId);
+  const systemicFailuresOf = typeof provider?.stats === "function"
+    ? () => provider.stats().systemicFailures ?? 0
+    : null;
+  let asked = false;
+  const article = await throughSourceBreaker(source, async () => {
+    asked = true;
+    try { provider.beginTurn?.(); } catch { /* an older provider has no budget */ }
+    try { return await provider.lookup(term); } catch { return null; }
+  }, {
+    registry: ctx?.sourceBreakers ?? undefined,
+    skipped,
+    label: provider?.label,
+    systemicFailuresOf,
+  });
+  return { article, asked };
+}
+
 /** Takes the top `limit` pending (negative-cache-expired) terms and walks
  *  the enabled KB sources in config order for each; first lookup hit wins.
  *  A grounded term is marked "grounded" and folded into one
  *  reprocessAfterGrounding pass over every term this cycle grounded; an
- *  all-null term enters the negative cache. */
+ *  all-null term enters the negative cache. A term whose sources were all
+ *  skipped goes back to pending instead: nothing asked it, so nothing knows
+ *  it is missing. */
 export async function enrichTopTerms(ctx, { limit } = {}) {
   const { memoryDir, store, state, providers, config, now } = ctx;
   const shouldAbort = abortSignalOf(ctx);
@@ -662,6 +689,7 @@ export async function enrichTopTerms(ctx, { limit } = {}) {
 
   const enriched = [];
   const missed = [];
+  const skippedSources = new Set();
   let factsTotal = 0;
   let derivedTotal = 0;
   let aborted = false;
@@ -670,22 +698,25 @@ export async function enrichTopTerms(ctx, { limit } = {}) {
     if (shouldAbort()) { aborted = true; break; }
     markTerm(ledger, entry.term, "enriching", nowVal);
     let hit = null;
+    let askedAnySource = false;
     for (const sourceId of config.kbSources) {
       if (shouldAbort()) { aborted = true; break; }
       const choice = KB_SOURCE_TO_RESEARCH_CHOICE[sourceId];
       if (!choice || typeof providers?.getResearchProvider !== "function") continue;
       const provider = providers.getResearchProvider({ source: choice });
       if (!provider) continue;
-      let article = null;
-      try { article = await provider.lookup(entry.term); } catch { article = null; }
+      const { article, asked } = await lookupThroughBreaker(ctx, provider, sourceId, entry.term, skippedSources);
+      if (asked) askedAnySource = true;
       if (article) { hit = { provider, article }; break; }
     }
     // A stop mid-lookup is not a verdict on the term: it goes back to
     // pending so the next cycle picks it up, never into the negative cache.
     if (aborted) { markTerm(ledger, entry.term, "pending", nowVal); break; }
     if (!hit) {
-      markTerm(ledger, entry.term, "missed", nowVal);
-      missed.push(entry.term);
+      // No source was asked, so nothing learned this term is missing —
+      // the same posture a stop takes, for the same reason.
+      markTerm(ledger, entry.term, askedAnySource ? "missed" : "pending", nowVal);
+      if (askedAnySource) missed.push(entry.term);
       continue;
     }
     const res = await ingestResearchArticle(ctx, entry.term, hit.provider, hit.article);
@@ -712,6 +743,7 @@ export async function enrichTopTerms(ctx, { limit } = {}) {
 
   return {
     enriched, missed, aborted,
+    skippedSources: [...skippedSources].sort(),
     facts: factsTotal + reprocessResult.facts,
     derived: derivedTotal + reprocessResult.derived,
   };
@@ -838,11 +870,13 @@ function renderPollResult(result) {
 function renderEnrichResult(result) {
   const enrichedText = result.enriched.length ? ` (${result.enriched.join(", ")})` : "";
   const missedText = result.missed.length ? ` (${result.missed.join(", ")})` : "";
+  const skipped = result.skippedSources || [];
   const text = `enriched ${pluralize(result.enriched.length, "term")}${enrichedText}; `
     + `${pluralize(result.missed.length, "miss")}${missedText}; `
     + `${pluralize(result.facts, "fact")} stored, ${result.derived} derived.`
-    + (result.aborted ? STOPPED_SUFFIX : "");
-  return { text, miss: !result.enriched.length && !result.missed.length && !result.aborted };
+    + (result.aborted ? STOPPED_SUFFIX : "")
+    + (skipped.length ? ` ${sourceSkipStatusLine(skipped)}` : "");
+  return { text, miss: !result.enriched.length && !result.missed.length && !result.aborted && !skipped.length };
 }
 
 async function handleAddSource(ctx, url) {
