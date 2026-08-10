@@ -2718,8 +2718,8 @@ function evalComposite(graph, ast, opts = {}) {
 function quotableClause(node) {
   const clause = node?.node === "clause" ? node.clause : null;
   if (!clause?.kind || !clause.object || clause.modifier === "transitive") return null;
+  if (clause.shape !== "reverse" && clause.shape !== "forward") return null;
   const passive = clause.shape === "forward";
-  if (clause.shape !== "reverse" && !passive) return null;
   if (passive && bareVerbFor(clause.kind).includes(" ")) return null;
   return {
     kind: clause.kind, object: clause.object, passive,
