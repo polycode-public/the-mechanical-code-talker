@@ -31,6 +31,16 @@ const SESSION_HEADER = "x-tmct-session";
 const DEFAULT_CYCLE_POLL_MS = 400;
 const DEFAULT_CYCLE_WAIT_TIMEOUT_MS = 20_000;
 
+/** The standing refresh loop's own cadence: `~2 s interval with backoff
+ *  toward ~10 s while nothing changes` (PLAN_MEMORY_BACKEND.md's materialized-
+ *  feed section). A version change resets the interval back to the floor —
+ *  something is actively happening, so the loop goes back to checking often —
+ *  and a quiet tick or a failed read both step it toward the ceiling, never
+ *  past it. The loop never stops outright: it only ever slows down. */
+const DEFAULT_VERSION_POLL_MS = 2_000;
+const DEFAULT_VERSION_POLL_STEP_MS = 2_000;
+const DEFAULT_VERSION_POLL_MAX_MS = 10_000;
+
 /** The localStorage keys the shipped page persists under — exported so the
  *  page's own inline script and a test can both name them without
  *  retyping the string. `NEWS_SESSION_PREF_KEY` is the ONE fact beyond the
@@ -88,8 +98,9 @@ export function parseJsonlRows(text) {
 
 /**
  * The thin API session over the row service's news-facing routes:
- * `{ sessionKey, consented, unavailable, fetchFeed, fetchFeedVersion, start,
- * poll, enrich, ingestText, ingestRows, revokeConsent, destroy }`.
+ * `{ sessionKey, consented, unavailable, fetchFeed, fetchFeedVersion,
+ * fetchCycle, onFeedUpdate, start, poll, enrich, ingestText, ingestRows,
+ * revokeConsent, destroy }`.
  *
  * `fetchImpl` defaults to the ambient `fetch`, so a page never has to pass
  * one; every path this module requests is root-relative ("/api/…"), which a
@@ -97,17 +108,34 @@ export function parseJsonlRows(text) {
  * behaviour §3.7 draws. A test hands in a `fetchImpl` that resolves those
  * same paths against a running `local.mjs` double instead.
  *
- * `cyclePollMs`/`cycleWaitTimeoutMs` govern the one polling loop this module
- * runs: after a trigger's own 202, waiting for `feedVersion` to move past
+ * `cyclePollMs`/`cycleWaitTimeoutMs` govern the one polling loop a trigger's
+ * own press runs: after its 202, waiting for `feedVersion` to move past
  * where it stood before that trigger, so the button that fired it can settle
  * once the cycle it started has actually materialized. It gives up and
  * renders whatever is there once `cycleWaitTimeoutMs` elapses — a cycle that
- * failed before materializing must never wedge the button forever.
+ * failed before materializing must never wedge the button forever. While
+ * that wait is running, each of its own ticks also reads the cycle marker
+ * and hands it to the press's own `onCycle` callback, if it supplied one —
+ * that is the page's live "polling…" / per-source-chip feed, not a separate
+ * standing read.
+ *
+ * `versionPollMs`/`versionPollStepMs`/`versionPollMaxMs` govern the OTHER
+ * loop: a standing watcher that starts the moment a session key exists (a
+ * restored visit, or the first press that mints one) and keeps polling
+ * `feedVersion` for as long as the session lives, backing off from
+ * `versionPollMs` toward `versionPollMaxMs` while nothing changes and
+ * dropping back to `versionPollMs` the moment it does — refetching the feed
+ * and notifying every `onFeedUpdate` listener only on an actual version
+ * change. It never stops outright (a cycle triggered from another tab, or
+ * left running past a reload, still needs to reach this page), only ever
+ * slows down; `destroy()`/`revokeConsent()` are the only ways to stop it.
  */
 export function createNewsSession({
   fetchImpl = null, prefs = null,
   consentPrefKey = NEWS_START_PREF_KEY, sessionPrefKey = NEWS_SESSION_PREF_KEY,
   cyclePollMs = DEFAULT_CYCLE_POLL_MS, cycleWaitTimeoutMs = DEFAULT_CYCLE_WAIT_TIMEOUT_MS,
+  versionPollMs = DEFAULT_VERSION_POLL_MS, versionPollStepMs = DEFAULT_VERSION_POLL_STEP_MS,
+  versionPollMaxMs = DEFAULT_VERSION_POLL_MAX_MS,
 } = {}) {
   const doFetch = fetchImpl || ((...args) => globalThis.fetch(...args));
   const prefStore = prefs || (typeof globalThis !== "undefined" && globalThis.localStorage ? localStoragePrefStore() : memoryPrefStore());
@@ -116,13 +144,91 @@ export function createNewsSession({
   let consented = Boolean(sessionKey) && prefStore.get(consentPrefKey) === "on";
   let unavailable = false;
 
+  const feedUpdateListeners = new Set();
+  let versionWatcher = null;
+
+  /** The last `feedVersion` any code path in this session has actually
+   *  confirmed — the watcher's own ticks update it, and so does a trigger's
+   *  own settle-wait (`waitForFeedVersionBump`), which already polls the
+   *  same number for its own reasons. Sharing one value across both means a
+   *  press's own wait already having caught a cycle's bump leaves nothing
+   *  for the standing watcher to rediscover moments later — without it, the
+   *  watcher's independent bookkeeping would treat that same bump as a
+   *  change of its own the next time it ticked, and needlessly refetch the
+   *  feed a second time for a change the page already rendered. `null` means
+   *  nothing has confirmed a number yet. */
+  let knownFeedVersion = null;
+
+  /** The standing loop: one `feedVersion` read per tick, refetching the feed
+   *  and notifying listeners only when the number actually moved from what
+   *  `knownFeedVersion` last confirmed. A failed tick (service unreachable)
+   *  backs off exactly like a quiet one — this loop never throws and never
+   *  blocks anything else the page does. */
+  function startVersionWatcher() {
+    if (versionWatcher || !sessionKey) return;
+    let intervalMs = versionPollMs;
+    let stopped = false;
+    let timer = null;
+    versionWatcher = {
+      stop() { stopped = true; if (timer) clearTimeout(timer); versionWatcher = null; },
+    };
+
+    function scheduleTick() {
+      timer = setTimeout(tick, intervalMs);
+      if (typeof timer?.unref === "function") timer.unref();
+    }
+
+    async function tick() {
+      if (stopped) return;
+      try {
+        const version = await readFeedVersion();
+        if (knownFeedVersion !== null && version !== knownFeedVersion) {
+          knownFeedVersion = version;
+          intervalMs = versionPollMs;
+          const feed = await readFeed();
+          for (const listener of feedUpdateListeners) { try { listener(feed); } catch { /* a listener's own bug never stops the loop */ } }
+        } else {
+          knownFeedVersion = version;
+          intervalMs = Math.min(versionPollMaxMs, intervalMs + versionPollStepMs);
+        }
+      } catch {
+        intervalMs = Math.min(versionPollMaxMs, intervalMs + versionPollStepMs);
+      }
+      if (!stopped) scheduleTick();
+    }
+
+    // The baseline read happens right away, not on the first timer tick —
+    // waiting a whole interval to find out where the count already stood
+    // would silently swallow a change that lands in that gap (a cycle this
+    // same press just started, or one still running from an earlier visit).
+    // Skipped entirely when a trigger already confirmed a number moments
+    // earlier — see knownFeedVersion above. Every tick after this one runs
+    // on the ordinary schedule.
+    (async () => {
+      if (knownFeedVersion === null) {
+        try { knownFeedVersion = await readFeedVersion(); } catch { knownFeedVersion = 0; }
+      }
+      if (!stopped) scheduleTick();
+    })();
+  }
+
+  function stopVersionWatcher() {
+    versionWatcher?.stop();
+  }
+
   function ensureSessionKey() {
     if (!sessionKey) {
       sessionKey = mintSessionKey();
       prefStore.set(sessionPrefKey, sessionKey);
     }
+    startVersionWatcher();
     return sessionKey;
   }
+
+  // A restored visit (a session key already in the pref store) starts the
+  // standing loop right away — nothing here waited for a press, because the
+  // consent that authorised the loop already happened on an earlier visit.
+  startVersionWatcher();
 
   /** Every request funnels through here: a thrown/rejected fetch or a 5xx
    *  both mean the service itself is unreachable, and the flag this sets is
@@ -183,20 +289,53 @@ export function createNewsSession({
     throw new Error(errBody?.error?.message || `${kind} trigger failed (status ${response.status})`);
   }
 
-  async function waitForFeedVersionBump(versionBefore) {
+  /** `GET /api/meta/cycle` — the running cycle's own marker: `{cycleId,
+   *  kind, state, startedAt, sources, finishedAt?, reason?}`. Answers `null`
+   *  before any cycle has ever run for this session (404) or once the
+   *  session itself doesn't exist yet, never throws on a malformed value —
+   *  a marker this module cannot parse is the same as no marker. */
+  async function readCycle() {
+    if (!sessionKey) return null;
+    const response = await request("/api/meta/cycle", { headers: { [SESSION_HEADER]: sessionKey } });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`GET /api/meta/cycle failed (status ${response.status})`);
+    const body = await readJsonOrNull(response);
+    if (typeof body?.value !== "string") return null;
+    try { return JSON.parse(body.value); } catch { return null; }
+  }
+
+  /** Waits for `feedVersion` to move past `versionBefore`, the same tight
+   *  loop every trigger settles on. Keeps `knownFeedVersion` current on every
+   *  read — this loop is a trigger's own dedicated watch over the exact
+   *  number the standing loop also tracks, so the standing loop must never
+   *  end up rediscovering, and re-rendering, a change this wait already
+   *  caught. `onCycle`, when supplied, is handed the cycle marker (or
+   *  `null`) on every tick — the press's own live "polling…" /
+   *  per-source-chip feed, read here because this is the one loop already
+   *  running for the whole span a cycle is in flight; a read that fails is
+   *  reported as `null` rather than aborting the wait over a display-only
+   *  read. */
+  async function waitForFeedVersionBump(versionBefore, onCycle) {
     const deadline = Date.now() + cycleWaitTimeoutMs;
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, cyclePollMs));
       const version = await readFeedVersion();
+      knownFeedVersion = version;
+      if (typeof onCycle === "function") {
+        let marker = null;
+        try { marker = await readCycle(); } catch { marker = null; }
+        try { onCycle(marker); } catch { /* a caller's own bug never stops the wait */ }
+      }
       if (version > versionBefore) return version;
     }
     return versionBefore; // gives up; the caller renders whatever is there
   }
 
-  async function triggerAndSettle(kind, body) {
+  async function triggerAndSettle(kind, body, { onCycle } = {}) {
     const versionBefore = await readFeedVersion();
+    knownFeedVersion = versionBefore;
     await postTrigger(kind, body);
-    await waitForFeedVersionBump(versionBefore);
+    await waitForFeedVersionBump(versionBefore, onCycle);
     return readFeed();
   }
 
@@ -214,47 +353,72 @@ export function createNewsSession({
      *  making a request at all. */
     async fetchFeed() { return readFeed(); },
 
-    /** `GET /api/meta/feedVersion` — the cheap poll a standing refresh loop
-     *  reads. Exposed for that loop to use; this module never runs one on
-     *  its own beyond the one-shot wait inside `triggerAndSettle`. */
+    /** `GET /api/meta/feedVersion` — the cheap poll the standing refresh
+     *  loop reads on its own. Exposed too, for a caller that wants a one-off
+     *  read outside that loop. */
     async fetchFeedVersion() { return readFeedVersion(); },
+
+    /** `GET /api/meta/cycle` — the cycle marker, for a caller that wants a
+     *  one-off read of the current or most recent cycle's progress outside
+     *  a trigger's own `onCycle` callback (a boot-time check, say). */
+    async fetchCycle() { return readCycle(); },
+
+    /** Subscribes to the standing refresh loop: `callback(feed)` fires every
+     *  time `feedVersion` actually moves, with the freshly re-fetched feed
+     *  already in hand. Returns an unsubscribe function. The loop itself
+     *  runs independently of any subscriber — it starts the moment a
+     *  session key exists, subscribed or not — so a page that boots after
+     *  the loop already started still catches every later change. */
+    onFeedUpdate(callback) {
+      feedUpdateListeners.add(callback);
+      return () => feedUpdateListeners.delete(callback);
+    },
 
     /** First press: mints the session key if this is a first visit, records
      *  the start-consent preference, and runs one poll cycle. Every later
      *  press of the same button is just another poll — there is no
-     *  recurring timer to distinguish a "first" press from any other. */
-    async start(sources) {
+     *  recurring timer to distinguish a "first" press from any other.
+     *  `onCycle`, if supplied, is reported the cycle marker on every tick of
+     *  the settle-wait (see `waitForFeedVersionBump`). */
+    async start(sources, { onCycle } = {}) {
       ensureSessionKey();
       prefStore.set(consentPrefKey, "on");
       consented = true;
-      return triggerAndSettle("poll", sources?.length ? { sources } : {});
+      return triggerAndSettle("poll", sources?.length ? { sources } : {}, { onCycle });
     },
 
     /** One enrich cycle, on its own press — independent of `start()`'s
      *  consent, the same way the old page's `addSource()` ran its own
-     *  preflight regardless of whether polling had started. */
-    async enrich() {
-      return triggerAndSettle("enrich", {});
+     *  preflight regardless of whether polling had started. `fuzzy`, when
+     *  supplied, rides the trigger body as `{fuzzy: 0|1}` — §3.15.2's
+     *  per-request rung, read by the worker's own corpus enrichment source;
+     *  omitted entirely (not defaulted here) when the caller doesn't pass
+     *  it, so the worker's own mode/env/config resolution still applies. */
+    async enrich({ fuzzy, onCycle } = {}) {
+      return triggerAndSettle("enrich", fuzzy === undefined ? {} : { fuzzy: fuzzy ? 1 : 0 }, { onCycle });
     },
 
     /** The teach panel's free-text path. */
-    async ingestText(text) {
-      return triggerAndSettle("ingest", { text });
+    async ingestText(text, { onCycle } = {}) {
+      return triggerAndSettle("ingest", { text }, { onCycle });
     },
 
     /** The teach panel's uploaded-`.jsonl` path. */
-    async ingestRows(rows) {
-      return triggerAndSettle("ingest", { rows });
+    async ingestRows(rows, { onCycle } = {}) {
+      return triggerAndSettle("ingest", { rows }, { onCycle });
     },
 
     /** Purges every row and meta entry this session's key reaches, then
      *  discards the key and the consent preference regardless of whether
      *  the purge itself succeeded — the visitor's own pointer to any
      *  residue is gone either way, the same reasoning `deleteAll`'s own
-     *  sharp edge documents. */
+     *  sharp edge documents. Stops the standing refresh loop first: there is
+     *  nothing left for it to watch. */
     async revokeConsent() {
       const key = sessionKey;
       let error = null;
+      stopVersionWatcher();
+      knownFeedVersion = null; // a later start() mints a different key with its own numbering from zero
       if (key) {
         try {
           const backend = createHttpRowBackend({ apiBase: "/", sessionKey: key, fetchImpl: doFetch });
@@ -273,9 +437,9 @@ export function createNewsSession({
       return { ok: !error, error };
     },
 
-    /** Nothing to tear down — kept for the same lifecycle shape every other
-     *  page's session exposes. */
-    destroy() {},
+    /** Stops the standing refresh loop — a page tearing itself down (or a
+     *  test moving on to the next case) leaves nothing still polling. */
+    destroy() { stopVersionWatcher(); },
   };
 }
 

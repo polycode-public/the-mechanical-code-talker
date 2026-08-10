@@ -80,7 +80,7 @@ async function openNewsPage(service) {
   const apiRequests = [];
   await page.route("**/api/**", async (route) => {
     const request = route.request();
-    apiRequests.push({ method: request.method(), url: request.url() });
+    apiRequests.push({ method: request.method(), url: request.url(), postData: request.postData() });
     const target = new URL(new URL(request.url()).pathname + new URL(request.url()).search, service.url);
     const headers = await request.allHeaders();
     delete headers.host;
@@ -192,18 +192,111 @@ test("start polls through a 202, the cards render once the cycle materializes, a
   }
 });
 
-test("once a triggered cycle settles, the page makes no further /api/ request while idle — the version poll backs off to nothing", async () => {
+test("once a triggered cycle settles, the page keeps polling feedVersion at a slow, backed-off cadence rather than falling silent, and never refetches the feed until it actually moves", async () => {
+  const service = await withRowService({ newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A quokka has a population of 12000."]) } });
+  const { context, page, apiRequests } = await openNewsPage(service);
+  try {
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+    await waitForFeedRendered(page, "the post-poll feed render");
+
+    const feedGetsBeforeIdle = apiRequests.filter((r) => r.method === "GET" && new URL(r.url).pathname === "/api/feed").length;
+    await page.waitForTimeout(3500); // past the standing loop's own floor interval at least once
+    const versionReadsWhileIdle = apiRequests.filter((r) => r.method === "GET" && new URL(r.url).pathname === "/api/meta/feedVersion").length;
+    const feedGetsAfterIdle = apiRequests.filter((r) => r.method === "GET" && new URL(r.url).pathname === "/api/feed").length;
+    assert.ok(versionReadsWhileIdle > 0, "the standing loop kept reading feedVersion instead of going silent once the cycle settled");
+    assert.equal(feedGetsAfterIdle, feedGetsBeforeIdle, "nothing changed, so the loop never refetched the feed itself");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a cycle triggered from outside the page reaches it through the standing loop, without any press here", async () => {
   const service = await withRowService({ newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A quokka has a population of 12000."]) } });
   const { context, page } = await openNewsPage(service);
   try {
     await page.locator("#newsStart").click();
     await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
     await waitForFeedRendered(page, "the post-poll feed render");
+    const sessionKey = await page.evaluate(() => window.localStorage.getItem("tmct.news.sessionKey"));
+    const graphSizeBefore = await page.evaluate(() => Number(document.querySelector("#tileGraphSize [data-value]").textContent));
 
-    const requestsBeforeIdle = await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/")).length);
-    await page.waitForTimeout(2000);
-    const requestsAfterIdle = await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/")).length);
-    assert.equal(requestsAfterIdle, requestsBeforeIdle, "no standing poll loop fires while nothing is in flight");
+    // The same session, driven directly against the row service — standing
+    // in for another tab, or a trigger this page never clicked — with no
+    // page-side ingest of its own: the page must never parse or extract
+    // anything locally to show this.
+    const response = await fetch(`${service.url}/api/sessions/${sessionKey}/ingest`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "A tariff is a tax on imported goods." }),
+    });
+    assert.equal(response.status, 202);
+    await service.drainNewsWorkers();
+
+    await waitFor(page, (before) => Number(document.querySelector("#tileGraphSize [data-value]").textContent) > before, {
+      timeoutMs: READY_TIMEOUT_MS, label: "the standing loop noticing the outside change", arg: graphSizeBefore,
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test("a worker budget that runs out between sources stops the cycle honestly: the reached source reports its own status, the rest still read as never polled", async () => {
+  const service = await withRowService({
+    newsWorker: {
+      budgetMs: 40,
+      fetchersFor: () => {
+        const map = new Map();
+        map.set("wikimedia-featured", {
+          id: "wikimedia-featured",
+          async fetchItems() {
+            await new Promise((resolve) => setTimeout(resolve, 70));
+            return {
+              items: [{ id: "wm:0", guid: "0", title: "A quokka has a population of 12000.", url: "https://example.com/wm/0", summary: "", publishedAt: "", sourceId: "wikimedia-featured" }],
+              bytes: 240,
+            };
+          },
+        });
+        map.set("hacker-news", fixtureFetcher("hacker-news", ["Something else entirely."]));
+        return map;
+      },
+    },
+  });
+  const { context, page } = await openNewsPage(service);
+  try {
+    await page.locator('[data-source-id="usgs-quakes"] [data-source-toggle]').uncheck();
+    await page.locator('[data-source-id="nyt-world"] [data-source-toggle]').uncheck();
+    await page.locator('[data-source-id="wikinews-published"] [data-source-toggle]').uncheck();
+
+    await page.locator("#newsStart").click();
+    await waitFor(page, () => document.getElementById("newsStart").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "start settling" });
+
+    const wikiStatus = await page.locator('[data-source-id="wikimedia-featured"] [data-source-status]').innerText();
+    assert.equal(wikiStatus, "ok", "the slow source the budget still reached completed and reports its own status");
+    const hnStatus = await page.locator('[data-source-id="hacker-news"] [data-source-status]').innerText();
+    assert.equal(hnStatus, "not yet polled", "the source after the exhausted budget was never reached this cycle, not silently marked done");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the fuzzy toggle rides the enrich trigger's own body, on by default", async () => {
+  const service = await withRowService({ newsWorker: { fetchersFor: fetchersFor(["wikimedia-featured"], ["A quokka has a population of 12000."]) } });
+  const { context, page, apiRequests } = await openNewsPage(service);
+  try {
+    assert.equal(await page.locator("#fuzzyToggle").isChecked(), true, "fuzzy matching defaults on, matching the shipped retrieval default");
+
+    await page.locator("#enrichNow").click();
+    await waitFor(page, () => document.getElementById("enrichNow").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "enrich settling" });
+
+    await page.locator("#fuzzyToggle").uncheck();
+    await page.locator("#enrichNow").click();
+    await waitFor(page, () => document.getElementById("enrichNow").disabled === false, { timeoutMs: INTERACTION_TIMEOUT_MS, label: "the second enrich settling" });
+
+    const enrichBodies = apiRequests
+      .filter((r) => r.method === "POST" && /\/enrich$/.test(new URL(r.url).pathname))
+      .map((r) => JSON.parse(r.postData || "{}"));
+    assert.deepEqual(enrichBodies, [{ fuzzy: 1 }, { fuzzy: 0 }], "the double observed the toggle's own state on each press, checked then unchecked");
   } finally {
     await context.close();
   }

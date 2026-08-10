@@ -122,6 +122,7 @@ ${THEME_TOKENS_CSS}
   @keyframes pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .btn[aria-busy="true"]::after { animation: none; opacity: .7; } }
   select { font-family: ${MONO_STACK}; font-size: .72rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .55rem; }
+  .fuzzytoggle { display: inline-flex; align-items: center; gap: .35rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); cursor: pointer; }
   .sources { display: flex; flex-direction: column; gap: .3rem; margin: .6rem 0; }
   .sources h2 { margin: .6rem 0 .1rem; }
   .sourcegroup { display: flex; flex-direction: column; gap: .3rem; }
@@ -209,6 +210,7 @@ ${NEWS_STYLE}
   <div class="controls" id="controls">
     <button type="button" class="btn primary" id="newsStart">start polling live sources</button>
     <button type="button" class="btn" id="enrichNow">enrich now</button>
+    <label class="fuzzytoggle" for="fuzzyToggle"><input type="checkbox" id="fuzzyToggle" checked> fuzzy corpus match</label>
     <button type="button" class="btn ghost" id="stopForget">stop &amp; forget</button>
     <span class="mono" id="controlsStatus" aria-live="polite"></span>
   </div>
@@ -328,6 +330,7 @@ ${NEWS_STYLE}
 
   function renderSourcesPanel(feed) {
     const byId = new Map((feed.sourceStatus || []).map(function (h) { return [h.sourceId, h]; }));
+    const nowMs = Date.now();
     document.querySelectorAll("[data-source-id]").forEach(function (row) {
       const health = byId.get(row.getAttribute("data-source-id"));
       const statusEl = row.querySelector("[data-source-status]");
@@ -335,6 +338,12 @@ ${NEWS_STYLE}
       if (health) {
         if (health.autoDisabled) text = "auto-disabled";
         else if (health.browserBlocked) text = "source does not permit browser access";
+        // A source can be skipped without being auto-disabled yet — one or
+        // two failures back off for a while rather than giving up on it —
+        // and that reads as nothing without its own note; left to fall
+        // through to lastStatus, a merely-cooling-down source would show
+        // "failed" forever, which understates what actually happened.
+        else if (health.backoffUntil && Date.parse(health.backoffUntil) > nowMs) text = "skipped — backing off";
         else if (health.lastStatus) text = health.lastStatus;
       }
       statusEl.textContent = text;
@@ -343,6 +352,27 @@ ${NEWS_STYLE}
     setBars("panelSourcesPerSource", (feed.sourceStatus || []).map(function (h) {
       return { label: h.sourceId, count: h.consecutiveFailures ? 0 : 1 };
     }));
+  }
+
+  // Live progress during a running cycle, read off the marker each button
+  // press reports through its own onCycle callback — a poll cycle's own
+  // per-source entries as they land, or "polling…" for a roster member the
+  // marker hasn't reached yet. renderSourcesPanel overwrites all of this the
+  // moment the press's own promise resolves with the finished feed; this is
+  // only what a visitor sees while it's still running.
+  function renderCycleProgress(marker) {
+    if (!marker) return;
+    const perSource = marker.sources || {};
+    document.querySelectorAll("[data-source-id]").forEach(function (row) {
+      if (row.classList.contains("kb")) return;
+      const id = row.getAttribute("data-source-id");
+      const statusEl = row.querySelector("[data-source-status]");
+      if (Object.prototype.hasOwnProperty.call(perSource, id)) {
+        statusEl.textContent = perSource[id].status;
+      } else if (marker.state === "running" && marker.kind === "poll") {
+        statusEl.textContent = "polling…";
+      }
+    });
   }
 
   function cardHtml(item) {
@@ -475,6 +505,15 @@ ${NEWS_STYLE}
     const session = await window.tmct.open({});
     window.tmct.news = { phase: "seeded" };
 
+    // The standing refresh loop lives inside the session, started already —
+    // this just subscribes to it. A cycle another tab (or a reload-surviving
+    // trigger) finishes reaches this page the same way a press's own cycle
+    // does, without this page having asked for anything.
+    session.onFeedUpdate(function (feed) {
+      renderAll(feed);
+      appendLog("the feed updated in the background");
+    });
+
     const startBtn = el("newsStart");
     startBtn.textContent = session.consented ? "poll now" : "start polling live sources";
 
@@ -515,12 +554,13 @@ ${NEWS_STYLE}
     startBtn.addEventListener("click", function () {
       emptyFeedText = DEFAULT_EMPTY_FEED_TEXT;
       const ids = [].slice.call(document.querySelectorAll("[data-source-toggle]:checked")).map(function (b) { return b.value; });
-      runPress(startBtn, "polling…", function () { return session.consented ? "poll now" : "start polling live sources"; }, function () { return session.start(ids); })
+      runPress(startBtn, "polling…", function () { return session.consented ? "poll now" : "start polling live sources"; }, function () { return session.start(ids, { onCycle: renderCycleProgress }); })
         .catch(function () {});
     });
 
     el("enrichNow").addEventListener("click", function () {
-      runPress(el("enrichNow"), "enriching…", function () { return "enrich now"; }, function () { return session.enrich(); })
+      const fuzzy = el("fuzzyToggle").checked;
+      runPress(el("enrichNow"), "enriching…", function () { return "enrich now"; }, function () { return session.enrich({ fuzzy: fuzzy, onCycle: renderCycleProgress }); })
         .catch(function () {});
     });
 
@@ -567,8 +607,8 @@ ${NEWS_STYLE}
       const graphSizeBefore = Number((el("tileGraphSize").querySelector("[data-value]") || {}).textContent) || 0;
       await runPress(btn, "ingesting…", function () { return "ingest"; }, async function () {
         const feed = looksLikeFactRows(text)
-          ? await session.ingestRows(window.tmct.page.parseJsonlRows(text))
-          : await session.ingestText(text);
+          ? await session.ingestRows(window.tmct.page.parseJsonlRows(text), { onCycle: renderCycleProgress })
+          : await session.ingestText(text, { onCycle: renderCycleProgress });
         const added = Math.max(0, (feed.stats.graphSize || 0) - graphSizeBefore);
         el("teachStatus").textContent = added + " fact(s) added to the graph";
         return feed;

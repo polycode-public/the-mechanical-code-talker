@@ -207,3 +207,35 @@ This is a local-loopback measurement (no network latency), matching what "first 
 for a visitor whose connection has already delivered the HTML's opening bytes — CloudFront's own
 time-to-first-byte is a separate, already-monitored concern (`npm run smoke:deploy`), not what
 this measurement targets.
+
+## news.html: before and after the thin-client cutover
+
+news.html was never one of the 23 deployed pages above — it carried its own in-page engine and
+seed on a separate track, and it isn't linked from the demo grid yet (that's the next phase's
+job). This section measures what the cutover to a render-and-controls thin client
+(PLAN_MEMORY_BACKEND.md's news.html-goes-thin revision) actually cost the page, since neither
+side of that change has ever been deployed: "before" is the last in-page-engine commit
+(`cec73f02`), "after" is the current thin client, both built locally
+(`npm run demo:build`) and measured the same two ways the rest of this report uses — raw bytes
+straight off disk, and wire bytes from each build's own brotli output (`scripts/build-demo-site.mjs`'s
+own precompression step, quality 11, the same code path CloudFront's on-the-fly compression
+approximates). This is a local measurement, not a live `curl`/CDP one — recorded here as a
+one-off before/after rather than folded into the revision-3 table above, which stays a live
+measurement of what's actually deployed.
+
+| | before (in-page engine) | after (thin client) |
+|---|---:|---:|
+| own HTML, raw | 58,182 | 41,311 |
+| own HTML, wire | 13,028 | 8,727 |
+| bundle, raw | 1,324,641 | 7,332 |
+| bundle, wire | 356,060 | 2,647 |
+| `chat-seed.json` fetched eagerly? | yes (90,323,857 raw / 4,493,688 wire) | no |
+| `vendor/wink.js` fetched eagerly? | yes (3,655,359 raw / 790,260 wire) | no |
+| **cold-load total, raw** | **95,362,039** | **48,643** |
+| **cold-load total, wire** | **5,653,036 (5.4 MiB)** | **11,374 (11.1 KiB)** |
+
+Both builds carry the same handful of icon/favicon requests, so those cancel out of the
+comparison and aren't counted in either column. The whole difference is the seed fetch and the
+engine bundle the tenth revision (PLAN_MEMORY_BACKEND.md §3.7) removed: the page now renders from
+one `GET /api/feed` call instead of assembling a graph in the browser, so there is no seed to
+fetch and no engine to bundle. Cold-load wire weight drops by a factor of about 497.

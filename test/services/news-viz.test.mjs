@@ -46,11 +46,28 @@ test("renderNewsHtml: the thin controls row renders start, enrich and stop & for
 test("renderNewsHtml: every control the page fires talks to the session's own trigger verbs, never an in-page engine call", () => {
   const html = renderNewsHtml();
   assert.match(html, /session\.start\(/, "start mints the session and polls");
-  assert.match(html, /session\.enrich\(\)/, "enrich now runs its own trigger");
+  assert.match(html, /session\.enrich\(\{/, "enrich now runs its own trigger");
   assert.match(html, /session\.revokeConsent\(\)/, "stop & forget purges through the session");
   assert.match(html, /session\.ingestText\(/, "the teach panel's prose path posts the ingest trigger");
   assert.match(html, /session\.ingestRows\(/, "the teach panel's row path posts the ingest trigger");
   assert.match(html, /session\.fetchFeed\(\)/, "the page reads the materialized feed rather than building one");
+});
+
+test("renderNewsHtml: a fuzzy toggle sits beside enrich now, checked by default, and rides the enrich trigger's body", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /id="fuzzyToggle"[^>]*checked/, "the fuzzy toggle defaults on, matching the shipped retrieval default");
+  assert.match(html, /fuzzy: fuzzy/, "the checkbox's own state rides the enrich call, not a hardcoded flag");
+});
+
+test("renderNewsHtml: the page subscribes to the session's standing feed-update loop and re-renders on it", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /session\.onFeedUpdate\(/, "the page subscribes to the standing refresh loop rather than running its own timer");
+});
+
+test("renderNewsHtml: start, enrich and teach ingest each report cycle progress through onCycle", () => {
+  const html = renderNewsHtml();
+  const onCycleCalls = (html.match(/onCycle: renderCycleProgress/g) || []).length;
+  assert.equal(onCycleCalls, 4, "start, enrich, ingestRows and ingestText each thread the same progress callback");
 });
 
 test("renderNewsHtml: the teach panel's two example buttons render, and the file drop takes .txt/.md/.jsonl only", () => {
