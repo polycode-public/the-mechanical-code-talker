@@ -105,6 +105,26 @@ test("openMemoryBackend(repo, \"memory\") still bypasses sqlite entirely — an 
   }
 });
 
+// ---- An OBJECT token bypasses routing altogether ---------------------------
+
+test("openMemoryBackend(repo, rowBackend): an injected store is bound as-is and the repo gains no store of its own", async () => {
+  const dir = await tmpRepo();
+  try {
+    const { createRowMemoryBackend } = await import("../../src/adapters/memory/row-backend-memory.mjs");
+    const impl = createRowMemoryBackend();
+    const { dir: handle, close } = await openMemoryBackend(dir, impl);
+    assert.equal(handle?.backend, "row", "the object token opens a Backend D handle");
+    assert.equal(handle.impl, impl);
+    await appendFact(handle, { subject: "cat", predicate: "rdfs:subClassOf", object: "animal" });
+    assert.deepEqual(readFactRows(await loadMemory(handle)).map((r) => r.subject), ["cat"]);
+    await close();
+
+    assert.deepEqual(await memoryEntries(dir), [], "no graph.sqlite, no graph.json — nothing was routed to the repo");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- The fold's canonise-link idle pass reaches the ROUTED store -----------
 // foldSessionLogs only ever has the repo path in hand; it must resolve the
 // configured backend (here: the sqlite default) and write its

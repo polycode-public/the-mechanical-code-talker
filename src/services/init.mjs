@@ -228,9 +228,11 @@ function seedRequested({ optSeed, configEnabled, env }) {
  * @param {object}  [opts.env]    environment (for TMCT_NO_SEED); defaults to process.env.
  * @param {object}  [opts.persona] a resolved PERSONA_PRESETS entry ({extensions?, bias?})
  *   merged into a FRESH config only; name resolution is the caller's job (bin/tmct.mjs).
- * @param {string}  [opts.memoryBackend]  "default" | "memory" | "sqlite" — merged into a
+ * @param {string|object}  [opts.memoryBackend]  "default" | "memory" | "sqlite" — merged into a
  *   FRESH config's `[memory] backend`, and selects which backend the corpus seed writes
- *   into (via src/adapters/memory/core.mjs's openMemoryBackend).
+ *   into (via src/adapters/memory/core.mjs's openMemoryBackend). A row backend object (or a
+ *   wrapRowBackend handle) instead seeds straight into that injected store and is never
+ *   written to tmct.toml — a config file has no way to name a live object.
  * @param {string}  [opts.researchSource]  "wikipedia" | "wikidata" | "simple-wikipedia-pack" — merged into a
  *   FRESH config's `[research] source`, the tmct.toml tier of the research lane's
  *   source precedence (src/services/chat-session.mjs createSession).
@@ -314,7 +316,12 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
     if (persona.extensions && Object.keys(persona.extensions).length) config.extensions = persona.extensions;
     if (persona.bias && Object.keys(persona.bias).length) config.bias = persona.bias;
   }
-  if (memoryBackend) config.memory = { ...(config.memory || {}), backend: memoryBackend };
+  // A backend passed as an OBJECT is an injected row store (or a handle over
+  // one): it seeds directly and stays out of the written config, because a
+  // config file can only name a string backend. openMemoryBackend does the real
+  // shape check and refuses an object that is not a row backend.
+  const injectedRowStore = !!memoryBackend && typeof memoryBackend === "object";
+  if (memoryBackend && !injectedRowStore) config.memory = { ...(config.memory || {}), backend: memoryBackend };
   if (researchSource) config.research = { ...(config.research || {}), source: researchSource };
   const tomlPresent = await exists(paths.toml);
   if (!tomlPresent || force) {
@@ -337,9 +344,12 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
   } else if ((await exists(paths.marker)) && !force) {
     seedNote = "seed skipped (already seeded — marker present)";
   } else {
-    // Seeds into whichever backend config.memory.backend names. "memory" is skipped
+    // Seeds into whichever backend config.memory.backend names, or straight into
+    // an injected row store when the caller passed one. "memory" is skipped
     // outright: it's an in-process-only store that vanishes when this process exits.
-    const backendChoice = String(config.memory?.backend || "").trim().toLowerCase();
+    const backendChoice = injectedRowStore
+      ? memoryBackend
+      : String(config.memory?.backend || "").trim().toLowerCase();
     if (backendChoice === "memory") {
       seedNote = "seed skipped (memory backend is in-process only — nothing would persist past this command)";
     } else {

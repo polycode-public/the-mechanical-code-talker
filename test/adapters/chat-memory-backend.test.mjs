@@ -189,6 +189,34 @@ test("createSession precedence: TMCT_MEMORY_BACKEND env beats tmct.toml, but los
   }
 });
 
+test("createSession precedence: an injected row backend beats env and tmct.toml, and skips config resolution entirely", async () => {
+  clearCache();
+  const dir = await tmpRepo();
+  try {
+    await writeFile(join(dir, "tmct.toml"), '[memory]\nbackend = "sqlite"\n');
+    const { createRowMemoryBackend } = await import("../../src/adapters/memory/row-backend-memory.mjs");
+    const impl = createRowMemoryBackend();
+    const s = await createSession({
+      repoPath: dir, env: { TMCT_NO_SEED: "1", TMCT_MEMORY_BACKEND: "memory" }, memoryBackend: impl,
+    });
+    assert.equal(s.memoryDir?.backend, "row", "the injected store wins over env and tmct.toml alike");
+    assert.equal(s.memoryDir?.impl, impl);
+    await s.turn("every module is a component");
+    const rows = readFactRows(await loadMemory(s.memoryDir));
+    assert.ok(rows.some((r) => r.subject === "module" && r.object === "component"), "taught fact recorded in the injected store");
+    await s.close();
+    // The routed store the config named must never end up holding the fact —
+    // an injected store that only half-wins would split a session's memory.
+    const { openMemoryBackend } = await import("../../src/adapters/memory/core.mjs");
+    const { dir: routed, close } = await openMemoryBackend(dir, "sqlite");
+    const routedRows = readFactRows(await loadMemory(routed));
+    await close();
+    assert.deepEqual(routedRows, [], "no fact reached the backend tmct.toml named");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("createSession: a tmct.toml [memory] backend of \"default\" (what `tmct init --memory-backend default` writes) falls through to the sqlite default, same as an absent value", async () => {
   clearCache();
   const dir = await tmpRepo();
