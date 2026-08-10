@@ -48,6 +48,13 @@
 //
 // Never claims full coverage: the summary this prints always states how many
 // sentences were found, how many were recognized, and how many were skipped.
+//
+// The extractor also says HOW it read a sentence, as named structural findings
+// with their own detectors — never a score. A candidate the detectors show was
+// mis-read is declined by name (`relative-clause-verb`, `fragment-term`), and a
+// definitional frame ("X is the name for Y") declines the false isa and mints
+// the edge the sentence actually states (`mgx:nameFor`, `definitional-frame`).
+// The ingest result reports both as `declined` and `minted`.
 
 import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -60,6 +67,7 @@ import { loadMemory, readFactRows, appendFact, removeFacts } from "../adapters/m
 import { loadConfig } from "../adapters/config.mjs";
 import { touchedFactRows } from "../domain/memory/touched-facts.mjs";
 import { normFactTerm } from "../domain/hash.mjs";
+import { splitIdentifierWords } from "../domain/prose.mjs";
 import { winkInstance } from "../adapters/wink-model.mjs";
 import {
   loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName, predicateOf,
@@ -143,6 +151,14 @@ const COPULA_NAMING_PARTICIPLES = new Set(["termed", "known", "defined", "descri
 // subject: "a mountain that has lava" is a fact about the volcano, so the
 // relative clause's verb binds to the copula's own subject, not to its object.
 const RELATIVE_PRONOUNS = new Set(["that", "which", "who", "whom", "whose"]);
+// The copula-object heads that define a subject rather than classify it. "X is
+// the name for Y" says what X names; it does not put X under the class "name".
+// Followed by "for" or "of", one of these declines the isa and mints the edge
+// the sentence states instead.
+const DEFINITIONAL_HEADS = new Set(["name", "word", "term", "label", "title"]);
+// The predicate that edge carries: the subject is a name for the object's
+// concept, minted at the extraction tier beside the other mgx: relations.
+const NAME_FOR_PREDICATE = "mgx:nameFor";
 // At most this many triples from one sentence — a bound so a run-on can never
 // shatter into noise, not a first-wins cap.
 const MAX_TRIPLES_PER_SENTENCE = 4;
@@ -233,14 +249,14 @@ function ungroundedTermOccurrences(sentences, rows, { lexicon, nlp }) {
  *  predicate). Adjectives, determiners and prepositions are never mistaken for
  *  the entity, so "the quick brown fox jumps over something" yields nothing.
  *  The entity scan stops at punctuation so it never crosses a clause. */
-function optimisticTriplesPos(sentence, lexicon, nlp) {
+function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false } = {}) {
   let values;
   let pos;
   try {
     const doc = nlp.readDoc(String(sentence || ""));
     values = doc.tokens().out(nlp.its.value);
     pos = doc.tokens().out(nlp.its.pos);
-  } catch { return []; }
+  } catch { return { triples: [], declined: [], minted: [] }; }
   // A found noun is read as its whole contiguous NOUN/PROPN run, head-lemma
   // folded — "a string instrument" is the class "string instrument", never
   // its modifier "string"; a single-word run keeps the plain lemma fold.
@@ -305,13 +321,14 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
   };
   // A relation verb whose nearest content token leftward (skipping adverbs and
   // the auxiliaries of its own verb complex) is a relative pronoun sits in a
-  // "that/which …" relative clause — its subject is the sentence subject.
-  const inRelativeFrame = (i) => {
+  // "that/which …" relative clause. Returns that pronoun's own index, or -1 when
+  // the verb heads a main clause.
+  const relativePronounBefore = (i) => {
     for (let k = i - 1; k >= 0; k -= 1) {
       if (pos[k] === "ADV" || pos[k] === "AUX") continue;
-      return RELATIVE_PRONOUNS.has(String(values[k]).toLowerCase());
+      return RELATIVE_PRONOUNS.has(String(values[k]).toLowerCase()) ? k : -1;
     }
-    return false;
+    return -1;
   };
   // An isa needs a CLEAN copula frame: only determiners/adjectives/adverbs/
   // numerals may sit between each entity and the copula. Crossing a verb or
@@ -356,7 +373,18 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
         while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
       }
       const headWord = String(values[hi]).toLowerCase();
-      const nextIsOf = values[hi + 1]?.toLowerCase() === "of";
+      const nextWord = values[hi + 1]?.toLowerCase();
+      // "latency is the name for the time period …" defines latency; it does not
+      // put latency under the class "name". The isa is declined and the object
+      // is re-read past the "for"/"of" as what the subject names.
+      if (DEFINITIONAL_HEADS.has(headWord) && (nextWord === "for" || nextWord === "of")) {
+        const named = nearestEntityIndex(hi + 1, +1, COPULA_FRAME_BLOCKERS);
+        return {
+          definitional: true, label: entityRunAt(j), hi,
+          names: named === null ? null : entityRunAt(named),
+        };
+      }
+      const nextIsOf = nextWord === "of";
       if (!nextIsOf) return { label: entityRunAt(j), hi };
       if (OF_CLASSIFIER_HEADS.has(headWord)) { i = hi + 1; j = hi + 1; continue; }
       if (OF_PARTITIVE_HEADS.has(headWord)) return null;
@@ -386,14 +414,19 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
   };
 
   const triples = [];
+  const declined = [];
+  const minted = [];
   const seen = new Set();
   const push = (subject, predicate, object) => {
-    if (!(subject && object && subject !== object)) return;
+    if (!(subject && object && subject !== object)) return null;
     const key = `${subject}\0${predicate}\0${object}`;
-    if (seen.has(key) || triples.length >= MAX_TRIPLES_PER_SENTENCE) return;
+    if (seen.has(key) || triples.length >= MAX_TRIPLES_PER_SENTENCE) return null;
     seen.add(key);
-    triples.push({ subject, predicate, object });
+    const triple = { subject, predicate, object };
+    triples.push(triple);
+    return triple;
   };
+  const decline = (finding, candidate) => { declined.push({ finding, candidate }); };
 
   // Pass 1 — the first clean copula frame yields the isa (all guards unchanged);
   // its subject and object-run end anchor the relative-clause continuation.
@@ -403,6 +436,16 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
     if (pos[i] === "AUX" && OPTIMISTIC_COPULAS.has(values[i].toLowerCase())) {
       const subject = copulaSubjectAt(i);
       const object = copulaObjectAt(i);
+      // A definitional frame declines its isa and mints the naming edge in its
+      // place. The rest of the sentence still reads, through Pass 2b.
+      if (subject && object?.definitional) {
+        decline("definitional-frame", { subject: subject.label, predicate: "rdfs:subClassOf", object: object.label });
+        if (mintDefinitional) {
+          const fact = push(subject.label, NAME_FOR_PREDICATE, object.names);
+          if (fact) minted.push({ finding: "definitional-frame", fact });
+        }
+        break;
+      }
       if (subject && object && subject.label !== object.label) {
         // "is" only, never are/was/were/be/been/being/am — the same G2 rule
         // every other individual-vs-class anchor holds to: a plural/non-
@@ -424,6 +467,12 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
   // relation verb keeps its nearest-entity-leftward subject. AUX relation verbs
   // ("has") count here — but only inside a copula frame that already resolved,
   // so a bare "… is that Earth has …" complement never mints "earth has lot".
+  //
+  // The bind is adjacency-bound: the relative pronoun must directly follow the
+  // copula object's own run end, so the clause restricts the class the subject
+  // was just given ("a mountain that has lava"). A pronoun hanging off a noun
+  // deeper in the object's complement ("the name for the time period that needs
+  // …") restricts that noun, not the subject, so the verb is declined.
   if (copulaSubject) {
     for (let i = copulaObjHi + 1; i < values.length; i += 1) {
       if (pos[i] !== "VERB" && pos[i] !== "AUX") continue;
@@ -431,26 +480,38 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
       if (OPTIMISTIC_COPULAS.has(word)) continue;
       const verb = lookupVerb(lexicon, word);
       if (!verb) continue;
-      const subject = inRelativeFrame(i) ? copulaSubject : climbedSubjectAt(i);
+      const relative = relativePronounBefore(i);
+      if (relative >= 0 && relative - 1 !== copulaObjHi) {
+        decline("relative-clause-verb", { subject: copulaSubject, predicate: predicateOf(verb), object: nearestEntity(i, +1) });
+        continue;
+      }
+      const subject = relative >= 0 ? copulaSubject : climbedSubjectAt(i);
       if (subject === null) continue;
       push(subject, predicateOf(verb), nearestEntity(i, +1));
     }
-    return triples;
+    return { triples, declined, minted };
   }
 
   // Pass 2b — no copula isa: the relation-verb tier over the whole sentence,
   // climbing an of-chain subject to its head ("the weight of the snow creates
   // pressure" → weight creates pressure, not snow). VERB-tagged only, so a bare
   // AUX ("Earth has …") in a non-frame sentence stays an honest miss.
+  //
+  // With no main predication resolved, a relative clause's verb has nothing to
+  // bind to, so any relative frame declines here rather than guess a subject.
   for (let i = 1; i < values.length - 1; i += 1) {
     if (pos[i] !== "VERB") continue;
     const verb = lookupVerb(lexicon, values[i].toLowerCase());
     if (!verb) continue;
     const subject = climbedSubjectAt(i);
+    if (relativePronounBefore(i) >= 0) {
+      decline("relative-clause-verb", { subject, predicate: predicateOf(verb), object: nearestEntity(i, +1) });
+      continue;
+    }
     if (subject === null) continue;
     push(subject, predicateOf(verb), nearestEntity(i, +1));
   }
-  return triples;
+  return { triples, declined, minted };
 }
 
 /** The lexical fallback for a checkout with no wink model: a copula flanked by
@@ -505,10 +566,24 @@ function optimisticTriplesLexical(sentence, lexicon) {
  *   opts.lexicon  a loaded lexicon (the core vocabulary when absent).
  *   opts.nlp      a wink instance (winkInstance() when absent); null forces the
  *                 lexical fallback.
+ *   opts.findings mint the definitional edge a `definitional-frame` sentence
+ *                 states. Off by default, the same flag ingestText gates the
+ *                 finding-bearing rows behind.
  */
-export function optimisticTriples(sentence, { lexicon = loadLexicon(), nlp } = {}) {
+export function optimisticTriples(sentence, opts = {}) {
+  return optimisticReading(sentence, opts).triples;
+}
+
+/**
+ * The same read as `optimisticTriples`, with how it read the sentence:
+ * { triples, declined, minted }. `declined` holds { finding, candidate } for
+ * every candidate a detector turned down; `minted` holds { finding, fact } for
+ * each edge minted in a declined candidate's place. Takes the same options.
+ */
+export function optimisticReading(sentence, { lexicon = loadLexicon(), nlp, findings = false } = {}) {
   const engine = nlp === undefined ? winkInstance() : nlp;
-  return engine ? optimisticTriplesPos(sentence, lexicon, engine) : optimisticTriplesLexical(sentence, lexicon);
+  if (!engine) return { triples: optimisticTriplesLexical(sentence, lexicon), declined: [], minted: [] };
+  return optimisticTriplesPos(sentence, lexicon, engine, { mintDefinitional: findings });
 }
 
 // A closed set of clause markers a compound sentence hinges on. A candidate
@@ -587,12 +662,18 @@ const MAX_TERM_WORDS = 6;
 // one-word term is exempt: a bare verb is a perfectly good object for a
 // capability or relation fact ("a cell is capable of grow"), and a single word
 // is never the clause fragment this rule exists to catch.
-const FRAGMENT_LEAD_TAGS = new Set(["VERB", "AUX", "ADP", "CCONJ", "SCONJ", "PART"]);
+const FRAGMENT_LEAD_TAGS = new Set(["VERB", "AUX", "ADP", "CCONJ", "SCONJ", "PART", "ADV"]);
+// The particles a phrasal verb leaves behind when a frame over-reads its
+// remainder as a term: "falls back to the link" surfaces as "back to the link",
+// which names nothing. Read lexically so a checkout with no wink model catches
+// it too, and only for a multi-word term — "back" alone is a fine noun.
+const PARTICLE_LEAD_WORDS = new Set(["back", "up", "down", "out", "off", "away", "along", "around"]);
 
 /** Does `term` read as a thing's name rather than a clause fragment? Bounds
- *  the word count and rejects a leading conjunction, auxiliary or preposition.
- *  Used to keep an over-read recognizer frame's predicate remainder out of the
- *  graph, where it would otherwise hub a feed card. */
+ *  the word count and rejects a leading conjunction, auxiliary, preposition,
+ *  adverb or phrasal-verb particle. Used to keep an over-read recognizer
+ *  frame's predicate remainder out of the graph, where it would otherwise hub
+ *  a feed card. */
 export function readsAsEntityTerm(term, nlp) {
   const text = String(term ?? "").trim();
   if (!text) return false;
@@ -602,6 +683,7 @@ export function readsAsEntityTerm(term, nlp) {
   if (!first) return false;
   if (FRAGMENT_LEAD_WORDS.has(first)) return false;
   if (words.length === 1) return true;
+  if (PARTICLE_LEAD_WORDS.has(first)) return false;
   const engine = nlp === undefined ? winkInstance() : nlp;
   if (!engine) return true;
   try {
@@ -612,6 +694,37 @@ export function readsAsEntityTerm(term, nlp) {
 }
 
 const readsAsEntityFact = (fact, nlp) => readsAsEntityTerm(fact.subject, nlp) && readsAsEntityTerm(fact.object, nlp);
+
+/** Does one raw token read as a code identifier rather than a word? camelCase
+ *  and snake_case split into several words, and a dot between letters or a path
+ *  separator names a module or a file. Read on the sentence's own surface,
+ *  before normFactTerm lower-cases the shape away: "normalizeFeedItems" is one,
+ *  "guitar" is not. */
+export function readsAsIdentifierToken(raw) {
+  const token = String(raw ?? "").trim();
+  if (!token || /\s/.test(token)) return false;
+  if (token.includes("_")) return true;
+  if (/[A-Za-z]\.[A-Za-z]/.test(token)) return true;
+  if (/[/\\]/.test(token)) return true;
+  return splitIdentifierWords(token).length > 1;
+}
+
+// The punctuation a raw sentence wraps a token in. Stripped from both ends
+// before the identifier test, so "(normalizeFeedItems)," still reads as one.
+const IDENTIFIER_TOKEN_EDGE_RE = /^[^A-Za-z0-9_/\\.]+|[^A-Za-z0-9_/\\.]+$/g;
+
+/** The stored term keys `sentence` names with an identifier-shaped token. An
+ *  endpoint whose key is in this set carries the `identifier-token` finding. */
+export function identifierTermsIn(sentence) {
+  const terms = new Set();
+  for (const raw of String(sentence ?? "").match(/\S+/g) || []) {
+    const token = raw.replace(IDENTIFIER_TOKEN_EDGE_RE, "");
+    if (!token || !readsAsIdentifierToken(token)) continue;
+    const term = normFactTerm(token);
+    if (term) terms.add(term);
+  }
+  return terms;
+}
 
 // A host that shares one thread with a UI hands the thread back through this;
 // a Node run leaves it unset and pays nothing.
@@ -680,18 +793,25 @@ function canonicalLines(facts, storeRows) {
  *                 ingested fact.
  *     config      a loaded config; derived from the write dir when absent.
  *     lexicon     a loaded lexicon; the core vocabulary when absent.
+ *     findings    mint the edge a definitional frame states (`mgx:nameFor`)
+ *                 where the false isa was declined. Off by default.
  *
- * Returns { sentences, recognized, extracted, optimistic, skipped, canonical? }.
+ * Returns { sentences, recognized, extracted, optimistic, skipped, declined,
+ * minted, canonical? }.
  *   recognized — strict-recognized sentence count.
  *   extracted  — strict fact rows ({subject, predicate, object, provenance,
  *                quantifier, sentence}).
  *   optimistic — fuzzy candidate rows ({subject, predicate, object, provenance,
  *                sentence}); always [] unless options.optimistic.
  *   skipped    — sentences neither tier grounded.
+ *   declined   — every candidate a detector turned down, as
+ *                { sentence, finding, candidate }.
+ *   minted     — every edge minted in a declined candidate's place, as
+ *                { sentence, finding, fact }.
  */
 export async function ingestText(text, {
   memoryDir = null, sourceTag = "text", optimistic = false,
-  canonical = false, config = null, lexicon = null, observedAt = "",
+  canonical = false, config = null, lexicon = null, observedAt = "", findings = false,
 } = {}) {
   // Paragraphs first (blank-line separated), so the pronoun carry never bridges
   // a topic break: a fresh paragraph clears the last-subject it would resolve
@@ -723,6 +843,10 @@ export async function ingestText(text, {
 
   const extracted = [];
   const optimisticFacts = [];
+  // How each sentence read: the candidates a detector turned down, and the
+  // edges minted where one was declined.
+  const declined = [];
+  const minted = [];
   let sentenceCount = 0;
   let recognizedSentences = 0;
   let optimisticSentences = 0;
@@ -751,6 +875,9 @@ export async function ingestText(text, {
   // — the recognizer has already written it by the time this sees it — and
   // the sentence falls through to the optimistic tier instead.
   let lastDecline = "";
+  // The sentence every decline and mint below is reported against, threaded the
+  // same way `lastDecline` is.
+  let currentSentence = "";
   const strictRows = async (form) => {
     if (ingestYield) await ingestYield();
     const knownIds = new Set(currentRows.map((r) => r.id));
@@ -762,6 +889,14 @@ export async function ingestText(text, {
     const fresh = rows.filter((row) => !taggedIds.has(row.id));
     const kept = fresh.filter((row) => readsAsEntityFact(row, termNlp));
     if (kept.length !== fresh.length) {
+      for (const row of fresh) {
+        if (kept.includes(row)) continue;
+        declined.push({
+          sentence: currentSentence,
+          finding: "fragment-term",
+          candidate: { subject: row.subject, predicate: row.predicate, object: row.object },
+        });
+      }
       const retractIds = fresh.filter((row) => !kept.includes(row) && !knownIds.has(row.id)).map((row) => row.id);
       if (retractIds.length) {
         await removeFacts(dir, retractIds);
@@ -781,6 +916,7 @@ export async function ingestText(text, {
       for (const sentence of splitSentencesPreservingPaths(paragraph)) {
         sentenceCount += 1;
         lastDecline = "";
+        currentSentence = sentence;
         const cleaned = stripCitationResidue(sentence);
         cleanedSentences.push(cleaned);
         // Whole sentence first, then each closed-marker clause as a fallback.
@@ -821,7 +957,16 @@ export async function ingestText(text, {
         const ungrounded = ungroundedTermsIn(lastDecline);
         if (ungrounded) for (const term of ungrounded) ungroundedTerms.add(term);
         if (!optimistic) continue;
-        const candidates = optimisticTriples(cleaned, { lexicon: lex, nlp }).filter((t) => readsAsEntityFact(t, termNlp));
+        const reading = optimisticReading(cleaned, { lexicon: lex, nlp, findings });
+        for (const { finding, candidate } of reading.declined) declined.push({ sentence, finding, candidate });
+        const candidates = [];
+        for (const t of reading.triples) {
+          if (readsAsEntityFact(t, termNlp)) candidates.push(t);
+          else declined.push({ sentence, finding: "fragment-term", candidate: t });
+        }
+        for (const { finding, fact } of reading.minted) {
+          if (candidates.includes(fact)) minted.push({ sentence, finding, fact });
+        }
         if (!candidates.length) continue;
         optimisticSentences += 1;
         const tag = `optimistic-extract:${sourceTag}`;
@@ -862,6 +1007,8 @@ export async function ingestText(text, {
       skipped: sentenceCount - recognizedSentences - optimisticSentences,
       ungroundedTerms: [...ungroundedTerms],
       ungroundedCounts,
+      declined,
+      minted,
     };
     if (canonical) {
       result.canonical = canonicalLines([...extracted, ...optimisticFacts], finalRows);
@@ -870,6 +1017,14 @@ export async function ingestText(text, {
   } finally {
     if (ephemeral) await rm(dir, { recursive: true, force: true });
   }
+}
+
+/** "relative-clause-verb 1, fragment-term 2" — how many rows each named finding
+ *  accounts for, in the order the findings first appeared. */
+function countsByFinding(rows) {
+  const counts = new Map();
+  for (const row of rows) counts.set(row.finding, (counts.get(row.finding) || 0) + 1);
+  return [...counts].map(([finding, n]) => `${finding} ${n}`).join(", ");
 }
 
 /**
@@ -885,7 +1040,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (!file) {
     console.error(USAGE);
     process.exitCode = 1;
-    return { sentences: 0, recognized: 0, extracted: [], optimistic: [], skipped: 0 };
+    return { sentences: 0, recognized: 0, extracted: [], optimistic: [], skipped: 0, declined: [], minted: [] };
   }
 
   const filePath = resolve(process.cwd(), file);
@@ -934,7 +1089,22 @@ export async function main(argv = process.argv.slice(2)) {
         + `Ground one side first (e.g. "every ${result.ungroundedTerms[0]} is a thing") and re-run.`
       : ""),
   );
+  if (result.declined.length) {
+    console.error(
+      `${result.declined.length} candidate${result.declined.length === 1 ? "" : "s"} declined `
+      + `on how the sentence read: ${countsByFinding(result.declined)}.`,
+    );
+  }
+  if (result.minted.length) {
+    console.error(
+      `${result.minted.length} edge${result.minted.length === 1 ? "" : "s"} minted `
+      + `in a declined candidate's place: ${countsByFinding(result.minted)}.`,
+    );
+  }
   if (repo) console.error(`facts written into ${repoRoot}'s tmct memory, tagged ${sourceTag}`);
   if (out) console.error(`facts written to ${out}`);
-  return { sentences, recognized, extracted: result.extracted, optimistic: result.optimistic, skipped: result.skipped };
+  return {
+    sentences, recognized, extracted: result.extracted, optimistic: result.optimistic,
+    skipped: result.skipped, declined: result.declined, minted: result.minted,
+  };
 }
