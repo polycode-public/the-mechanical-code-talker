@@ -362,8 +362,11 @@ export class WebsiteStack extends Stack {
       removalPolicy: envName === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
     });
 
+    // No functionName on any of the three: CloudFormation refuses to REPLACE a
+    // custom-named function, and the zip-to-image packaging swap is a replacement.
+    // Generated names keep every future packaging change deployable; consumers get
+    // the real name through the CDK ref (NEWS_WORKER_FUNCTION_NAME).
     const rowServiceFn = new lambda.DockerImageFunction(this, "RowServiceFn", {
-      functionName: `tmct-${envName}-${slug}-row-service`,
       code: lambda.DockerImageCode.fromEcr(lambdaImageRepo, {
         tagOrDigest: imageTag,
         cmd: ["row-service/handler.handler"],
@@ -395,7 +398,6 @@ export class WebsiteStack extends Stack {
     // service's poll/enrich/ingest trigger routes and by the turn service
     // (materialize mode) — never invoked directly by a caller.
     const newsWorkerFn = new lambda.DockerImageFunction(this, "NewsWorkerFn", {
-      functionName: `tmct-${envName}-${slug}-news-worker`,
       code: lambda.DockerImageCode.fromEcr(lambdaImageRepo, {
         tagOrDigest: imageTag,
         cmd: ["news-worker/handler.handler"],
@@ -433,7 +435,6 @@ export class WebsiteStack extends Stack {
     // match wins, so the more specific pattern has to come first or every
     // turn request would be served by the row service instead.
     const turnServiceFn = new lambda.DockerImageFunction(this, "TurnServiceFn", {
-      functionName: `tmct-${envName}-${slug}-turn-service`,
       code: lambda.DockerImageCode.fromEcr(lambdaImageRepo, {
         tagOrDigest: imageTag,
         cmd: ["turn-service/handler.handler"],
