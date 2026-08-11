@@ -47,14 +47,21 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   (pipeline #781, 6.0.11): container functions live, `smoke:post-deploy` and all page
   e2e green, and the OOM is dead — live cycles peak at 1.9–2.1 GB of 3008 MB with
   87–992 ms sqlite seed opens. Remaining before this item closes:
-  - `e2e:deployed:news-live` — the zero-ingestion cycle is fixed and merged, pending
-    the 6.0.13 push: reads stop deep-cloning the 86 MB payload (`copyOnRead: false`;
-    an article grounds in ~18 s locally, was ~52 s), aborted cycles resume exactly
-    their pending items (`processedRounds`, new resume tests), and the poll cap is
-    60 s so the first feed lands ~65 s after the press against the gate's 170 s.
-    The remaining per-article cost is the full-graph fold (`recomputeSourceReliability`
-    folds all 61k groups per write, ~11 s of the 18); a group-scoped or incremental
-    fold is the recorded horizon if the gate still flakes.
+  - `e2e:deployed:news-live` — the zero-ingestion cycle is fixed and pushed (6.0.13,
+    pipeline #783 running): reads stop deep-cloning the 86 MB payload (`copyOnRead:
+    false`; an article grounds in ~18 s locally, was ~52 s), aborted cycles resume
+    exactly their pending items (`processedRounds`, new resume tests), and the poll
+    cap is 60 s so the first feed lands ~65 s after the press against the gate's
+    170 s.
+
+- [ ] **Group-scoped source-reliability fold — operator-commissioned 2026-08-11** —
+  `recomputeSourceReliability` folds all 61,724 fact groups on every write to rescore
+  session Sources (~11 s of an article's ~18 s locally, ~9 of its ~13 folds). Replace
+  with a group-scoped or incremental fold: bit-identical scores, order-independent
+  (resolver purity), seed Sources not rescored by session churn. Agent in flight:
+  worktree `.claude/worktrees/agent-a7fea69eb822cfc5e`. Known follow-on it may
+  surface: `runSentence` mints a per-sentence Source id that reliability rescores
+  forever (semantics-bearing, needs its own decision).
   - Secondary, non-blocking: each fresh execution environment overruns the 10 s init
     cap once (`INIT_REPORT ... Status: timeout`), then re-inits fine in 87–992 ms.
   - Then: record the measured cycle peak in the plan's build marker.
