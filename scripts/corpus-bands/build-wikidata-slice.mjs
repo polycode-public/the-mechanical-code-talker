@@ -31,10 +31,9 @@
 
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
-import { writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import { WIKIDATA_PROPERTY_RELATIONS } from "../../src/adapters/corpus/wikidata-live.mjs";
 import { bandFactRow, bandLicenseInfo } from "../../src/adapters/memory/corpus-bands.mjs";
+import { writeRowsStreaming } from "./stream-band-rows.mjs";
 
 export const WIKIDATA_SLICE_BAND = "wikidata-slice";
 export const DEFAULT_OUT = "wikidata-slice.band.jsonl";
@@ -142,13 +141,11 @@ async function main() {
   const outPath = flagValue(argv, "--out") || DEFAULT_OUT;
 
   const { rows, scanned } = await buildWikidataSliceRows(sourcePath);
-  const text = rows.map((row) => JSON.stringify(row)).join("\n") + "\n";
-  await writeFile(outPath, text);
-  const digest = createHash("sha256").update(text).digest("hex");
+  const { bytes, digest } = await writeRowsStreaming(outPath, rows);
   const { license } = bandLicenseInfo(WIKIDATA_SLICE_BAND);
   process.stderr.write(
     `scanned ${scanned} entity line(s), built ${rows.length} row(s) from ${SEED_QIDS.length} seed entities `
-    + `(${text.length} bytes, sha256 ${digest})\n`
+    + `(${bytes} bytes, sha256 ${digest})\n`
     + `wrote ${outPath} (${license}, no attribution notice needed)\n`
     + `load with: tmct corpus load ${WIKIDATA_SLICE_BAND} --source ${outPath}\n`,
   );

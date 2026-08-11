@@ -2,10 +2,14 @@
 // network, no real Wikidata dump.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildWikidataSliceRows, WIKIDATA_SLICE_BAND, SEED_QIDS } from "../../scripts/corpus-bands/build-wikidata-slice.mjs";
+import { writeRowsStreaming } from "../../scripts/corpus-bands/stream-band-rows.mjs";
 import { rowProblems } from "../../src/adapters/memory/row-backend.mjs";
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "corpus-bands", "wikidata-sample.jsonl");
@@ -61,4 +65,34 @@ test("rows carry this band's provenance and CC0 needs no share-alike wording", a
 test("SEED_QIDS is a closed, non-empty list of bare Wikidata item ids", () => {
   assert.ok(SEED_QIDS.length > 0);
   for (const id of SEED_QIDS) assert.match(id, /^Q[1-9][0-9]*$/);
+});
+
+test("streaming zero rows still writes the lone newline the old join-based empty case produced", async () => {
+  const { rows } = await buildWikidataSliceRows(FIXTURE, { seedQids: [] });
+  assert.deepEqual(rows, []);
+  const dir = await mkdtemp(join(tmpdir(), "tmct-wikidata-stream-empty-"));
+  const outPath = join(dir, "out.jsonl");
+  try {
+    const { bytes, digest } = await writeRowsStreaming(outPath, rows);
+    assert.equal(bytes, 1);
+    assert.equal(digest, createHash("sha256").update("\n").digest("hex"));
+    assert.equal(await readFile(outPath, "utf8"), "\n");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the streamed write produces the same bytes and digest as joining every row into one string", async () => {
+  const { rows } = await buildWikidataSliceRows(FIXTURE);
+  const joined = rows.map((row) => JSON.stringify(row)).join("\n") + "\n";
+  const dir = await mkdtemp(join(tmpdir(), "tmct-wikidata-stream-"));
+  const outPath = join(dir, "out.jsonl");
+  try {
+    const { bytes, digest } = await writeRowsStreaming(outPath, rows);
+    assert.equal(bytes, joined.length);
+    assert.equal(digest, createHash("sha256").update(joined).digest("hex"));
+    assert.equal(await readFile(outPath, "utf8"), joined);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

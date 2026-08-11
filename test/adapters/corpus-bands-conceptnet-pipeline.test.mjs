@@ -3,11 +3,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildConceptnetFullRows, conceptnetFullNotice, CONCEPTNET_FULL_BAND } from "../../scripts/corpus-bands/build-conceptnet-full.mjs";
+import { writeRowsStreaming } from "../../scripts/corpus-bands/stream-band-rows.mjs";
 import { rowProblems } from "../../src/adapters/memory/row-backend.mjs";
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "corpus-bands", "conceptnet-sample.tsv");
@@ -77,6 +79,21 @@ test("the CLI writes both the jsonl and its NOTICE beside it", async () => {
     assert.ok(jsonl.trim().split("\n").length >= 4);
     const notice = await readFile(`${outPath}.NOTICE`, "utf8");
     assert.match(notice, /CC-BY-SA 4\.0|CC BY-SA 4\.0/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the streamed write produces the same bytes and digest as joining every row into one string", async () => {
+  const { rows } = await buildConceptnetFullRows(FIXTURE);
+  const joined = rows.map((row) => JSON.stringify(row)).join("\n") + "\n";
+  const dir = await mkdtemp(join(tmpdir(), "tmct-conceptnet-stream-"));
+  const outPath = join(dir, "out.jsonl");
+  try {
+    const { bytes, digest } = await writeRowsStreaming(outPath, rows);
+    assert.equal(bytes, joined.length);
+    assert.equal(digest, createHash("sha256").update(joined).digest("hex"));
+    assert.equal(await readFile(outPath, "utf8"), joined);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

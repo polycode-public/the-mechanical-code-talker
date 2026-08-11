@@ -33,10 +33,10 @@
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import { scanAssertions } from "../../corpus/conceptnet/filter-dump.mjs";
 import { loadMap, toFacts } from "../../src/adapters/corpus/conceptnet.mjs";
 import { bandFactRow, bandLicenseInfo } from "../../src/adapters/memory/corpus-bands.mjs";
+import { writeRowsStreaming } from "./stream-band-rows.mjs";
 
 export const CONCEPTNET_FULL_BAND = "conceptnet-full";
 export const DEFAULT_OUT = "conceptnet-full.band.jsonl";
@@ -130,14 +130,12 @@ async function main() {
   const outPath = flagValue(argv, "--out") || DEFAULT_OUT;
 
   const { rows, scanned } = await buildConceptnetFullRows(sourcePath);
-  const text = rows.map((row) => JSON.stringify(row)).join("\n") + "\n";
-  await writeFile(outPath, text);
+  const { bytes, digest } = await writeRowsStreaming(outPath, rows);
   const noticePath = `${outPath}.NOTICE`;
   await writeFile(noticePath, conceptnetFullNotice({ rowCount: rows.length, outPath }));
-  const digest = createHash("sha256").update(text).digest("hex");
   const { license } = bandLicenseInfo(CONCEPTNET_FULL_BAND);
   process.stderr.write(
-    `scanned ${scanned} dump line(s), admitted ${rows.length} row(s) (${text.length} bytes, sha256 ${digest})\n`
+    `scanned ${scanned} dump line(s), admitted ${rows.length} row(s) (${bytes} bytes, sha256 ${digest})\n`
     + `wrote ${outPath} and ${noticePath} (${license})\n`
     + `load with: tmct corpus load ${CONCEPTNET_FULL_BAND} --source ${outPath}\n`,
   );

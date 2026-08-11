@@ -27,10 +27,9 @@
 // this band's content needs; corpus-bands.mjs's BAND_LICENSES points the
 // loader at that same file, so this pipeline emits no NOTICE of its own.
 
-import { writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import { loadSlice, loadMap, toFacts, WORDNET_DIR } from "../../src/adapters/corpus/conceptnet.mjs";
 import { bandFactRow, bandLicenseInfo } from "../../src/adapters/memory/corpus-bands.mjs";
+import { writeRowsStreaming } from "./stream-band-rows.mjs";
 import { join } from "node:path";
 
 export const WORDNET_COMPLETE_BAND = "wordnet-complete";
@@ -67,12 +66,10 @@ async function main() {
   const outPath = flagValue(argv, "--out") || DEFAULT_OUT;
 
   const rows = await buildWordnetCompleteRows(sourcePath);
-  const text = rows.map((row) => JSON.stringify(row)).join("\n") + "\n";
-  await writeFile(outPath, text);
-  const digest = createHash("sha256").update(text).digest("hex");
+  const { bytes, digest } = await writeRowsStreaming(outPath, rows);
   const { license, notice } = bandLicenseInfo(WORDNET_COMPLETE_BAND);
   process.stderr.write(
-    `wrote ${rows.length} rows (${text.length} bytes, sha256 ${digest}) to ${outPath}\n`
+    `wrote ${rows.length} rows (${bytes} bytes, sha256 ${digest}) to ${outPath}\n`
     + `licence: ${license} (${notice})\n`
     + `load with: tmct corpus load ${WORDNET_COMPLETE_BAND} --source ${outPath}\n`,
   );
