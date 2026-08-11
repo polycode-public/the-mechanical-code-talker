@@ -750,6 +750,47 @@ test("a relation hop over a held inner set says the hop found nothing, rather th
   assert.match(imported.content, /^nothing matches that\. 1 module defines fnAlpha, but it imports nothing in this index\./);
 });
 
+test("a location question over an emptied composition carries the missing location on the verdict, then names the step", () => {
+  const r = runAsk("where are the modules that import app/lib/a.mjs and import app/lib/c.mjs defined");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^no modules match that, so there is no location to cite\. 3 modules import app\/lib\/a\.mjs, but none of them imports app\/lib\/c\.mjs\./);
+  assert.match(r.content, /Try "which modules import app\/lib\/a\.mjs" for that branch on its own\./);
+  assert.doesNotMatch(r.content, /nothing in the index matches that clause/);
+});
+
+test("a when-question over an emptied composition carries the missing history on the verdict, then names the step", () => {
+  const r = runAsk("when did the modules that import app/lib/a.mjs and import app/lib/c.mjs last change");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^no modules match that, so there is no change history to date\. 3 modules import app\/lib\/a\.mjs, but none of them imports app\/lib\/c\.mjs\./);
+  assert.match(r.content, /Try "which modules import app\/lib\/a\.mjs" for that branch on its own\./);
+  assert.doesNotMatch(r.content, /nothing in the index matches the inner set|who touched/);
+});
+
+test("both nested-set lanes state the inner clause itself when nothing satisfied it", () => {
+  const where = runAsk("where are the classes that inherit from Button defined");
+  assert.equal(where.tmct_ask.miss, true);
+  assert.match(where.content, /^no class in this index inherits from Button, so there is no location to cite\./);
+  const when = runAsk("when did the classes that inherit from Button last change");
+  assert.equal(when.tmct_ask.miss, true);
+  assert.match(when.content, /^no class in this index inherits from Button, so there is no change history to date\./);
+});
+
+test("a nested set with no clause to quote counts the kind the index does hold", () => {
+  // A transitive clause states no direction a receipt can quote, so the walk
+  // reaches neither a held set nor a leaf, and the population is what is left
+  // to say.
+  const r = runAsk("where are the modules that transitively import scripts/g.mjs defined");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^the index has 8 modules, and none of them matches that, so there is no location to cite\./);
+});
+
+test("a coverage filter that empties a nested set keeps the module-grain note beside the location verdict", () => {
+  const r = runAsk("where are the methods that are not tested defined");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^no methods match that, so there is no location to cite\. The index has 1 method, but it is tested\./);
+  assert.match(r.content, /counts as covered exactly when the module it lives in is tested/);
+});
+
 test("the branch an emptied composition offers is one the parser accepts and answers", () => {
   for (const branch of ["which modules define Widget", "which modules import app/lib/a.mjs", "which classes inherit from Base"]) {
     const r = runAsk(branch);
