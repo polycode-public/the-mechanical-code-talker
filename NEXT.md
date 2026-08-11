@@ -54,7 +54,19 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     cap is 60 s so the first feed lands ~65 s after the press against the gate's
     170 s.
 
-- [ ] **Group-scoped source-reliability fold + per-feed Sources — operator-commissioned
+- [ ] **Stopwords rank as news terms — the ranked ledger surfaces noise words** — the
+  live news page's `terms.ranked` lists "from", "and", "but", "very", "into", "about",
+  all tagged "(unknown word)" (seen 2026-08-11 on 6.0.12 with only 2 ingested facts).
+  Two legs, both wanted regardless of each other:
+  - Function words must never rank as candidate hub terms — filter them out of the
+    ranked ledger/enrichment candidates outright (the lexicon knows "from"; a term the
+    page renders as "(unknown word)" while being a common function word points at the
+    lookup, not the word).
+  - Verify the novelty gate's prior-term universe on the worker's sqlite seed path:
+    if the seed vocabulary isn't consulted there, common words look novel — the exact
+    junk-hub failure `PLAN_MEMORY_ROLLOUT.md` §1 records from the 688-fact seed
+    experiment ("geneva"). Re-check the live ranked terms after 6.0.13 cycles ground
+    real articles; fix at the vocabulary source if it reproduces.
   2026-08-11** — `recomputeSourceReliability` folds all 61,724 fact groups on every
   write to rescore session Sources (~11 s of an article's ~18 s locally). Replace with
   a group-scoped or incremental fold: exact-equality scores for the same attribution
