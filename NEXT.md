@@ -29,6 +29,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
+- [ ] **Wikidata dump download — operator-run, outside any session** — the download now
+  belongs to a terminal of the operator's own: run `bash scripts/resume-wikidata-dump.sh`
+  from the repo root (re-run after any interruption; it resumes and verifies the byte
+  count). File: `~/tmct-dumps/wikidata-latest-all.json.gz` (40.4 of 155.3 GB when handed
+  over). When it reports done, the next steps are `PLAN_MEMORY_ROLLOUT.md` section 4.
+
 - [ ] **The rollout: container-image Lambdas with sqlite seeds, and the data loads** —
   the plan of record is `PLAN_MEMORY_ROLLOUT.md` (operator-decided 2026-08-11): one
   Node 24 container image for all three Lambdas carrying `mid-seed.sqlite` +
