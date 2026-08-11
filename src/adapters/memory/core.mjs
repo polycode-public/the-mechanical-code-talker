@@ -2616,6 +2616,14 @@ const isSessionScopedSourceId = (id) =>
  * pass does too.
  */
 function sessionScopedFoldScope(payload) {
+  // The Source list is a handful of individuals where the edge list is one per
+  // fact record, so "is there an actor here at all" is asked of the Sources.
+  const idx = memoryIndexOf(payload);
+  if (idx) {
+    let anyActor = false;
+    for (const id of idx.sourcesById.keys()) if (isSessionScopedSourceId(id)) { anyActor = true; break; }
+    if (!anyActor) return null;
+  }
   const statedGroup = payload.objectProperties.find((g) => g?.prop === STATED_BY_PROP);
   const statedRecordIds = new Set();
   for (const e of statedGroup?.examples || []) {
@@ -3969,24 +3977,87 @@ function factFoldContext(memory, { pairs = null, scopedGroups = new Set() } = {}
     else groups.delete(groupId);
   }
 
-  const groupsByPair = new Map();
-  for (const [groupId, members] of groups) {
-    // Codepoint order on the record id, which sorts by source key — the same
-    // locale-free determinism the P2P layer's own sort insists on, so two peers
-    // holding the same records read the same row.
-    members.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    const key = subjectPredicateKey(individualKey(members[0], "subject"), individualKey(members[0], "predicate"));
-    const held = groupsByPair.get(key);
-    if (held) held.push(groupId);
-    else groupsByPair.set(key, [groupId]);
-  }
+  // Codepoint order on the record id, which sorts by source key — the same
+  // locale-free determinism the P2P layer's own sort insists on, so two peers
+  // holding the same records read the same row.
+  for (const members of groups.values()) members.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  // One entry per distinct Source, not one attribute scan per record: a seed's
+  // 60,000 facts name a handful of Sources between them.
+  const typeBySource = new Map();
+  const sourceTypeOf = (id) => {
+    let type = typeBySource.get(id);
+    if (type === undefined) {
+      type = (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value || "";
+      typeBySource.set(id, type);
+    }
+    return type;
+  };
+
+  // Likewise for the timestamp a provenance string embeds: a corpus band writes
+  // one tag over tens of thousands of records, and parsing it is the same
+  // answer every time.
+  const embeddedBySource = new Map();
+  const embeddedTimestampOf = (provenance) => {
+    let ts = embeddedBySource.get(provenance);
+    if (ts === undefined) {
+      ts = embeddedTagTimestamp(provenance.split(" | ").filter(Boolean));
+      embeddedBySource.set(provenance, ts);
+    }
+    return ts;
+  };
+
+  // Only the sqlite head materialisation walks siblings by pair, and building
+  // the index costs two attribute reads per group — so it is built when asked
+  // for and not before.
+  let groupsByPair = null;
 
   return {
     groups,
-    groupsByPair,
+    get groupsByPair() {
+      if (groupsByPair) return groupsByPair;
+      groupsByPair = new Map();
+      for (const [groupId, members] of groups) {
+        const key = subjectPredicateKey(individualKey(members[0], "subject"), individualKey(members[0], "predicate"));
+        const held = groupsByPair.get(key);
+        if (held) held.push(groupId);
+        else groupsByPair.set(key, [groupId]);
+      }
+      return groupsByPair;
+    },
     statedByRecord,
-    sourceTypeOf: (id) => (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value || "",
+    sourceTypeOf,
+    embeddedTimestampOf,
   };
+}
+
+/** Everything the fold reads off one live head, gathered in ONE walk of its
+ *  attributes. Ten `.find()` scans of the same short array, once per record, is
+ *  the single most expensive thing a whole-graph fold does — the work is all in
+ *  the scanning, not in the reading. */
+function foldHeadFields(head) {
+  let provenance = "";
+  let createdAt = "";
+  let observedAt = "";
+  let extraction = "";
+  let trustScore = "";
+  let sourceId = "";
+  let quantifier = "";
+  let justification = "";
+  for (const a of head?.attributes || []) {
+    switch (a?.prop) {
+      case "mgx:factProvenance": provenance = a.value || ""; continue;
+      case CREATED_AT_PROP: createdAt = a.value || ""; continue;
+      case OBSERVED_AT_PROP: observedAt = a.value || ""; continue;
+      case EXTRACTION_FINDING_PROP: extraction = a.value || ""; continue;
+      case TRUST_SCORE_PROP: trustScore = a.value || ""; continue;
+      case SOURCE_ID_PROP: sourceId = a.value || ""; continue;
+      default: break;
+    }
+    if (a?.key === "quantifier") quantifier = a.value || "";
+    else if (a?.key === "justification") justification = a.value || "";
+  }
+  return { provenance, createdAt, observedAt, extraction, trustScore, sourceId, quantifier, justification };
 }
 
 /** One triple group folded into its row, minus the aggregate trust — that is
@@ -4034,10 +4105,11 @@ function foldFactGroup(id, heads, ctx) {
       });
       continue;
     }
-    const headTags = attrOf(head, "mgx:factProvenance").split(" | ").filter(Boolean);
+    const field = foldHeadFields(head);
+    const headTags = field.provenance.split(" | ").filter(Boolean);
     for (const tag of headTags) tags.add(tag);
     const [statedBy] = statedByRecord.get(head.id) || [];
-    const sourceId = statedBy || attrOf(head, SOURCE_ID_PROP);
+    const sourceId = statedBy || field.sourceId;
     const sourceType = sourceTypeOf(sourceId);
     // src:none stands for "no Source at all", so it stays out of the union a
     // reader renders and out of the corroboration count, exactly as an
@@ -4046,9 +4118,9 @@ function foldFactGroup(id, heads, ctx) {
       sourceIds.push(statedBy);
       if (sourceType) sourceTypes.push(sourceType);
     }
-    const createdAt = attrOf(head, CREATED_AT_PROP);
-    const observedAt = attrOf(head, OBSERVED_AT_PROP);
-    const extraction = attrOf(head, EXTRACTION_FINDING_PROP).split(" ").filter(Boolean);
+    const createdAt = field.createdAt;
+    const observedAt = field.observedAt;
+    const extraction = field.extraction ? field.extraction.split(" ").filter(Boolean) : [];
     for (const finding of extraction) findings.add(finding);
     assertions.push({
       id: head.id, sourceId, sourceType,
@@ -4056,13 +4128,13 @@ function foldFactGroup(id, heads, ctx) {
       createdAt,
       ...(observedAt ? { observedAt } : {}),
       ...(extraction.length ? { extraction } : {}),
-      ownTrust: Number(attrOf(head, TRUST_SCORE_PROP)) || 0,
-      assertedAt: assertionTimestampFor(headTags, createdAt),
+      ownTrust: Number(field.trustScore) || 0,
+      assertedAt: ctx.embeddedTimestampOf(field.provenance) || (Number.isFinite(Date.parse(createdAt)) ? createdAt : ""),
     });
-    quantifier = quantifier || keyOf(head, "quantifier");
+    quantifier = quantifier || field.quantifier;
     // ' | '-separated environments, one premise-id list per independent
     // derivation; a legacy value with no ' | ' parses as one environment.
-    for (const chunk of keyOf(head, "justification").split(" | ")) {
+    for (const chunk of field.justification.split(" | ")) {
       const env = chunk.split(" ").filter(Boolean);
       if (!env.length) continue;
       const key = env.join(" ");
