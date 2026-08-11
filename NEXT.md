@@ -53,8 +53,11 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   (CDK container functions); Wave 2 = R1 (Dockerfile + RIE verify), R4 (CI image build);
   R5 acceptance is the coordinator's post-deploy job. In flight now (Wave 1, dispatched
   2026-08-11):
-  - R0 seed-sqlite agent — worktree `.claude/worktrees/agent-a208c44a55e540d75`
-  - R2 overlay agent — worktree `.claude/worktrees/agent-a8c70a4aab695cfcf`
+  - R0 seed-sqlite agent — worktree `.claude/worktrees/agent-a208c44a55e540d75`;
+    builder committed (`c6f7de16`), full-scale xl build still running
+  - R2 sqlite seed overlay — code complete, merged to local `main` (4 commits through
+    `a57437f1`); fixture cycle peak heap 105.8 MB against a 140 MB budget test;
+    verified at the R5 deploy gate
   - R3 CDK — code complete, merged to local `main` (`6b0b00e5`), worktree removed;
     verified at the R5 deploy gate
 
