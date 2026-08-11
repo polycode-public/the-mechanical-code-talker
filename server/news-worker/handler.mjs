@@ -505,6 +505,14 @@ export function createInMemorySourceGate({
  *  at all, which is how a timed-out cycle reads exactly like a cycle that never
  *  started. */
 const WORKER_SAFETY_MARGIN_MS = 30_000;
+
+/** A poll cycle stops taking new work at this cap even when the invocation
+ *  has more time left. The visitor who pressed start is watching an empty
+ *  page until the cycle's tail writes land, so a cycle that spends its whole
+ *  five Lambda minutes polling shows nothing for five minutes; capped, the
+ *  first feed lands in about two, and the next press resumes where the
+ *  aborted cycle left off. */
+const POLL_CYCLE_BUDGET_CAP_MS = 120_000;
 const CORPUS_BREAKER_META_PARTITION_KEY = "_meta";
 
 let cachedDynamoClientPromise = null;
@@ -668,7 +676,7 @@ export const handler = async (event, context) => {
     seedStore,
     seedStamp,
     sourceGate: createDynamoSourceGate({ client, tableName }),
-    budgetMs: Math.max(1000, remainingMs - WORKER_SAFETY_MARGIN_MS),
+    budgetMs: Math.max(1000, Math.min(remainingMs - WORKER_SAFETY_MARGIN_MS, POLL_CYCLE_BUDGET_CAP_MS)),
     log: logToConsole,
   });
 
