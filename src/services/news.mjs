@@ -338,6 +338,7 @@ async function ingestSnapshotFacts(ctx, snapshot) {
   const sourceTag = `news:${snapshot.sourceId}@${snapshot.id}`;
   const result = await ingestText(text, {
     memoryDir, sourceTag, optimistic: true, lexicon: lex, observedAt: nowVal, findings: true,
+    attributeToSource: true,
   });
   invalidateCache(cache);
 
@@ -662,6 +663,7 @@ async function ingestResearchArticle(ctx, term, provider, article) {
     ingested = await ingestText(prose, {
       memoryDir, sourceTag: provenance, optimistic: true,
       lexicon: lexicon || loadLexicon(), observedAt: resolveNow(now), findings: true,
+      attributeToSource: true,
     });
     invalidateCache(ctx.cache);
   }

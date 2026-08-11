@@ -220,7 +220,7 @@ test("a reference provenance tag round-trips: pack and article split on the firs
   assert.deepEqual(provenanceTagToSource("corpus:conceptnet /r/IsA"), { kind: "corpus", name: "conceptnet" });
 });
 
-test("a reference-tagged fact materialises a per-article DocumentSource with sourceType reference", async () => {
+test("a reference-tagged fact materialises a per-work DocumentSource with sourceType reference", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-ref-trust-"));
   try {
     await appendFact(dir, {
@@ -228,8 +228,8 @@ test("a reference-tagged fact materialises a per-article DocumentSource with sou
       provenance: "reference:simplewiki:Otter@9184482", createdAt: FRESH,
     });
     const m = await loadMemory(dir);
-    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === "src:reference:simplewiki:Otter@9184482");
-    assert.ok(source, "one Source per pack article, id keyed pack:article@revid");
+    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === "src:reference:simplewiki");
+    assert.ok(source, "one Source per reference work, id keyed on the pack alone");
     const typeAttr = source.attributes.find((a) => a.prop === "mgx:sourceType");
     assert.equal(typeAttr?.value, "reference");
     assert.deepEqual(provSourceClassFor("reference"), { subClass: "tmct:DocumentSource", prov: "prov:Entity" });
@@ -274,8 +274,8 @@ test("a live-Wikipedia-tagged fact materialises a DocumentSource with sourceType
       provenance: "reference:wikipedia-live:Otter@9184482", createdAt: FRESH,
     });
     const m = await loadMemory(dir);
-    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === "src:reference:wikipedia-live:Otter@9184482");
-    assert.ok(source, "one Source per live article, keyed the same pack:article@revid way");
+    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === "src:reference:wikipedia-live");
+    assert.ok(source, "one Source per live reference work, keyed on the pack the same way");
     const typeAttr = source.attributes.find((a) => a.prop === "mgx:sourceType");
     assert.equal(typeAttr?.value, "referenceLive");
     assert.deepEqual(provSourceClassFor("referenceLive"), { subClass: "tmct:DocumentSource", prov: "prov:Entity" });

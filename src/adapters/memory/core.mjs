@@ -2421,12 +2421,14 @@ function sourceIdFor(desc) {
     case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
     case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
     case "corpusWeak": return { id: `src:corpus-weak:${desc.name}`, type: "corpusWeak" };
-    // One Source per pack article (the @revid stays in the article segment),
-    // so two facts from the same article corroborate nothing extra.
-    case "reference": return { id: `src:reference:${desc.pack}:${desc.article}`, type: "reference" };
-    // The live-Wikipedia pack: same per-article Source id, but a lower trust
+    // One Source per reference WORK, not per article: Simple English Wikipedia
+    // is one party however many of its pages get read, so two of its articles
+    // stating the same triple corroborate nothing. Which article said it stays
+    // on the fact's own provenance tag, where the audit trail belongs.
+    case "reference": return { id: `src:reference:${desc.pack}`, type: "reference" };
+    // The live-Wikipedia pack: same per-work Source id, but a lower trust
     // type so a live lookup ranks below the curated revision-pinned pack.
-    case "referenceLive": return { id: `src:reference:${desc.pack}:${desc.article}`, type: "referenceLive" };
+    case "referenceLive": return { id: `src:reference:${desc.pack}`, type: "referenceLive" };
     // One Source per source-file basename, not per extraction run.
     case "extracted": return { id: `src:extracted:${desc.name}`, type: "extracted" };
     // The fuzzy tier's candidates: one low-trust Source per source label.
@@ -2601,6 +2603,41 @@ const isSessionScopedSourceId = (id) =>
     || id.startsWith(`${TEACH_NODE_SOURCE_ID}:`));
 
 /**
+ * The slice of the graph a reliability pass can possibly read: the triples a
+ * session-scoped Source stated, and every (subject, predicate) those triples
+ * sit under so each one's disagreeing siblings come along. Null when nothing
+ * in the store has a track record to keep, which is the whole of what a
+ * seed-only graph or a store whose writers are all documents ever needs.
+ *
+ * A pure narrowing, not a cache: the answer is still folded from the fact set
+ * on every call, and every group left out is one whose row could not have
+ * changed a number in the tally. A Source nobody stated anything for keeps no
+ * reliability attribute either way, so leaving it out is what the whole-graph
+ * pass does too.
+ */
+function sessionScopedFoldScope(payload) {
+  const statedGroup = payload.objectProperties.find((g) => g?.prop === STATED_BY_PROP);
+  const statedRecordIds = new Set();
+  for (const e of statedGroup?.examples || []) {
+    if (isSessionScopedSourceId(e?.object)) statedRecordIds.add(e.subject);
+  }
+  const scopedGroups = new Set();
+  const pairs = new Set();
+  for (const ind of payload.individuals) {
+    if (ind?.class !== FACT_CLASS) continue;
+    // A summary that absorbed an actor's record still votes for it, so the
+    // group it stands in is in scope exactly as the record itself would be.
+    const stated = statedRecordIds.has(ind.id)
+      || (isHeadRollupId(ind.id) && absorbedSourceIds(ind).some(isSessionScopedSourceId));
+    if (!stated) continue;
+    scopedGroups.add(factGroupId(ind.id));
+    const subject = individualKey(ind, "subject");
+    if (subject) pairs.add(subjectPredicateKey(subject, individualKey(ind, "predicate")));
+  }
+  return scopedGroups.size ? { pairs, scopedGroups } : null;
+}
+
+/**
  * Recompute + materialise mgx:sourceReliability on every session-scoped
  * operator/teach Source: count facts stated vs. contradicted
  * (findContradictions), run sessionReliabilityFrom, write the bounded result.
@@ -2610,11 +2647,17 @@ const isSessionScopedSourceId = (id) =>
  */
 function recomputeSourceReliability(payload) {
   if (!Array.isArray(payload?.individuals) || !Array.isArray(payload?.objectProperties)) return;
-  const rows = readFactRows(payload); // Fact-only — contradiction accounting is inherently Fact-shaped
+  const scope = sessionScopedFoldScope(payload);
+  if (!scope) return;
+
+  // Fact-only — contradiction accounting is inherently Fact-shaped. Scoped to
+  // the triples a scorable actor actually stated, plus every sibling object
+  // those triples could be contradicted by: no other group can put a number in
+  // the tally below, so folding the rest of the graph only costs time.
+  const rows = foldFactRows(payload, factFoldContext(payload, scope));
   const contradictedFactIds = new Set();
   // The fold above is the same one findContradictions would take for itself,
-  // and over a seed-sized graph it is half a second. Nothing changes the
-  // payload between the two, so it goes across.
+  // and nothing changes the payload between the two, so it goes across.
   for (const group of findContradictions(payload, { factRows: rows })) for (const r of group) contradictedFactIds.add(r.id);
 
   const bySource = new Map(); // sessionSourceId -> { factsAsserted, factsContradicted }
@@ -3813,7 +3856,14 @@ export async function resolveRelationChaseReverse(memory, name, objectTerm, help
  * answers "what did this source used to say", never "what do I trust now".
  */
 export function readFactRows(memory, opts = {}) {
-  const ctx = factFoldContext(memory);
+  return foldFactRows(memory, factFoldContext(memory), opts);
+}
+
+/** The fold itself, over whatever slice of the graph a context was built for.
+ *  `readFactRows` hands it the whole graph; a caller that only needs certain
+ *  (subject, predicate) pairs hands it a scoped context and gets exactly the
+ *  rows a whole-graph fold would have produced for those pairs. */
+function foldFactRows(memory, ctx, opts = {}) {
   // A materialised head, when the backend keeps one, replaces the group's own
   // fold with the audit trail that fold was last built from — the same records,
   // read back instead of re-derived. It carries no recency by construction, so
@@ -3840,16 +3890,46 @@ export function readFactRows(memory, opts = {}) {
  *  Shared by the read fold and by the head materialisation below, deliberately:
  *  a stored aggregate and a computed one folded from different inputs is the
  *  failure a materialised table invites, and one shared builder is what keeps
- *  the two from ever drifting apart. */
-function factFoldContext(memory) {
+ *  the two from ever drifting apart.
+ *
+ *  `pairs` narrows the context to the groups a given set of (subject,
+ *  predicate) keys carries, with `scopedGroups` naming groups to keep outright
+ *  whatever their records read as. Every group of a kept pair is kept, whoever
+ *  stated it, so a scoped fold reads each of those triples exactly as a
+ *  whole-graph fold does — and a caller asking about one party's facts still
+ *  sees every sibling object that party's claim could be contradicted by. */
+function factFoldContext(memory, { pairs = null, scopedGroups = new Set() } = {}) {
   const individuals = memory?.individuals || [];
-  const sourcesById = new Map(individuals.filter((i) => i?.class === SOURCE_CLASS).map((i) => [i.id, i]));
-  const statedGroup = (memory?.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
-  const statedByRecord = new Map();
-  for (const e of statedGroup?.examples || []) {
-    if (!statedByRecord.has(e.subject)) statedByRecord.set(e.subject, []);
-    statedByRecord.get(e.subject).push(e.object);
+  const idx = memoryIndexOf(memory);
+  const sourcesById = idx
+    ? idx.sourcesById
+    : new Map(individuals.filter((i) => i?.class === SOURCE_CLASS).map((i) => [i.id, i]));
+  // The live index already keeps this map, edge for edge, and rebuilding it
+  // allocates one array per fact record over the whole graph.
+  let statedByRecord = idx?.statedByBySubject;
+  if (!statedByRecord) {
+    const statedGroup = (memory?.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
+    statedByRecord = new Map();
+    for (const e of statedGroup?.examples || []) {
+      if (!statedByRecord.has(e.subject)) statedByRecord.set(e.subject, []);
+      statedByRecord.get(e.subject).push(e.object);
+    }
   }
+
+  // Subject first, predicate only on a subject hit: reading both attributes off
+  // every fact record in the graph is the whole cost of a scoped pass, and the
+  // subject rules out nearly all of them on one lookup.
+  const wantedSubjects = pairs ? new Set([...pairs].map((key) => key.slice(0, key.indexOf(" ")))) : null;
+  const outsideScope = (ind) => {
+    if (!pairs) return false;
+    // A group the caller named outright is in whatever its records read as —
+    // a summary standing for absorbed records carries only a copied template,
+    // so its own attributes are not what places it.
+    if (scopedGroups.has(factGroupId(ind.id))) return false;
+    const subject = individualKey(ind, "subject");
+    if (!wantedSubjects.has(subject)) return true;
+    return !pairs.has(subjectPredicateKey(subject, individualKey(ind, "predicate")));
+  };
 
   const groups = new Map();
   const retractionsByGroup = new Map();
@@ -3864,6 +3944,7 @@ function factFoldContext(memory) {
     if (ind?.class !== FACT_CLASS) continue;
     if ((ind.attributes || []).some((a) => a?.prop === SUPERSEDED_BY_PROP)) continue; // a demoted leaf, not a head
     if (isChainRollupId(ind.id)) continue; // a summary of one source's demoted history, which was never a vote
+    if (outsideScope(ind)) continue;
     const groupId = factGroupId(ind.id);
     const group = groups.get(groupId);
     if (group) group.push(ind);

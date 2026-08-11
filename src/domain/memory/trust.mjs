@@ -107,6 +107,60 @@ function parsePeerNodeTagRest(rest) {
 const LIVE_REFERENCE_PACK = "wikipedia-live";
 const referenceKindFor = (pack) => (pack === LIVE_REFERENCE_PACK ? "referenceLive" : "reference");
 
+/** The part of a tag that names WHICH publication it came from, with the
+ *  per-item tail cut off: `news:nyt-world@item-91` names the NYT world feed,
+ *  and the item id beside it says which article, not which publisher. One feed
+ *  is one asserting party however many articles it runs, so the tail stays on
+ *  the tag for audit and out of the Source identity — the same split
+ *  `world:<name>:turnN` and `mud:<character>:turnN` already make. */
+const publicationKeyOf = (rest) => String(rest || "").split("@")[0];
+
+/** The same cut for a tag the fuzzy tier labels its own Source with: the feed
+ *  or the reference work, never the article. `news:nyt-world@item-91` folds to
+ *  `news:nyt-world`, `research:wikidata:otter` to `research:wikidata`, and the
+ *  research lane's `research:otter@2` to `research`. */
+function publicationSourceLabel(rest) {
+  if (rest.startsWith("news:")) return publicationKeyOf(rest);
+  const { pack } = researchTagToSource(rest.slice("research:".length));
+  return `research:${pack}`;
+}
+
+/** `teach:chat:ingest#<tag>@<ts>` — the ingest seam driving the chat teach lane
+ *  as a RECOGNIZER over a document. The party asserting is the document's own
+ *  publisher, which the embedded `<tag>` names, so the record lands on that
+ *  publisher's Source rather than on a chat session. Without it an ingest mints
+ *  a throwaway teach Source per SENTENCE, and one publication's sentences
+ *  corroborate each other for free. */
+export const INGEST_SESSION_MARKER = "ingest#";
+
+/** The two `research:` tag shapes, both live-fetched at query time and both
+ *  scored at the referenceLive prior, below every curated pack:
+ *    research:<source>:<term>   one KB adapter's own lookup (researchSourceTag)
+ *    research:<topic>@<depth>   the research lane's fan-out, which records how
+ *                               far it reached rather than which adapter answered
+ *  The `@` is what tells them apart — a folded term never carries one. Either
+ *  way the PACK names the reference work and the article segment names the page
+ *  inside it, so `sourceIdFor` can key one Source per work. */
+function researchTagToSource(rest) {
+  const at = rest.lastIndexOf("@");
+  if (at >= 0) return { kind: "referenceLive", pack: "research", article: rest.slice(0, at).trim() || "unknown" };
+  const colon = rest.indexOf(":");
+  if (colon < 0) return { kind: "referenceLive", pack: "research", article: rest.trim() || "unknown" };
+  return { kind: "referenceLive", pack: rest.slice(0, colon) || "research", article: rest.slice(colon + 1).trim() };
+}
+
+/** The publisher a chat-shaped tag stands in for, when its session slot carries
+ *  the ingest marker; null for an ordinary session, which is every tag a person
+ *  actually typed. One level only — an embedded chat tag is refused rather than
+ *  followed, so a hand-written tag cannot nest its way anywhere. */
+function ingestPublisherOf(chat) {
+  if (!chat.sessionId?.startsWith(INGEST_SESSION_MARKER)) return null;
+  const embedded = chat.sessionId.slice(INGEST_SESSION_MARKER.length);
+  if (embedded.startsWith("teach:") || embedded.startsWith("ace:")) return null;
+  const publisher = provenanceTagToSource(embedded);
+  return publisher ? { ...publisher, ...(chat.createdAt ? { createdAt: chat.createdAt } : {}) } : null;
+}
+
 export function provenanceTagToSource(tag) {
   const t = String(tag || "").trim();
   if (!t) return null;
@@ -119,17 +173,7 @@ export function provenanceTagToSource(tag) {
     const pack = rest.slice(0, colon) || "unknown";
     return { kind: referenceKindFor(pack), pack, article: rest.slice(colon + 1) };
   }
-  // research:<topic>@<depth> — the research lane's Simple English Wikipedia
-  // loads. Live-fetched at query time like the wikipedia-live pack, so it
-  // scores at the same referenceLive prior, below every curated pack. Parsed
-  // from the FULL tag (a topic may contain spaces); the depth segment records
-  // how far the fan-out reached and is not part of the Source identity.
-  if (t.startsWith("research:")) {
-    const rest = t.slice("research:".length);
-    const at = rest.lastIndexOf("@");
-    const topic = (at >= 0 ? rest.slice(0, at) : rest).trim();
-    return { kind: "referenceLive", pack: "research", article: topic || "unknown" };
-  }
+  if (t.startsWith("research:")) return researchTagToSource(t.slice("research:".length));
   const head = t.split(/\s+/)[0]; // drop trailing " /r/IsA" etc.
   if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
   if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
@@ -148,7 +192,10 @@ export function provenanceTagToSource(tag) {
   // `mud:` prefix so `src:corpus:mud:<character>` can never collide with a
   // `world:<name>` Source that happens to share the literal name.
   if (head.startsWith("mud:")) return { kind: "corpus", name: `mud:${head.slice("mud:".length).split(":")[0] || "unknown"}` };
-  if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
+  if (head.startsWith("ace:")) {
+    const chat = parseChatTagRest(head.slice("ace:".length));
+    return ingestPublisherOf(chat) || { kind: "operator", ...chat };
+  }
   if (head.startsWith("teach:")) {
     const rest = head.slice("teach:".length);
     // teach:peer:<name>#node:<id>@<ts> — a peer's own relabeled tag off the
@@ -156,7 +203,8 @@ export function provenanceTagToSource(tag) {
     const peerNode = parsePeerNodeTagRest(rest);
     if (peerNode) return peerNode;
     // the chat teach lane's natural frames — chat.mjs's teachProvenanceTag
-    return { kind: "teach", ...parseChatTagRest(rest) };
+    const chat = parseChatTagRest(rest);
+    return ingestPublisherOf(chat) || { kind: "teach", ...chat };
   }
   if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
   if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
@@ -172,10 +220,23 @@ export function provenanceTagToSource(tag) {
   // the bare extracted: fallback below, which still catches every other
   // extracted: caller unchanged. A bare news:<sourceId>@<itemId> tag (a
   // future caller that writes it directly, with no extracted: wrapper)
-  // scores the same way.
-  if (head.startsWith("extracted:news:")) return { kind: "web", url: head.slice("extracted:".length) };
-  if (head.startsWith("news:")) return { kind: "web", url: head };
-  if (head.startsWith("optimistic-extract:")) return { kind: "optimisticExtract", name: head.slice("optimistic-extract:".length) || "unknown" };
+  // scores the same way. One Source per FEED: the item id rides the tag for
+  // audit and stays out of the identity.
+  if (head.startsWith("extracted:news:")) return { kind: "web", url: publicationKeyOf(head.slice("extracted:".length)) };
+  if (head.startsWith("news:")) return { kind: "web", url: publicationKeyOf(head) };
+  // The same wrapper over a KB lookup's own tag: the reference work that
+  // answered is the asserting party, not the ingest run that read it.
+  if (head.startsWith("extracted:research:")) return researchTagToSource(head.slice("extracted:research:".length));
+  // The fuzzy tier keeps a Source of its OWN — a candidate the strict
+  // recognizer skipped must never corroborate a curated fact — but one per
+  // publication, not one per article.
+  if (head.startsWith("optimistic-extract:")) {
+    const rest = head.slice("optimistic-extract:".length);
+    const publication = rest.startsWith("news:") || rest.startsWith("research:")
+      ? publicationSourceLabel(rest)
+      : rest;
+    return { kind: "optimisticExtract", name: publication || "unknown" };
+  }
   if (head.startsWith("extracted:")) return { kind: "extracted", name: head.slice("extracted:".length) || "unknown" };
   if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };
   if (head.startsWith("chat:") || head.startsWith("session:") || head.startsWith("operator")) return { kind: "operator" };
