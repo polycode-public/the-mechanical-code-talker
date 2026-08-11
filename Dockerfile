@@ -11,7 +11,8 @@
 FROM node:24-slim AS builder
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ \
+    && apt-get install -y --no-install-recommends \
+        python3 make g++ cmake curl ca-certificates xz-utils libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
