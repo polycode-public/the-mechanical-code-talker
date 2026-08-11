@@ -53,7 +53,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   wikidata-slice and conceptnet-full bands stay empty until their raw dumps are
   downloaded and loaded by hand — the pipelines are built and fixture-proven, only the
   dumps are missing. The exact steps, from each script's own header:
-  - conceptnet-full: `curl -s https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz | gunzip -c > dump.tsv`,
+  - conceptnet-full (a Sonnet agent is running these exact steps now, under the live SSO
+    session, with a stop-and-report gate at 10M rows):
+    `curl -s https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz | gunzip -c > dump.tsv`,
     then `node scripts/corpus-bands/build-conceptnet-full.mjs --source dump.tsv`, then
     `tmct corpus load conceptnet-full --table tmct-prod-prod-rows --source <out>` with
     `AWS_PROFILE=tmct-prod`. Admits every en→en canonical-relation edge (the superset
@@ -69,7 +71,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   Loads are idempotent (content-addressed rows; a matching source digest is a no-op)
   and resumable (a mid-load death re-runs as harmless re-puts; the manifest writes
   last).
-- [ ] **The two empty leads the composition receipt did not reach** — `whereSet` still answers
+- [ ] **The two empty leads the composition receipt did not reach** (Opus agent in flight
+  as of the 6.0.6 pipeline watch) — `whereSet` still answers
   "nothing in the index matches that clause (classes), so there is no location to cite" and
   `temporal` still answers "nothing in the index matches the inner set", the last two empties
   that name neither the branch that emptied them nor the population the index holds. The walk
@@ -79,19 +82,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   the shared lead. (The combined miss-lead + empty-composition round itself landed: +0.084
   answer-identity-controlled on changed answers, every cell up, report
   `reports/BENCHMARK_CEFR_ENGLISH_5.0.46.md`.)
-- [ ] **The judge instrument moved: decide whether to re-baseline the judged pool** —
-  `g-b1-neg-11`, the case whose two honesty-0 samples originally evidenced the miss-lead
-  item, scored honesty 2 on a fresh draw of the UNCHANGED base text in the 5.0.46 round —
-  same pinned judge (`claude-haiku-4-5-20251001`), same `judge-prompt-v2`, N=2, no verdict
-  cache on either arm. The same sentence moved 0→2 between rounds with nothing about the
-  answer changing, so that cell can no longer be cited in either direction and any
-  raw-score comparison across rounds inherits the doubt; the 5.0.46 report's
-  answer-identity-controlled views (scoring only answers whose text actually changed, with
-  byte-identical answers as the instrument-noise control) are the trustworthy lens until
-  the instrument is re-anchored. A re-baseline round means re-scoring the full held judged
-  pool once against current answers to reset every cell's baseline (~1,075 cases × N=2
-  judge calls, same spend class as the miss-round's 850). Operator's call whether and when
-  to spend it; until then, judged rounds keep leading with the identity-controlled view.
 
 ## Discipline
 
