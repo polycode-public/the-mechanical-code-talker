@@ -240,6 +240,19 @@ const ENTITY_FRAGMENT_LEAD_WORDS = new Set([
 // term; "back" alone is a fine noun.
 const ENTITY_PARTICLE_LEAD_WORDS = new Set(["back", "up", "down", "out", "off", "away", "along", "around"]);
 
+// A pronoun points back at whatever the last clause named, so a multi-word
+// term opening with one is a clause the split lost the subject of. A term
+// ending in a bare auxiliary is the front half of one. Both mirror
+// extract-facts.mjs's own lexical rules, for the same reason the sets above do.
+const ENTITY_PRONOUN_LEAD_WORDS = new Set([
+  "i", "he", "she", "it", "we", "they", "you", "me", "him", "them", "us",
+  "his", "her", "its", "their", "our", "your", "my",
+]);
+const ENTITY_CLITIC_SUFFIX_RE = /['’](?:s|re|ve|ll|d|m)$/;
+const ENTITY_TRAILING_AUXILIARY_WORDS = new Set([
+  "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had",
+]);
+
 /** Does `term` read as a thing's name rather than a clause fragment? Bounds
  *  the word count and rejects a leading conjunction, auxiliary or
  *  preposition (test E's condition 3, PLAN_NEWSWORTHINESS.md section 2), plus
@@ -251,7 +264,10 @@ function looksLikeEntityTerm(term) {
   if (words.length > ENTITY_TERM_MAX_WORDS) return false;
   const first = words[0].toLowerCase().replace(/^[^a-z0-9]+/, "");
   if (!first || ENTITY_FRAGMENT_LEAD_WORDS.has(first)) return false;
-  if (words.length > 1 && ENTITY_PARTICLE_LEAD_WORDS.has(first)) return false;
+  if (words.length === 1) return true;
+  if (ENTITY_PARTICLE_LEAD_WORDS.has(first)) return false;
+  if (ENTITY_PRONOUN_LEAD_WORDS.has(first.replace(ENTITY_CLITIC_SUFFIX_RE, ""))) return false;
+  if (ENTITY_TRAILING_AUXILIARY_WORDS.has(words[words.length - 1].toLowerCase())) return false;
   return true;
 }
 
@@ -425,21 +441,29 @@ export function buildTermAdjacency(rows) {
 }
 
 /** Breadth-first over subject/object adjacency from `hub`, exactly `hops`
- *  levels deep, then capped by content-addressed id — so the cap never
- *  depends on `rows`' own order, only on which rows the hop-bounded walk
- *  actually reaches. */
-export function subgraphAround(rows, hub, { hops = NEWS_HUB_HOPS, cap = 60, adjacency = null } = {}) {
+ *  levels deep, then capped: a `priorityIds` row first, then the nearer hop,
+ *  then content-addressed id. The cap never depends on `rows`' own order, only
+ *  on which rows the hop-bounded walk actually reaches and how far out each
+ *  one sits.
+ *
+ *  `priorityIds` is what keeps a card about a term the graph already knows
+ *  thousands of things about from being built out of an arbitrary slice of
+ *  them: a hub like "france" reaches far more rows than the cap, and the one
+ *  report that made it news would otherwise be the row that fell out. */
+export function subgraphAround(rows, hub, { hops = NEWS_HUB_HOPS, cap = 60, adjacency = null, priorityIds = null } = {}) {
   const adj = adjacency ?? buildTermAdjacency(rows);
   const hubTerm = normFactTerm(hub);
   const visited = new Set([hubTerm]);
   let frontier = [hubTerm];
   const collected = new Map();
+  const hopOf = new Map();
   for (let hop = 0; hop < hops; hop += 1) {
     const nextFrontier = new Set();
     for (const term of [...frontier].sort()) {
       for (const idx of adj.byTerm.get(term) ?? []) {
         const row = rows[idx];
         collected.set(row.id, row);
+        if (!hopOf.has(row.id)) hopOf.set(row.id, hop);
         const [s, o] = adj.terms[idx];
         if (!visited.has(s)) nextFrontier.add(s);
         if (!visited.has(o)) nextFrontier.add(o);
@@ -448,7 +472,12 @@ export function subgraphAround(rows, hub, { hops = NEWS_HUB_HOPS, cap = 60, adja
     for (const term of nextFrontier) visited.add(term);
     frontier = [...nextFrontier].sort();
   }
-  return [...collected.values()].sort(byId).slice(0, cap);
+  const isPriority = (id) => (priorityIds instanceof Set ? priorityIds.has(id) : Boolean(priorityIds?.includes?.(id)));
+  return [...collected.values()]
+    .sort((a, b) => (isPriority(b.id) - isPriority(a.id))
+      || (hopOf.get(a.id) - hopOf.get(b.id))
+      || byId(a, b))
+    .slice(0, cap);
 }
 
 /** The strongest prior kind among `rows`, for the item's trust chip — read
@@ -599,7 +628,7 @@ export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId
   if (readsAsEntityTerm) hubOptions.readsAsEntityTerm = readsAsEntityTerm;
   const hubs = newsworthyHubs(rows, reported, hubOptions);
   const items = hubs.map(({ term, changed }) => {
-    const subgraphRows = subgraphAround(rows, term, { adjacency });
+    const subgraphRows = subgraphAround(rows, term, { adjacency, priorityIds: reportedIds });
     const factIds = subgraphRows.map((r) => r.id).sort();
     const { background } = splitCardRows(subgraphRows, reportedIds);
     return {

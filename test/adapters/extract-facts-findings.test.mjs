@@ -95,6 +95,17 @@ test("a phrasal-verb remainder never reads as a term, while a one-word particle 
   assert.equal(readsAsEntityTerm("string instrument"), true);
 });
 
+test("a clause led by a pronoun or cut off after an auxiliary never reads as a term", () => {
+  assert.equal(readsAsEntityTerm("he’s also destroyed the city’s soul"), false);
+  assert.equal(readsAsEntityTerm("they were arrested"), false);
+  assert.equal(readsAsEntityTerm("its own budget"), false);
+  assert.equal(readsAsEntityTerm("rooms were"), false);
+  assert.equal(readsAsEntityTerm("the talks have"), false);
+  // One word stands: a headline writes the United States as "US".
+  assert.equal(readsAsEntityTerm("us"), true);
+  assert.equal(readsAsEntityTerm("string instrument"), true);
+});
+
 test("a place named after a compass direction still reads as a term, while a real prepositional phrase does not", () => {
   // A tagger reading the lowercased term has no capital left to tell the
   // place from the direction, and calls the leading word an adverb.
