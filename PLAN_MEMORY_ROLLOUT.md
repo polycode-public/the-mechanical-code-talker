@@ -128,11 +128,12 @@ full suite only at push moments, `e2e:deployed:news-live` is the rollout's accep
 
 ## 4. The operator-gated data loads (mop-up from NEXT.md)
 
-- **conceptnet-full — staged, awaiting one command.** 147,922 of 2,344,809 rows are in
-  the live band (the first run died on a transient DynamoDB 500; the loader now retries
-  — 5 attempts, exponential backoff, full jitter). The built jsonl, its NOTICE, and the
-  dump sit in the session scratchpad
-  (`/private/tmp/claude-501/-Users-antony-projects-polycode-projects-the-mechanical-code-talker/25aaa718-8e2f-446f-97b2-78a35a914eb8/scratchpad/`):
+- **conceptnet-full — the operator's resumed load was at 74% and climbing.** (The first
+  run died on a transient DynamoDB 500; the loader now retries — 5 attempts, exponential
+  backoff, full jitter — and logs a progress line per minute.) The reusable artifacts
+  live durably in `~/tmct-dumps/`: `conceptnet-full.band.jsonl` + `.NOTICE` — loadable
+  against ANY table, re-loads are digest-checked no-ops. Session-scratchpad copies also
+  exist but are temporary:
   `conceptnet-full.band.jsonl` (2,344,809 rows, 3.02 GiB, sha256
   `7937e30c…ad8e91c`), `conceptnet-full.band.jsonl.NOTICE`, `conceptnet-dump.tsv`
   (9.46 GiB). The load is idempotent and resumes from what is there. The command
