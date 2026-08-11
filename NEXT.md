@@ -43,13 +43,18 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   live-ops facts a fresh session must not re-learn. Build runs as coordinator + worktree
   sub-agents in waves: Wave 1 = R0 (seed sqlite build), R2 (sqlite seed overlay), R3
   (CDK container functions); Wave 2 = R1 (Dockerfile + RIE verify), R4 (CI image build);
-  R5 acceptance is the coordinator's post-deploy job. R0–R4 are all code complete and
-  merged to local `main`; all worktrees removed. RIE-verified locally: the worker's
-  cold init opens the 229 MB xl seed in 82 ms via sqlite, no JSON parse; fixture cycle
-  peak heap 105.8 MB against a 140 MB budget test. Remaining: the R5 push — full suite,
-  push the batch, watch `build:image` → `deploy:website` → `smoke:post-deploy` →
-  `e2e:deployed:news-live`, record the measured live cycle peak in the plan's build
-  marker, then this item closes.
+  R5 acceptance is the coordinator's post-deploy job. R0–R4 are merged and DEPLOYED
+  (pipeline #781, 6.0.11): container functions live, `smoke:post-deploy` and all page
+  e2e green, and the OOM is dead — live cycles peak at 1.9–2.1 GB of 3008 MB with
+  87–992 ms sqlite seed opens. Remaining before this item closes:
+  - `e2e:deployed:news-live` still red, new failure mode: every cycle logs
+    `cycle-start` then nothing until the 300 s Lambda timeout — no `phase-done`, no
+    source ever polled, nothing written. Suspected dead await or per-row round-trip
+    on the sqlite overlay path at xl scale. Diagnosis agent in flight: worktree
+    `.claude/worktrees/agent-ae9fdb7bebd3d9ea1`.
+  - Secondary, non-blocking: each fresh execution environment overruns the 10 s init
+    cap once (`INIT_REPORT ... Status: timeout`), then re-inits fine in 87–992 ms.
+  - Then: record the measured cycle peak in the plan's build marker.
 
 ## Discipline
 
