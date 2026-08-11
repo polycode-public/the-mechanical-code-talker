@@ -6,7 +6,8 @@
 //     behind matches what a fresh handle would assemble;
 //   - the two scalar sidecars land in meta, and the research queue lands as
 //     rows, one per title;
-//   - a seed overlay is read-only: putRows never receives a seed row;
+//   - a seed overlay is read-only: putRows never receives a seed row, whether
+//     the seed arrives as a parsed payload or as an open sqlite store;
 //   - two live handles racing on one store both land, supersessions included;
 //   - a row-backed session answers the same taught turns as a sqlite-backed
 //     one, so this is a storage seam and not a behaviour change.
@@ -18,8 +19,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
-  wrapRowBackend, isRowHandle, isMemoryOrSqliteHandle, openMemoryBackend,
+  wrapRowBackend, wrapRowBackendOverSqliteSeed, isRowHandle, isMemoryOrSqliteHandle, openMemoryBackend,
   createInMemoryStore, readOnlyMemorySnapshot, resolveMemoryGraphFile,
+  createSqliteMemoryStore, closeSqliteMemoryStore, openSqliteSeedStore, sqliteSeedFactTermValues,
   loadMemory, appendFact, appendFacts, appendUtterances, removeFacts, readFactRows,
   loadSyllogiseState, saveSyllogiseState, loadNodeId, saveNodeId,
   BackendRejected, FACT_CLASS,
@@ -416,6 +418,129 @@ test("under onOversizedRow: \"drop\", the same write completes and the oversized
   const writtenKeys = spy.calls.putRows.flat();
   assert.ok(writtenKeys.length, "the session's own fact still writes");
   assert.equal(writtenKeys.includes("edge-group:mgx:hugeGroup"), false, "the oversized seed row is never written back");
+});
+
+// ---- the seed held as a sqlite store ----------------------------------------
+
+const SEED_FACTS = [
+  { subject: "dog", predicate: "IsA", object: "mammal", provenance: "corpus:conceptnet", createdAt: T1 },
+  { subject: "mammal", predicate: "IsA", object: "animal", provenance: "corpus:conceptnet", createdAt: T1 },
+];
+
+/** A pre-built seed file: the facts written through the sqlite store's own
+ *  writer, the payload that same store hands back, and the file reopened
+ *  read-only — so both ways of holding one seed describe the same graph down
+ *  to the wall-clock stamps its records carry. */
+async function buildSeedSqlite(facts = SEED_FACTS) {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-seed-sqlite-"));
+  const dbPath = join(dir, "seed.sqlite");
+  const writable = await createSqliteMemoryStore(dbPath);
+  await appendFacts(writable, facts);
+  const payload = await loadMemory(writable);
+  closeSqliteMemoryStore(writable);
+  const store = await openSqliteSeedStore(dbPath);
+  return { payload, store, async cleanup() { closeSqliteMemoryStore(store); await rm(dir, { recursive: true, force: true }); } };
+}
+
+test("a seed read out of a sqlite store assembles exactly what the same seed as a parsed payload does", async () => {
+  const seed = await buildSeedSqlite();
+  try {
+    const fromPayload = await loadMemory(wrapRowBackend(createRowMemoryBackend(), { basePayload: seed.payload }));
+    const fromStore = await loadMemory(wrapRowBackendOverSqliteSeed(createRowMemoryBackend(), seed.store));
+    assert.deepEqual(fromStore, fromPayload);
+  } finally {
+    await seed.cleanup();
+  }
+});
+
+test("a sqlite seed is readable from turn one and never written back", async () => {
+  const seed = await buildSeedSqlite();
+  const spy = spyBackend();
+  try {
+    const seedKeys = new Set(payloadToRows(seed.payload).map((r) => r.rowKey));
+    const dir = wrapRowBackendOverSqliteSeed(spy.backend, seed.store);
+
+    assert.deepEqual(
+      readFactRows(await loadMemory(dir)).map((r) => r.subject).sort(), ["dog", "mammal"],
+      "the seed answers before the session has written anything",
+    );
+
+    await appendFact(dir, { subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T2), createdAt: T2 });
+
+    const written = spy.calls.putRows.flat();
+    assert.ok(written.length, "the session's own fact did get written");
+    for (const key of written) assert.equal(seedKeys.has(key), false, `putRows received the seed row ${key}`);
+    assert.deepEqual(spy.calls.deleteRows.flat().filter((k) => seedKeys.has(k)), [], "and no seed row is deleted");
+    assert.equal(dir.baseRows, null, "the seed never materializes as a row array");
+
+    assert.deepEqual(
+      readFactRows(await loadMemory(wrapRowBackendOverSqliteSeed(spy.backend, seed.store))).map((r) => r.subject).sort(),
+      ["dog", "kim", "mammal"],
+      "a fresh handle over the same seed and store assembles both",
+    );
+  } finally {
+    await seed.cleanup();
+  }
+});
+
+test("overlay rows sit over a sqlite seed and under the session's own, and are read-only too", async () => {
+  const seed = await buildSeedSqlite();
+  const overlaySource = createInMemoryStore();
+  await appendFacts(overlaySource, [
+    { subject: "hall", predicate: "IsA", object: "room", provenance: "corpus:wordnet", createdAt: T1 },
+  ]);
+  const overlayRows = payloadToRows(await loadMemory(overlaySource));
+  const spy = spyBackend();
+  try {
+    const dir = wrapRowBackendOverSqliteSeed(spy.backend, seed.store, { overlayRows });
+    assert.deepEqual(
+      readFactRows(await loadMemory(dir)).map((r) => r.subject).sort(), ["dog", "hall", "mammal"],
+      "the overlay reads alongside the seed",
+    );
+
+    await appendFact(dir, { subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T2), createdAt: T2 });
+    const overlayKeys = new Set(overlayRows.map((r) => r.rowKey));
+    for (const key of spy.calls.putRows.flat()) {
+      assert.equal(overlayKeys.has(key), false, `putRows received the overlay row ${key}`);
+    }
+  } finally {
+    await seed.cleanup();
+  }
+});
+
+test("a write over a sqlite seed projects only the session's own rows, so an oversized seed row cannot fail it", async () => {
+  // A seed whose statedBy group is over the per-row cap before any session has
+  // taught anything — what a real corpus band's own fan-out looks like.
+  const highFanOut = Array.from({ length: 40 }, (_, i) => ({
+    subject: `term${i}`, predicate: "IsA", object: "thing", provenance: "corpus:conceptnet", createdAt: T1,
+  }));
+  const seed = await buildSeedSqlite([...SEED_FACTS, ...highFanOut]);
+  const taught = { subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T2), createdAt: T2 };
+  try {
+    await assert.rejects(
+      appendFact(wrapRowBackend(spyBackend().backend, { basePayload: seed.payload }), taught),
+      (error) => error.code === "TMCT_BACKEND_REJECTED",
+      "the parsed-payload path re-projects the whole seed, so the oversized record reaches the cap",
+    );
+
+    const spy = spyBackend();
+    const dir = wrapRowBackendOverSqliteSeed(spy.backend, seed.store);
+    await appendFact(dir, taught);
+    assert.equal(spy.calls.putRows.flat().length, 2, "the taught fact and its source, and nothing of the seed");
+  } finally {
+    await seed.cleanup();
+  }
+});
+
+test("a sqlite seed's fact terms come off its own columns, matching the records it holds", async () => {
+  const seed = await buildSeedSqlite();
+  try {
+    assert.deepEqual(
+      [...new Set(sqliteSeedFactTermValues(seed.store))].sort(), ["animal", "dog", "mammal"],
+    );
+  } finally {
+    await seed.cleanup();
+  }
 });
 
 // ---- two live handles -------------------------------------------------------
