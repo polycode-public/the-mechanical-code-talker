@@ -21,7 +21,7 @@ holds ONLY what to do next. Completed work is not narrated here; `git log` and t
 `reports/BENCHMARK_*.md` reports hold that record.
 
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
-`~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
+`~/.claude/inboxes/tmct-hanoi.md`.
 
 Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline): bucket
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
@@ -30,27 +30,25 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 ## Open items
 
 - [ ] **ConceptNet band load — running in the operator's terminal** — `tmct corpus load
-  conceptnet-full` against the live table, last counted at 74% of 2,344,809 rows and
-  climbing (idempotent; if it dies, re-run the same command — it resumes and now logs
-  progress per minute). When its summary prints: verify with the manifest read-back and
-  a `queryBandTerm("dog")` probe (`PLAN_MEMORY_ROLLOUT.md` section 4), then this item
-  closes. The reusable band jsonl lives durably in `~/tmct-dumps/`.
+  conceptnet-full` (2,344,809 rows) against the live table. Idempotent: if it dies,
+  re-run the same command — it resumes and logs progress per minute. When its summary
+  prints: verify with the manifest read-back and a `queryBandTerm("dog")` probe
+  (`PLAN_MEMORY_ROLLOUT.md` section 4), then this item closes. The reusable band jsonl
+  lives durably in `~/tmct-dumps/`.
 
-- [ ] **Wikidata dump download — operator-run, outside any session** — the download now
-  belongs to a terminal of the operator's own: run `bash scripts/resume-wikidata-dump.sh`
-  from the repo root (re-run after any interruption; it resumes and verifies the byte
-  count). File: `~/tmct-dumps/wikidata-latest-all.json.gz` (40.4 of 155.3 GB when handed
-  over). When it reports done, the next steps are `PLAN_MEMORY_ROLLOUT.md` section 4.
+- [ ] **Wikidata dump download — operator-run, outside any session** — run
+  `bash scripts/resume-wikidata-dump.sh` from the repo root (re-run after any
+  interruption; it resumes, prints a progress line per minute, and verifies the final
+  byte count). File: `~/tmct-dumps/wikidata-latest-all.json.gz` (155.3 GB). When it
+  reports done, the next steps are `PLAN_MEMORY_ROLLOUT.md` section 4.
 
-- [ ] **The rollout: container-image Lambdas with sqlite seeds, and the data loads** —
-  the plan of record is `PLAN_MEMORY_ROLLOUT.md` (operator-decided 2026-08-11): one
-  Node 24 container image for all three Lambdas carrying `mid-seed.sqlite` +
-  `xl-seed.sqlite`, killing the news worker's OOM (three in-memory seed copies) at its
-  cause; phases R0–R5 there are written to build; `e2e:deployed:news-live` is the
-  acceptance gate and is red until the worker fix lands. That doc also carries the two
-  operator-gated corpus loads (conceptnet-full resume command; the wikidata full-dump
-  route with the download-resume line) and every live-ops fact a fresh session must
-  not re-learn.
+- [ ] **The rollout: container-image Lambdas with sqlite seeds** — the plan of record
+  is `PLAN_MEMORY_ROLLOUT.md`: one Node 24 container image for all three Lambdas
+  carrying `mid-seed.sqlite` + `xl-seed.sqlite`, killing the news worker's OOM (three
+  in-memory seed copies) at its cause. Phases R0–R5 there are written to build on the
+  operator's go; `e2e:deployed:news-live` is the acceptance gate and is red until the
+  worker fix lands. That doc also carries the live-ops facts a fresh session must not
+  re-learn.
 
 ## Discipline
 
