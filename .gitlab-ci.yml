@@ -848,6 +848,23 @@ e2e:deployed:pages-timing:
       test-e2e/pages-chat-export.test.mjs
       test-e2e/pages-service-worker.test.mjs
 
+# news.html's own real cycle: presses "start polling live sources" and waits
+# for the worker to reach real external feeds and materialize a feed the
+# page renders — the one probe in this pipeline that presses that button.
+# Everything else in the deployed matrix proves the row round trip, the turn
+# endpoint and the page's own markup, none of which presses it, so a worker
+# failing on every real invoke could sit behind an otherwise green pipeline.
+# Its own job, not folded into e2e:deployed:pages, because its wait budget
+# (a couple of minutes, for a real worker cycle against real external feeds)
+# is an order of magnitude past every other file in this matrix, and a slow
+# real-network file sharing a job with fast markup files would either starve
+# the fast files of their own concurrency slot or force the whole job's
+# budget up to match one file's own tail.
+e2e:deployed:news-live:
+  extends: .e2e-deployed-base
+  script:
+    - node --disable-warning=ExperimentalWarning --test test-e2e/pages-news-live-ingest.test.mjs
+
 # Sharing between browsers: every file here drives two or three real browser
 # contexts at once, so the heaviest per-file Chromium load in the matrix and
 # the tightest cap — at most 2 of these files run their own contexts at once.
