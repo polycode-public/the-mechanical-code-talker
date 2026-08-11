@@ -110,6 +110,7 @@ public/news-fixtures.json
 public/claims-browser.bundle.js
 public/chat-seed.json
 server/turn-service/mid-seed.json
+server/seeds/
 server/turn-service/dist/
 server/news-worker/dist/
 public/reference-pack/
