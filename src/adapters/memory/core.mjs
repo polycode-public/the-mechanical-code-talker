@@ -712,6 +712,27 @@ export function closeSqliteMemoryStore(handle) {
   if (isSqliteHandle(handle)) handle.db.close();
 }
 
+/** Open a pre-built seed file READ-ONLY: the same tables
+ *  `createSqliteMemoryStore` writes, opened without the DDL, the backfills or
+ *  the WAL pragma, so the file itself never changes and it can sit on a
+ *  read-only image layer. This is the base layer a
+ *  `wrapRowBackendOverSqliteSeed` handle assembles under a session's own rows.
+ *  No row-backend methods are attached: nothing may ever write here. Close it
+ *  with `closeSqliteMemoryStore`. */
+export async function openSqliteSeedStore(dbPath) {
+  installSqliteWarningFilter();
+  const { DatabaseSync } = await import("node:sqlite");
+  try {
+    return { backend: BACKEND_SQLITE, db: new DatabaseSync(dbPath, { readOnly: true }), dbPath, readOnly: true };
+  } catch (cause) {
+    // A seed file whose writer never closed keeps a live -wal beside it, and
+    // recovering that needs write access the caller does not have. Say which
+    // file and say read-only, or the raw sqlite message sends the reader
+    // looking for a missing file that is right there.
+    throw new BackendUnavailable(`could not open the seed store ${dbPath} read-only: ${cause.message}`, { cause });
+  }
+}
+
 // ---- Backend D — a consumer's own row store ------------------------------
 // The consumer constructs the store (row-backend.mjs is the contract) and
 // tmct binds it into the same `memoryDir` token every memory call threads.
@@ -738,22 +759,54 @@ const ROW_NODE_ID_KEY = "nodeId";
 /** Bind a row backend as a `memoryDir` token: `{ backend: "row", impl,
  *  cachedPayload, basePayload }`. `basePayload` is the read-only seed overlay;
  *  `onOversizedRow` is the projection's posture for a record over the per-row
- *  cap ("throw", the default, or "drop"), and `log` takes the drop notices. */
-export function wrapRowBackend(impl, { basePayload = null, onOversizedRow = "throw", log = undefined } = {}) {
+ *  cap ("throw", the default, or "drop"), and `log` takes the drop notices.
+ *
+ *  `sqliteSeedStore` is the same seed overlay held as an OPEN sqlite store
+ *  (`openSqliteSeedStore`) instead of a parsed payload — see
+ *  `wrapRowBackendOverSqliteSeed`, the entry point that takes one.
+ *  `sqliteSeedOverlayRows` are rows that layer over that seed and under the
+ *  session's own (a turn's retrieved corpus subgraph), read-only exactly as
+ *  the seed is. */
+export function wrapRowBackend(impl, {
+  basePayload = null,
+  sqliteSeedStore = null,
+  sqliteSeedOverlayRows = null,
+  onOversizedRow = "throw",
+  log = undefined,
+} = {}) {
   const problems = rowBackendProblems(impl);
   if (problems.length) {
     throw new BackendRejected(`not a memory row backend: ${problems.join("; ")}`);
+  }
+  if (sqliteSeedStore && !isSqliteHandle(sqliteSeedStore)) {
+    throw new BackendRejected("sqliteSeedStore must be an open sqlite store handle (openSqliteSeedStore)");
+  }
+  if (sqliteSeedStore && basePayload) {
+    throw new BackendRejected("a handle takes its seed either as a basePayload or as a sqliteSeedStore, never both");
   }
   return {
     backend: BACKEND_ROW,
     impl,
     cachedPayload: null,
     basePayload: cloneMemoryPayload(basePayload),
+    sqliteSeedStore,
+    sqliteSeedOverlayRows: sqliteSeedOverlayRows ? [...sqliteSeedOverlayRows] : null,
+    sqliteSeedKeyOrds: null,
     baseRows: null,
     storedRows: null,
     onOversizedRow,
     log,
   };
+}
+
+/** `wrapRowBackend` over a seed held as an open read-only sqlite store. The
+ *  seed's rows stream into assembly one at a time and the keys the session may
+ *  never write come off the store's own key columns, so a 60k-fact seed is
+ *  never materialized as a row array: the assembled payload is the only copy
+ *  of it this process holds. `overlayRows` layer over the seed and under the
+ *  session's own rows. */
+export function wrapRowBackendOverSqliteSeed(impl, sqliteSeedStore, { overlayRows = null, onOversizedRow = "throw", log = undefined } = {}) {
+  return wrapRowBackend(impl, { sqliteSeedStore, sqliteSeedOverlayRows: overlayRows, onOversizedRow, log });
 }
 
 /** Drain whatever `readRows()` returned: the contract allows an array or an
@@ -779,7 +832,12 @@ function overlayRows(baseRows, sessionRows) {
  *  session store does not already hold a row for. */
 function seedOnlyKeys(handle) {
   const sessionKeys = new Set(handle.storedRows.map((r) => r.rowKey));
-  return new Set(handle.baseRows.map((r) => r.rowKey).filter((key) => !sessionKeys.has(key)));
+  const baseKeys = handle.sqliteSeedStore
+    ? sqliteSeedKeyOrds(handle).keys()
+    : handle.baseRows.map((r) => r.rowKey);
+  const seedOnly = new Set();
+  for (const key of baseKeys) if (!sessionKeys.has(key)) seedOnly.add(key);
+  return seedOnly;
 }
 
 async function readRowMeta(handle, key, fallback) {
@@ -796,20 +854,23 @@ async function readRowPayload(handle) {
   if (!handle.cachedPayload) {
     const empty = emptyMemory();
     const stored = await collectRows(handle.impl.readRows());
-    // "keep": the base overlay's own rows never reach the wire (persistRowPayload
-    // excludes every seed key from every write via seedOnlyKeys below), so the
-    // per-row byte cap that protects a real backend's real item-size limit has
-    // nothing to protect here — capping it would silently drop a real corpus
-    // band's own high-fan-out property (one edge per fact is normal, not a
-    // pathology) and break every read that depends on it.
-    handle.baseRows = payloadToRows(handle.basePayload || empty, { onOversizedRow: "keep" });
     handle.storedRows = stored.filter((row) => row?.rowClass !== BOOKKEEPING_ROW_CLASS);
-    handle.cachedPayload = rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), {
-      meta: {
-        memory: await readRowMeta(handle, ROW_META_MEMORY_KEY, handle.basePayload?.memory ?? empty.memory),
-        prefixes: await readRowMeta(handle, ROW_META_PREFIXES_KEY, handle.basePayload?.prefixes ?? empty.prefixes),
-      },
-    });
+    const meta = {
+      memory: await readRowMeta(handle, ROW_META_MEMORY_KEY, seedScalar(handle, "memory", empty.memory)),
+      prefixes: await readRowMeta(handle, ROW_META_PREFIXES_KEY, seedScalar(handle, "prefixes", empty.prefixes)),
+    };
+    if (handle.sqliteSeedStore) {
+      handle.cachedPayload = assembleSqliteSeededPayload(handle, meta);
+    } else {
+      // "keep": the base overlay's own rows never reach the wire (persistRowPayload
+      // excludes every seed key from every write via seedOnlyKeys below), so the
+      // per-row byte cap that protects a real backend's real item-size limit has
+      // nothing to protect here — capping it would silently drop a real corpus
+      // band's own high-fan-out property (one edge per fact is normal, not a
+      // pathology) and break every read that depends on it.
+      handle.baseRows = payloadToRows(handle.basePayload || empty, { onOversizedRow: "keep" });
+      handle.cachedPayload = rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta });
+    }
   }
   return cloneJson(handle.cachedPayload);
 }
@@ -843,15 +904,18 @@ function movedBeyondAuditStamp(beforeRow, row) {
  *  from a payload that never landed. */
 async function persistRowPayload(handle, payload) {
   await readRowPayload(handle);
-  const before = overlayRows(handle.baseRows, handle.storedRows);
+  const seedKeys = seedOnlyKeys(handle);
+  // On the sqlite path the seed is out of BOTH sides of the diff: the rows it
+  // holds are exactly the keys no write may touch, so projecting them would
+  // materialize the whole seed only to filter every row of it back out.
+  const before = handle.sqliteSeedStore ? handle.storedRows : overlayRows(handle.baseRows, handle.storedRows);
   const beforeByKey = new Map(before.map((row) => [row.rowKey, row]));
-  const after = payloadToRows(payload, {
-    priorRows: before,
+  const after = payloadToRows(handle.sqliteSeedStore ? payloadWithoutRowKeys(payload, seedKeys) : payload, {
+    priorRows: handle.sqliteSeedStore ? sqliteSeedPriorRows(handle) : before,
     onOversizedRow: handle.onOversizedRow,
     ...(handle.log ? { log: handle.log } : {}),
   });
   const { puts, deletes } = diffRows(before, after);
-  const seedKeys = seedOnlyKeys(handle);
   const writes = puts
     .filter((row) => !seedKeys.has(row.rowKey))
     .filter((row) => movedBeyondAuditStamp(beforeByKey.get(row.rowKey), row));
@@ -871,9 +935,141 @@ async function persistRowPayload(handle, payload) {
   const next = new Map(handle.storedRows.filter((row) => !removed.has(row.rowKey)).map((row) => [row.rowKey, row]));
   for (const row of writes) next.set(row.rowKey, row);
   handle.storedRows = [...next.values()];
-  handle.cachedPayload = rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), {
-    meta: { memory: payload.memory, prefixes: payload.prefixes },
-  });
+  const meta = { memory: payload.memory, prefixes: payload.prefixes };
+  // Dropped before the rebuild, not after it: the payload this replaces is the
+  // largest object the handle holds, and keeping it reachable while the next
+  // one assembles doubles the peak for no reason.
+  handle.cachedPayload = null;
+  handle.cachedPayload = handle.sqliteSeedStore
+    ? assembleSqliteSeededPayload(handle, meta)
+    : rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta });
+}
+
+/** The payload minus a set of row keys, for a projection that must not spend
+ *  bytes on rows the write path is about to filter out anyway. */
+function payloadWithoutRowKeys(payload, excluded) {
+  if (!excluded.size) return payload;
+  return {
+    ...payload,
+    individuals: (payload?.individuals || []).filter((ind) => !excluded.has(String(ind?.id ?? ""))),
+    objectProperties: (payload?.objectProperties || []).filter((group) => !excluded.has(`${EDGE_GROUP_KEY_PREFIX}${group?.prop}`)),
+  };
+}
+
+// ---- A sqlite store as the seed layer --------------------------------------
+// The seed a Backend D handle reads under its session's own rows can be an
+// open read-only sqlite store instead of a parsed payload. Nothing about the
+// contract changes: the same rows assemble in the same order and the same keys
+// are barred from every write. What changes is how many copies of the seed
+// exist at once — the rows stream out of the store one at a time and the
+// write path never projects them, so the assembled payload is the only one.
+
+/** node:sqlite's row-at-a-time read where the runtime has it, the whole result
+ *  set where it does not. Streaming is the point: a seed row is garbage the
+ *  moment assembly has parsed it. */
+function statementRowStream(statement) {
+  return typeof statement.iterate === "function" ? statement.iterate() : statement.all();
+}
+
+/** Every row the seed store holds, one at a time. `coveredByAnotherLayer(key)`
+ *  drops the keys the subgraph overlay or the session's own rows already own,
+ *  so assembly sees each key exactly once. */
+function* sqliteSeedRowStream(store, coveredByAnotherLayer) {
+  const individuals = store.db.prepare(
+    "SELECT i.id AS id, i.ord AS ord, i.class AS class, i.json AS json, f.subject AS subject"
+    + " FROM individuals i LEFT JOIN facts f ON f.id = i.id ORDER BY i.ord, i.id",
+  );
+  for (const r of statementRowStream(individuals)) {
+    if (coveredByAnotherLayer(r.id)) continue;
+    const rowClass = ROW_CLASS_BY_INDIVIDUAL_CLASS.get(r.class) || "";
+    yield {
+      rowKey: r.id,
+      rowClass,
+      term: rowClass === "fact" ? normFactTerm(r.subject || "") : "",
+      json: individualRowJson(r.ord, r.json),
+    };
+  }
+  // One query per group rather than one over every edge in the store: a group
+  // is freed as soon as assembly has taken it, so the edges of the largest
+  // property are all this ever holds at once.
+  const edgesOfProp = store.db.prepare(
+    "SELECT subject, object, subject_label, object_label, extra FROM edges WHERE prop = ? ORDER BY rowid",
+  );
+  for (const relation of store.db.prepare("SELECT prop, ord, predicate, count FROM relations ORDER BY ord, prop").all()) {
+    if (coveredByAnotherLayer(`${EDGE_GROUP_KEY_PREFIX}${relation.prop}`)) continue;
+    const examples = [];
+    for (const e of edgesOfProp.all(relation.prop)) {
+      const edge = { subject: e.subject, object: e.object, subjectLabel: e.subject_label, objectLabel: e.object_label };
+      if (e.extra) Object.assign(edge, JSON.parse(e.extra));
+      examples.push(edge);
+    }
+    yield edgeGroupRow({ predicate: relation.predicate, prop: relation.prop, count: relation.count, examples }, relation.ord);
+  }
+  for (const row of readUnmappedRows(store.db)) {
+    if (!coveredByAnotherLayer(row.rowKey)) yield row;
+  }
+}
+
+/** Every key the read-only layers hold, with the ord each one carries — the
+ *  keys-only view of the seed the write path needs. A key and an integer per
+ *  row is small where the rows themselves are not, so this is held for the
+ *  handle's life once a write has asked for it. */
+function sqliteSeedKeyOrds(handle) {
+  if (handle.sqliteSeedKeyOrds) return handle.sqliteSeedKeyOrds;
+  const db = handle.sqliteSeedStore.db;
+  const ords = new Map();
+  for (const r of statementRowStream(db.prepare("SELECT id, ord FROM individuals"))) ords.set(r.id, r.ord);
+  for (const r of statementRowStream(db.prepare("SELECT prop, ord FROM relations"))) ords.set(`${EDGE_GROUP_KEY_PREFIX}${r.prop}`, r.ord);
+  for (const row of readUnmappedRows(db)) ords.set(row.rowKey, ordOfRow(row));
+  for (const row of handle.sqliteSeedOverlayRows || []) ords.set(row.rowKey, ordOfRow(row));
+  handle.sqliteSeedKeyOrds = ords;
+  return ords;
+}
+
+/** What `payloadToRows` reads off prior rows: the ord each key already carries,
+ *  in the smallest row shape that carries one. The session's own rows come
+ *  last, so a key both layers hold keeps the session's ord — the precedence
+ *  assembly gives it. */
+function* sqliteSeedPriorRows(handle) {
+  for (const [rowKey, ord] of sqliteSeedKeyOrds(handle)) yield { rowKey, json: `{"ord":${ord}}` };
+  yield* handle.storedRows;
+}
+
+function* chainedRows(...sources) {
+  for (const source of sources) yield* source;
+}
+
+/** seed ⊕ overlay ⊕ session, assembled once: the seed streams out of sqlite,
+ *  the overlay rows layer over it, and the session's own rows win both. */
+function assembleSqliteSeededPayload(handle, meta) {
+  const covered = new Set(handle.storedRows.map((row) => row.rowKey));
+  const overlay = (handle.sqliteSeedOverlayRows || []).filter((row) => row?.rowKey && !covered.has(row.rowKey));
+  for (const row of overlay) covered.add(row.rowKey);
+  return rowsToPayload(
+    chainedRows(sqliteSeedRowStream(handle.sqliteSeedStore, (key) => covered.has(key)), overlay, handle.storedRows),
+    { meta },
+  );
+}
+
+/** Every distinct subject and object a seed store's facts carry, off the
+ *  `facts` projection's own columns — the raw values, folded by whoever needs
+ *  them. A caller that would otherwise walk the seed's individuals to collect
+ *  its vocabulary asks the database instead and parses no record at all. */
+export function* sqliteSeedFactTermValues(store) {
+  for (const column of ["subject", "object"]) {
+    for (const r of statementRowStream(store.db.prepare(`SELECT DISTINCT ${column} AS value FROM facts`))) {
+      if (r.value) yield r.value;
+    }
+  }
+}
+
+/** The seed's own value for one of the two stored scalars, whichever way this
+ *  handle holds its seed. */
+function seedScalar(handle, key, fallback) {
+  if (!handle.sqliteSeedStore) return handle.basePayload?.[key] ?? fallback;
+  const row = handle.sqliteSeedStore.db.prepare("SELECT v FROM meta WHERE k = ?").get(key);
+  if (!row) return fallback;
+  try { return JSON.parse(row.v); } catch { return fallback; }
 }
 
 /** Resolve a backend token ("memory" | "sqlite" | anything else) into
