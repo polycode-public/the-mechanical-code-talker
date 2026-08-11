@@ -1,9 +1,9 @@
 # PLAN_MEMORY_BACKEND.md — a pluggable session-memory backend, the AWS row service behind the deployed demos, and a consumer-hosted turn surface over a Dynamo corpus
 
 Status: BUILT — every phase (M0–M10, T0–T14) landed 2026-08-10 in one continuous campaign;
-each phase's heading carries its build marker. Still open on the AWS side, tracked in
-NEXT.md: the orphaned first-deploy table blocks `deploy:website` until it is removed, and
-the wikidata-slice/conceptnet-full bands load by hand once their raw dumps are downloaded.
+each phase's heading carries its build marker. The rollout continues in
+`PLAN_MEMORY_ROLLOUT.md`: what live traffic taught, the container-image re-packaging with
+sqlite seeds, and the remaining operator-gated corpus loads.
 Revised ten times before the go. The first draft made news.html an IndexedDB consumer; the
 operator redirected it (2026-08-10): the deployed news demo must BE the AWS-backed architecture,
 fronted by a new row service in tmct's own stack. The second revision (same day) moved every

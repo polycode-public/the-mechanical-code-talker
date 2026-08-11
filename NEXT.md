@@ -29,27 +29,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **The memory backend and turn surface: the last live-ops steps** —
-  `PLAN_MEMORY_BACKEND.md` is BUILT and the 6.0.7 pipeline went fully green end to end
-  (deploy, WordNet corpus load, all deployed e2e, and every post-deploy smoke probe:
-  row round trip, turn, corpus read). The orphaned first-generation table and the
-  manual out-of-band Lambda permission are both removed; CDK owns everything deployed.
-  Open:
-  - The news worker OOMs at 1769 MB when a real poll cycle runs over the xl seed
-    (boot is fine; the cycle's working set is not) — the 4096 MB fix is in the 6.0.8
-    pipeline now; after it deploys, re-verify poll → materialized feed on the live
-    page before calling news.html working.
-  - conceptnet-full: 147,922 of 2,344,809 rows are loaded; the first operator run died
-    on a transient DynamoDB 500 and the loader now retries (5 attempts, exponential
-    backoff with jitter). The operator re-runs the staged command (idempotent, resumes
-    from what's there): `AWS_PROFILE=tmct-prod node bin/tmct.mjs corpus load
-    conceptnet-full --table tmct-prod-prod-website-RowServiceTable2B650E09-1AG9XEDHMG359
-    --source <scratchpad>/conceptnet-full.band.jsonl`.
-  - wikidata-slice: the operator chose the full-dump route; the 155 GB gz dump is
-    downloading (hours at ~4 MB/s). Then: two streaming grep passes pull the 12
-    SEED_QIDS entities and their claim-object entities into a dump-derived JSON-lines
-    slice, `node scripts/corpus-bands/build-wikidata-slice.mjs --source <slice>`, and
-    `tmct corpus load wikidata-slice` against the same table. CC0, no notice.
+- [ ] **The rollout: container-image Lambdas with sqlite seeds, and the data loads** —
+  the plan of record is `PLAN_MEMORY_ROLLOUT.md` (operator-decided 2026-08-11): one
+  Node 24 container image for all three Lambdas carrying `mid-seed.sqlite` +
+  `xl-seed.sqlite`, killing the news worker's OOM (three in-memory seed copies) at its
+  cause; phases R0–R5 there are written to build; `e2e:deployed:news-live` is the
+  acceptance gate and is red until the worker fix lands. That doc also carries the two
+  operator-gated corpus loads (conceptnet-full resume command; the wikidata full-dump
+  route with the download-resume line) and every live-ops fact a fresh session must
+  not re-learn.
 
 ## Discipline
 
