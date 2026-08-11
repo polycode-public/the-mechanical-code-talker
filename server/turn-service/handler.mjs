@@ -22,7 +22,10 @@
 import { randomUUID } from "node:crypto";
 import { BackendUnavailable } from "../../src/adapters/memory/row-backend.mjs";
 import { createDynamoRowBackend } from "../../src/adapters/memory/row-backend-dynamo.mjs";
-import { wrapRowBackend, emptyMemory, FACT_CLASS } from "../../src/adapters/memory/core.mjs";
+import {
+  wrapRowBackend, wrapRowBackendOverSqliteSeed, openSqliteSeedStore,
+  sqliteSeedFactTermValues, emptyMemory, FACT_CLASS,
+} from "../../src/adapters/memory/core.mjs";
 import { payloadToRows, rowsToPayload, payloadMeta } from "../../src/adapters/memory/rows.mjs";
 import { normFactTerm } from "../../src/domain/hash.mjs";
 import { runTurn } from "../../src/services/chat.mjs";
@@ -97,6 +100,16 @@ export function vocabularyFromSeed(seedPayload) {
   return [...words].sort();
 }
 
+/** The same vocabulary off a seed held as an open sqlite store: the terms come
+ *  from the store's own fact columns, so no record is parsed to collect them. */
+export function vocabularyFromSqliteSeedStore(seedStore) {
+  const words = new Set();
+  for (const value of sqliteSeedFactTermValues(seedStore)) {
+    for (const word of normFactTerm(value).split(" ")) if (word) words.add(word);
+  }
+  return [...words].sort();
+}
+
 /** The read-only overlay a turn's engine call runs over: the bundled seed's
  *  rows with this turn's retrieved corpus rows layered on top (a subgraph
  *  row wins a key collision, being the more specific of the two — in
@@ -164,8 +177,14 @@ function withGlobalRowCap(backend, globalRowCapCounter) {
  *  caches it, so a warm container's cold-parse cost is paid exactly once, by
  *  whoever loaded it;
  *
- *  `vocabulary` defaults to `vocabularyFromSeed(seedPayload)`, computed once
- *  here at construction time rather than per turn;
+ *  `seedStore` is that same seed held as an open read-only sqlite store
+ *  (`openSqliteSeedStore`), which a turn reads instead of a parsed payload: the
+ *  seed's rows stream into assembly and the retrieved subgraph layers over them
+ *  as overlay rows, so a turn never materializes the seed as rows. Takes
+ *  precedence over `seedPayload` when both are set;
+ *
+ *  `vocabulary` defaults to the seed's own terms, computed once here at
+ *  construction time rather than per turn;
  *
  *  `bands`/`queryTerm` are retrieval's corpus surface — an empty `bands`
  *  array (no bands configured) always answers in seed-session mode, the
@@ -201,6 +220,7 @@ function withGlobalRowCap(backend, globalRowCapCounter) {
 export function createTurnServiceHandler({
   createSessionBackend,
   seedPayload = null,
+  seedStore = null,
   vocabulary = null,
   bands = [],
   queryTerm = null,
@@ -225,7 +245,8 @@ export function createTurnServiceHandler({
     throw new TypeError("createTurnServiceHandler needs a counters seam with incrementTurnRate");
   }
 
-  const resolvedVocabulary = vocabulary ?? vocabularyFromSeed(seedPayload);
+  const resolvedVocabulary = vocabulary
+    ?? (seedStore ? vocabularyFromSqliteSeedStore(seedStore) : vocabularyFromSeed(seedPayload));
   const noSkipDecision = { mode: SUPPLEMENTED_MODE, probe: false, report: async () => {} };
   const forcedSkipDecision = { mode: SEED_SESSION_MODE, probe: false, report: async () => {} };
 
@@ -274,10 +295,15 @@ export function createTurnServiceHandler({
     // row service's own handler leaves it alone for the same reason, and a
     // local double that closed it here would disable the very session it
     // just wrote to for every turn after this one.
-    const basePayload = mergeSeedAndSubgraph(seedPayload, retrieval.rows, { log });
     const sessionBackend = await createSessionBackend(sessionKey);
     const cappedBackend = withGlobalRowCap(sessionBackend, globalRowCapCounter);
-    const memoryDir = wrapRowBackend(cappedBackend, { basePayload, onOversizedRow: "drop", log });
+    const memoryDir = seedStore
+      ? wrapRowBackendOverSqliteSeed(cappedBackend, seedStore, { overlayRows: retrieval.rows, onOversizedRow: "drop", log })
+      : wrapRowBackend(cappedBackend, {
+        basePayload: mergeSeedAndSubgraph(seedPayload, retrieval.rows, { log }),
+        onOversizedRow: "drop",
+        log,
+      });
 
     let result;
     try {
@@ -366,13 +392,20 @@ async function loadDocumentClients() {
 }
 
 let cachedSeedPromise = null;
-/** Loads and parses the mid-bundle seed once per container. `seedPath`
- *  defaults to `mid-seed.json` beside this file — `server/turn-service/
- *  build-seed.mjs` (`npm run build:turn-seed`) writes it there; the AWS
- *  package ships both files side by side. */
-async function loadMidSeed(seedPath = new URL("./mid-seed.json", import.meta.url)) {
+/** The mid-bundle seed, once per container. `TMCT_MID_SEED_SQLITE` names a
+ *  pre-built seed file, opened read-only in milliseconds with no parse; unset,
+ *  the JSON at `seedPath` is loaded and parsed as before — `server/turn-service/
+ *  build-seed.mjs` (`npm run build:turn-seed`) writes `mid-seed.json` beside
+ *  this file, and the AWS package ships them side by side. Either way the
+ *  vocabulary is computed here, once. */
+async function loadMidSeed({ seedPath = new URL("./mid-seed.json", import.meta.url), env = process.env } = {}) {
   if (!cachedSeedPromise) {
     cachedSeedPromise = (async () => {
+      const sqlitePath = env.TMCT_MID_SEED_SQLITE || "";
+      if (sqlitePath) {
+        const seedStore = await openSqliteSeedStore(sqlitePath);
+        return { seedStore, vocabulary: vocabularyFromSqliteSeedStore(seedStore) };
+      }
       const { readFile } = await import("node:fs/promises");
       const seedPayload = JSON.parse(await readFile(seedPath, "utf8"));
       return { seedPayload, vocabulary: vocabularyFromSeed(seedPayload) };
@@ -481,7 +514,7 @@ function createLambdaNewsWorkerInvoker({ functionName }) {
  *  or the news worker's own Lambda invoke. */
 export const handler = async (event) => {
   const { tableName, ttlSeconds, turnRateLimit, tableRowCap, bands } = turnServiceConfigFromEnv();
-  const [{ commandClient, convenienceClient }, { seedPayload, vocabulary }] = await Promise.all([
+  const [{ commandClient, convenienceClient }, { seedPayload = null, seedStore = null, vocabulary }] = await Promise.all([
     loadDocumentClients(), loadMidSeed(),
   ]);
 
@@ -490,6 +523,7 @@ export const handler = async (event) => {
       client: commandClient, tableName, sessionKey, ttlSeconds, softDelete: true,
     }),
     seedPayload,
+    seedStore,
     vocabulary,
     bands,
     queryTerm: bands.length ? termQueryOverDocumentClient({ client: convenienceClient, tableName }) : null,
