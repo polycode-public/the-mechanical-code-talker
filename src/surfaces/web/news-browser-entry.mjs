@@ -32,11 +32,12 @@
 // builds it fresh on every deploy, never committed, the same posture every
 // sibling *-browser-entry.mjs documents for its own output.
 
-import { createHttpRowBackend } from "./http-row-backend.mjs";
+import { createHttpRowBackend, sha256Hex } from "./http-row-backend.mjs";
 import { publishTmctSurface } from "./tmct-surface.mjs";
 import { factSentence, findingCaveat } from "../../domain/fact-phrase.mjs";
 
 const SESSION_HEADER = "x-tmct-session";
+const PAYLOAD_HASH_HEADER = "x-amz-content-sha256";
 const DEFAULT_CYCLE_POLL_MS = 400;
 const DEFAULT_CYCLE_WAIT_TIMEOUT_MS = 20_000;
 
@@ -296,10 +297,11 @@ export function createNewsSession({
 
   async function postTrigger(kind, body) {
     const key = ensureSessionKey();
+    const serializedBody = JSON.stringify(body || {});
     const response = await request(`/api/sessions/${key}/${kind}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body || {}),
+      headers: { "content-type": "application/json", [PAYLOAD_HASH_HEADER]: await sha256Hex(serializedBody) },
+      body: serializedBody,
     });
     // A 409 means a cycle this session already had running is still going —
     // never this call's own fault. Falling through to the version-wait below
@@ -455,10 +457,11 @@ export function createNewsSession({
       const key = ensureSessionKey();
       const body = { text };
       if (fuzzy !== undefined) body.retrieval = { fuzzy: Boolean(fuzzy) };
+      const serializedBody = JSON.stringify(body);
       const response = await request(`/api/sessions/${key}/turn`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        headers: { "content-type": "application/json", [PAYLOAD_HASH_HEADER]: await sha256Hex(serializedBody) },
+        body: serializedBody,
       });
       if (response.status === 429) {
         throw new Error("this session has sent a lot of chat messages this hour — wait a bit and try again.");

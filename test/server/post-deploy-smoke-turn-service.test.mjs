@@ -21,3 +21,22 @@ test("the round trip posts one turn and gets real reply text back from a local d
 test("a missing turn service reports the failure instead of throwing past the caller", async () => {
   await assert.rejects(() => turnServiceRoundTrip("http://127.0.0.1:1"), /fetch failed|ECONNREFUSED/);
 });
+
+test("the round trip's POST carries x-amz-content-sha256 — the URL auth layer 403s a body-carrying request without it", async () => {
+  const service = await createLocalTurnService();
+  const realFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = (url, init) => {
+    calls.push({ url: String(url), method: init?.method || "GET", headers: init?.headers || {} });
+    return realFetch(url, init);
+  };
+  try {
+    await turnServiceRoundTrip(service.url);
+  } finally {
+    globalThis.fetch = realFetch;
+    await service.close();
+  }
+
+  const postCall = calls.find((call) => call.method === "POST");
+  assert.ok(postCall.headers["x-amz-content-sha256"], "the POST carries the payload-hash header");
+});

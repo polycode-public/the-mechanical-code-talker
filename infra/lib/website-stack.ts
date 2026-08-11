@@ -25,6 +25,7 @@ import {
   aws_lambda as lambda,
   aws_events as events,
   aws_events_targets as events_targets,
+  aws_iam as iam,
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
 
@@ -346,9 +347,13 @@ export class WebsiteStack extends Stack {
     }
 
     // ---------- the row service: table, Lambda, function URL, /api/* ----------
+    // No explicit tableName: every shipped consumer (the DynamoDB backend
+    // default, the corpus loader, retrieval, the breaker) speaks "pk"/"sk",
+    // so the key attribute names below matter more than a stable table name
+    // — CloudFormation names it instead, since a named table can't be
+    // replaced when the key schema changes without a name collision.
     const rowTable = new dynamodb.Table(this, "RowServiceTable", {
-      tableName: `tmct-${envName}-${slug}-rows`,
-      partitionKey: { name: "sessionKey", type: dynamodb.AttributeType.STRING },
+      partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
       sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       timeToLiveAttribute: "expiresAt",
@@ -372,6 +377,16 @@ export class WebsiteStack extends Stack {
       },
     });
     rowTable.grantReadWriteData(rowServiceFn);
+    // OAC's own lambda:InvokeFunctionUrl grant (added by
+    // FunctionUrlOrigin.withOriginAccessControl below) is not enough on its
+    // own — the URL auth layer checks lambda:InvokeFunction for the
+    // cloudfront.amazonaws.com principal too, so without this a signed
+    // request 403s at the edge before the handler ever runs.
+    rowServiceFn.addPermission("CloudFrontServiceInvoke", {
+      principal: new iam.ServicePrincipal("cloudfront.amazonaws.com"),
+      action: "lambda:InvokeFunction",
+      sourceArn: `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`,
+    });
 
     // ---------- the news worker: one Lambda, invoked async by the row
     // service's poll/enrich/ingest trigger routes and by the turn service
@@ -442,6 +457,14 @@ export class WebsiteStack extends Stack {
     // what it learned into the caller's own session partition (write) —
     // the same table the row service owns, never a copy of it.
     rowTable.grantReadWriteData(turnServiceFn);
+    // Same second permission the row service Lambda needs above: the URL
+    // auth layer checks lambda:InvokeFunction for the cloudfront.amazonaws.com
+    // principal, separately from OAC's own lambda:InvokeFunctionUrl grant.
+    turnServiceFn.addPermission("CloudFrontServiceInvoke", {
+      principal: new iam.ServicePrincipal("cloudfront.amazonaws.com"),
+      action: "lambda:InvokeFunction",
+      sourceArn: `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`,
+    });
     // A turn whose factsTouched is non-empty fires the same materialize
     // invoke the row service's own trigger routes fire — the news worker
     // Lambda, so a taught fact reaches the feed within the next version
@@ -518,5 +541,6 @@ export class WebsiteStack extends Stack {
     new CfnOutput(this, "DistributionId", { value: distribution.distributionId });
     new CfnOutput(this, "DistributionDomain", { value: distribution.distributionDomainName });
     new CfnOutput(this, "Hostname", { value: hostname });
+    new CfnOutput(this, "RowTableName", { value: rowTable.tableName });
   }
 }

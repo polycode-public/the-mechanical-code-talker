@@ -14,9 +14,21 @@ import {
 } from "../../adapters/memory/row-backend.mjs";
 
 const SESSION_HEADER = "x-tmct-session";
+const PAYLOAD_HASH_HEADER = "x-amz-content-sha256";
 
 function trimTrailingSlash(value) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+/** Hex SHA-256 of `text`, via Web Crypto (available as `globalThis.crypto.subtle`
+ *  in both browsers and node >= 20, so this needs no node-only import and
+ *  stays safe to bundle for the page). Every body-carrying `/api/*` request
+ *  needs this as `x-amz-content-sha256`: Lambda URLs behind OAC 403 at the
+ *  URL auth layer, before the handler ever runs, if a body-carrying request
+ *  arrives without it. */
+export async function sha256Hex(text) {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /** Reads whatever text the response carries, for the error's own message
@@ -94,7 +106,12 @@ export function createHttpRowBackend({ apiBase, sessionKey, fetchImpl = fetch } 
   }
 
   async function mutate(path, { method, body }, { retryOn5xx = false } = {}) {
-    const init = { method, headers: jsonHeaders, body: JSON.stringify(body) };
+    const serializedBody = JSON.stringify(body);
+    const init = {
+      method,
+      headers: { ...jsonHeaders, [PAYLOAD_HASH_HEADER]: await sha256Hex(serializedBody) },
+      body: serializedBody,
+    };
     const response = retryOn5xx
       ? await fetchWithOneRetryOn5xx(fetchImpl, `${base}${path}`, init, "could not reach the row service")
       : await runFetch(fetchImpl, `${base}${path}`, init, "could not reach the row service");
