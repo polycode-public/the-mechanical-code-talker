@@ -2421,12 +2421,14 @@ function sourceIdFor(desc) {
     case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
     case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
     case "corpusWeak": return { id: `src:corpus-weak:${desc.name}`, type: "corpusWeak" };
-    // One Source per pack article (the @revid stays in the article segment),
-    // so two facts from the same article corroborate nothing extra.
-    case "reference": return { id: `src:reference:${desc.pack}:${desc.article}`, type: "reference" };
-    // The live-Wikipedia pack: same per-article Source id, but a lower trust
+    // One Source per reference WORK, not per article: Simple English Wikipedia
+    // is one party however many of its pages get read, so two of its articles
+    // stating the same triple corroborate nothing. Which article said it stays
+    // on the fact's own provenance tag, where the audit trail belongs.
+    case "reference": return { id: `src:reference:${desc.pack}`, type: "reference" };
+    // The live-Wikipedia pack: same per-work Source id, but a lower trust
     // type so a live lookup ranks below the curated revision-pinned pack.
-    case "referenceLive": return { id: `src:reference:${desc.pack}:${desc.article}`, type: "referenceLive" };
+    case "referenceLive": return { id: `src:reference:${desc.pack}`, type: "referenceLive" };
     // One Source per source-file basename, not per extraction run.
     case "extracted": return { id: `src:extracted:${desc.name}`, type: "extracted" };
     // The fuzzy tier's candidates: one low-trust Source per source label.
@@ -2601,6 +2603,49 @@ const isSessionScopedSourceId = (id) =>
     || id.startsWith(`${TEACH_NODE_SOURCE_ID}:`));
 
 /**
+ * The slice of the graph a reliability pass can possibly read: the triples a
+ * session-scoped Source stated, and every (subject, predicate) those triples
+ * sit under so each one's disagreeing siblings come along. Null when nothing
+ * in the store has a track record to keep, which is the whole of what a
+ * seed-only graph or a store whose writers are all documents ever needs.
+ *
+ * A pure narrowing, not a cache: the answer is still folded from the fact set
+ * on every call, and every group left out is one whose row could not have
+ * changed a number in the tally. A Source nobody stated anything for keeps no
+ * reliability attribute either way, so leaving it out is what the whole-graph
+ * pass does too.
+ */
+function sessionScopedFoldScope(payload) {
+  // The Source list is a handful of individuals where the edge list is one per
+  // fact record, so "is there an actor here at all" is asked of the Sources.
+  const idx = memoryIndexOf(payload);
+  if (idx) {
+    let anyActor = false;
+    for (const id of idx.sourcesById.keys()) if (isSessionScopedSourceId(id)) { anyActor = true; break; }
+    if (!anyActor) return null;
+  }
+  const statedGroup = payload.objectProperties.find((g) => g?.prop === STATED_BY_PROP);
+  const statedRecordIds = new Set();
+  for (const e of statedGroup?.examples || []) {
+    if (isSessionScopedSourceId(e?.object)) statedRecordIds.add(e.subject);
+  }
+  const scopedGroups = new Set();
+  const pairs = new Set();
+  for (const ind of payload.individuals) {
+    if (ind?.class !== FACT_CLASS) continue;
+    // A summary that absorbed an actor's record still votes for it, so the
+    // group it stands in is in scope exactly as the record itself would be.
+    const stated = statedRecordIds.has(ind.id)
+      || (isHeadRollupId(ind.id) && absorbedSourceIds(ind).some(isSessionScopedSourceId));
+    if (!stated) continue;
+    scopedGroups.add(factGroupId(ind.id));
+    const subject = individualKey(ind, "subject");
+    if (subject) pairs.add(subjectPredicateKey(subject, individualKey(ind, "predicate")));
+  }
+  return scopedGroups.size ? { pairs, scopedGroups } : null;
+}
+
+/**
  * Recompute + materialise mgx:sourceReliability on every session-scoped
  * operator/teach Source: count facts stated vs. contradicted
  * (findContradictions), run sessionReliabilityFrom, write the bounded result.
@@ -2610,11 +2655,17 @@ const isSessionScopedSourceId = (id) =>
  */
 function recomputeSourceReliability(payload) {
   if (!Array.isArray(payload?.individuals) || !Array.isArray(payload?.objectProperties)) return;
-  const rows = readFactRows(payload); // Fact-only — contradiction accounting is inherently Fact-shaped
+  const scope = sessionScopedFoldScope(payload);
+  if (!scope) return;
+
+  // Fact-only — contradiction accounting is inherently Fact-shaped. Scoped to
+  // the triples a scorable actor actually stated, plus every sibling object
+  // those triples could be contradicted by: no other group can put a number in
+  // the tally below, so folding the rest of the graph only costs time.
+  const rows = foldFactRows(payload, factFoldContext(payload, scope));
   const contradictedFactIds = new Set();
   // The fold above is the same one findContradictions would take for itself,
-  // and over a seed-sized graph it is half a second. Nothing changes the
-  // payload between the two, so it goes across.
+  // and nothing changes the payload between the two, so it goes across.
   for (const group of findContradictions(payload, { factRows: rows })) for (const r of group) contradictedFactIds.add(r.id);
 
   const bySource = new Map(); // sessionSourceId -> { factsAsserted, factsContradicted }
@@ -3813,7 +3864,14 @@ export async function resolveRelationChaseReverse(memory, name, objectTerm, help
  * answers "what did this source used to say", never "what do I trust now".
  */
 export function readFactRows(memory, opts = {}) {
-  const ctx = factFoldContext(memory);
+  return foldFactRows(memory, factFoldContext(memory), opts);
+}
+
+/** The fold itself, over whatever slice of the graph a context was built for.
+ *  `readFactRows` hands it the whole graph; a caller that only needs certain
+ *  (subject, predicate) pairs hands it a scoped context and gets exactly the
+ *  rows a whole-graph fold would have produced for those pairs. */
+function foldFactRows(memory, ctx, opts = {}) {
   // A materialised head, when the backend keeps one, replaces the group's own
   // fold with the audit trail that fold was last built from — the same records,
   // read back instead of re-derived. It carries no recency by construction, so
@@ -3840,16 +3898,46 @@ export function readFactRows(memory, opts = {}) {
  *  Shared by the read fold and by the head materialisation below, deliberately:
  *  a stored aggregate and a computed one folded from different inputs is the
  *  failure a materialised table invites, and one shared builder is what keeps
- *  the two from ever drifting apart. */
-function factFoldContext(memory) {
+ *  the two from ever drifting apart.
+ *
+ *  `pairs` narrows the context to the groups a given set of (subject,
+ *  predicate) keys carries, with `scopedGroups` naming groups to keep outright
+ *  whatever their records read as. Every group of a kept pair is kept, whoever
+ *  stated it, so a scoped fold reads each of those triples exactly as a
+ *  whole-graph fold does — and a caller asking about one party's facts still
+ *  sees every sibling object that party's claim could be contradicted by. */
+function factFoldContext(memory, { pairs = null, scopedGroups = new Set() } = {}) {
   const individuals = memory?.individuals || [];
-  const sourcesById = new Map(individuals.filter((i) => i?.class === SOURCE_CLASS).map((i) => [i.id, i]));
-  const statedGroup = (memory?.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
-  const statedByRecord = new Map();
-  for (const e of statedGroup?.examples || []) {
-    if (!statedByRecord.has(e.subject)) statedByRecord.set(e.subject, []);
-    statedByRecord.get(e.subject).push(e.object);
+  const idx = memoryIndexOf(memory);
+  const sourcesById = idx
+    ? idx.sourcesById
+    : new Map(individuals.filter((i) => i?.class === SOURCE_CLASS).map((i) => [i.id, i]));
+  // The live index already keeps this map, edge for edge, and rebuilding it
+  // allocates one array per fact record over the whole graph.
+  let statedByRecord = idx?.statedByBySubject;
+  if (!statedByRecord) {
+    const statedGroup = (memory?.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
+    statedByRecord = new Map();
+    for (const e of statedGroup?.examples || []) {
+      if (!statedByRecord.has(e.subject)) statedByRecord.set(e.subject, []);
+      statedByRecord.get(e.subject).push(e.object);
+    }
   }
+
+  // Subject first, predicate only on a subject hit: reading both attributes off
+  // every fact record in the graph is the whole cost of a scoped pass, and the
+  // subject rules out nearly all of them on one lookup.
+  const wantedSubjects = pairs ? new Set([...pairs].map((key) => key.slice(0, key.indexOf(" ")))) : null;
+  const outsideScope = (ind) => {
+    if (!pairs) return false;
+    // A group the caller named outright is in whatever its records read as —
+    // a summary standing for absorbed records carries only a copied template,
+    // so its own attributes are not what places it.
+    if (scopedGroups.has(factGroupId(ind.id))) return false;
+    const subject = individualKey(ind, "subject");
+    if (!wantedSubjects.has(subject)) return true;
+    return !pairs.has(subjectPredicateKey(subject, individualKey(ind, "predicate")));
+  };
 
   const groups = new Map();
   const retractionsByGroup = new Map();
@@ -3864,6 +3952,7 @@ function factFoldContext(memory) {
     if (ind?.class !== FACT_CLASS) continue;
     if ((ind.attributes || []).some((a) => a?.prop === SUPERSEDED_BY_PROP)) continue; // a demoted leaf, not a head
     if (isChainRollupId(ind.id)) continue; // a summary of one source's demoted history, which was never a vote
+    if (outsideScope(ind)) continue;
     const groupId = factGroupId(ind.id);
     const group = groups.get(groupId);
     if (group) group.push(ind);
@@ -3888,24 +3977,87 @@ function factFoldContext(memory) {
     else groups.delete(groupId);
   }
 
-  const groupsByPair = new Map();
-  for (const [groupId, members] of groups) {
-    // Codepoint order on the record id, which sorts by source key — the same
-    // locale-free determinism the P2P layer's own sort insists on, so two peers
-    // holding the same records read the same row.
-    members.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    const key = subjectPredicateKey(individualKey(members[0], "subject"), individualKey(members[0], "predicate"));
-    const held = groupsByPair.get(key);
-    if (held) held.push(groupId);
-    else groupsByPair.set(key, [groupId]);
-  }
+  // Codepoint order on the record id, which sorts by source key — the same
+  // locale-free determinism the P2P layer's own sort insists on, so two peers
+  // holding the same records read the same row.
+  for (const members of groups.values()) members.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  // One entry per distinct Source, not one attribute scan per record: a seed's
+  // 60,000 facts name a handful of Sources between them.
+  const typeBySource = new Map();
+  const sourceTypeOf = (id) => {
+    let type = typeBySource.get(id);
+    if (type === undefined) {
+      type = (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value || "";
+      typeBySource.set(id, type);
+    }
+    return type;
+  };
+
+  // Likewise for the timestamp a provenance string embeds: a corpus band writes
+  // one tag over tens of thousands of records, and parsing it is the same
+  // answer every time.
+  const embeddedBySource = new Map();
+  const embeddedTimestampOf = (provenance) => {
+    let ts = embeddedBySource.get(provenance);
+    if (ts === undefined) {
+      ts = embeddedTagTimestamp(provenance.split(" | ").filter(Boolean));
+      embeddedBySource.set(provenance, ts);
+    }
+    return ts;
+  };
+
+  // Only the sqlite head materialisation walks siblings by pair, and building
+  // the index costs two attribute reads per group — so it is built when asked
+  // for and not before.
+  let groupsByPair = null;
 
   return {
     groups,
-    groupsByPair,
+    get groupsByPair() {
+      if (groupsByPair) return groupsByPair;
+      groupsByPair = new Map();
+      for (const [groupId, members] of groups) {
+        const key = subjectPredicateKey(individualKey(members[0], "subject"), individualKey(members[0], "predicate"));
+        const held = groupsByPair.get(key);
+        if (held) held.push(groupId);
+        else groupsByPair.set(key, [groupId]);
+      }
+      return groupsByPair;
+    },
     statedByRecord,
-    sourceTypeOf: (id) => (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value || "",
+    sourceTypeOf,
+    embeddedTimestampOf,
   };
+}
+
+/** Everything the fold reads off one live head, gathered in ONE walk of its
+ *  attributes. Ten `.find()` scans of the same short array, once per record, is
+ *  the single most expensive thing a whole-graph fold does — the work is all in
+ *  the scanning, not in the reading. */
+function foldHeadFields(head) {
+  let provenance = "";
+  let createdAt = "";
+  let observedAt = "";
+  let extraction = "";
+  let trustScore = "";
+  let sourceId = "";
+  let quantifier = "";
+  let justification = "";
+  for (const a of head?.attributes || []) {
+    switch (a?.prop) {
+      case "mgx:factProvenance": provenance = a.value || ""; continue;
+      case CREATED_AT_PROP: createdAt = a.value || ""; continue;
+      case OBSERVED_AT_PROP: observedAt = a.value || ""; continue;
+      case EXTRACTION_FINDING_PROP: extraction = a.value || ""; continue;
+      case TRUST_SCORE_PROP: trustScore = a.value || ""; continue;
+      case SOURCE_ID_PROP: sourceId = a.value || ""; continue;
+      default: break;
+    }
+    if (a?.key === "quantifier") quantifier = a.value || "";
+    else if (a?.key === "justification") justification = a.value || "";
+  }
+  return { provenance, createdAt, observedAt, extraction, trustScore, sourceId, quantifier, justification };
 }
 
 /** One triple group folded into its row, minus the aggregate trust — that is
@@ -3953,10 +4105,11 @@ function foldFactGroup(id, heads, ctx) {
       });
       continue;
     }
-    const headTags = attrOf(head, "mgx:factProvenance").split(" | ").filter(Boolean);
+    const field = foldHeadFields(head);
+    const headTags = field.provenance.split(" | ").filter(Boolean);
     for (const tag of headTags) tags.add(tag);
     const [statedBy] = statedByRecord.get(head.id) || [];
-    const sourceId = statedBy || attrOf(head, SOURCE_ID_PROP);
+    const sourceId = statedBy || field.sourceId;
     const sourceType = sourceTypeOf(sourceId);
     // src:none stands for "no Source at all", so it stays out of the union a
     // reader renders and out of the corroboration count, exactly as an
@@ -3965,9 +4118,9 @@ function foldFactGroup(id, heads, ctx) {
       sourceIds.push(statedBy);
       if (sourceType) sourceTypes.push(sourceType);
     }
-    const createdAt = attrOf(head, CREATED_AT_PROP);
-    const observedAt = attrOf(head, OBSERVED_AT_PROP);
-    const extraction = attrOf(head, EXTRACTION_FINDING_PROP).split(" ").filter(Boolean);
+    const createdAt = field.createdAt;
+    const observedAt = field.observedAt;
+    const extraction = field.extraction ? field.extraction.split(" ").filter(Boolean) : [];
     for (const finding of extraction) findings.add(finding);
     assertions.push({
       id: head.id, sourceId, sourceType,
@@ -3975,13 +4128,13 @@ function foldFactGroup(id, heads, ctx) {
       createdAt,
       ...(observedAt ? { observedAt } : {}),
       ...(extraction.length ? { extraction } : {}),
-      ownTrust: Number(attrOf(head, TRUST_SCORE_PROP)) || 0,
-      assertedAt: assertionTimestampFor(headTags, createdAt),
+      ownTrust: Number(field.trustScore) || 0,
+      assertedAt: ctx.embeddedTimestampOf(field.provenance) || (Number.isFinite(Date.parse(createdAt)) ? createdAt : ""),
     });
-    quantifier = quantifier || keyOf(head, "quantifier");
+    quantifier = quantifier || field.quantifier;
     // ' | '-separated environments, one premise-id list per independent
     // derivation; a legacy value with no ' | ' parses as one environment.
-    for (const chunk of keyOf(head, "justification").split(" | ")) {
+    for (const chunk of field.justification.split(" | ")) {
       const env = chunk.split(" ").filter(Boolean);
       if (!env.length) continue;
       const key = env.join(" ");

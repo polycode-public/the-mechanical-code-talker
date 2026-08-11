@@ -66,6 +66,7 @@ import { splitSentencesPreservingPaths, stripCitationResidue } from "./sentences
 import { loadMemory, readFactRows, appendFacts, removeFacts } from "../adapters/memory/core.mjs";
 import { loadConfig } from "../adapters/config.mjs";
 import { touchedFactRows } from "../domain/memory/touched-facts.mjs";
+import { INGEST_SESSION_MARKER } from "../domain/memory/trust.mjs";
 import { normFactTerm } from "../domain/hash.mjs";
 import { splitIdentifierWords } from "../domain/prose.mjs";
 import { winkInstance } from "../adapters/wink-model.mjs";
@@ -104,18 +105,22 @@ export function parseArgs(argv) {
  * on a browser-sized graph — so the caller threads one fold from sentence to
  * sentence instead of paying a fresh one per candidate.
  */
-async function runSentence(sentence, { config, memoryDir, env, beforeRows }) {
+async function runSentence(sentence, { config, memoryDir, env, beforeRows, sessionId = "" }) {
   const before = beforeRows || readFactRows(await loadMemory(memoryDir));
   if (ingestYield) await ingestYield();
-  const { record, answer } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7(), env });
+  // The turn takes the caller's fold as its own before-view and hands back the
+  // after-fold it already had to take, so one sentence costs one fold rather
+  // than three of the same graph.
+  const { record, answer, factsTouched, factRowsAfter } = await runTurn(sentence, {
+    config, memoryDir, sessionId: sessionId || uuidv7(), env, factRowsBefore: before,
+  });
+  const after = factRowsAfter || before;
   // Only an assert turn can have written a Fact, so only an assert turn earns
-  // the post-turn fold; every other turn hands the caller's own view straight
-  // back untouched.
+  // a fresh view; every other turn hands the caller's own straight back.
   if (record?.via !== "assert") return { recognized: false, rows: [], afterRows: before, decline: String(answer || "") };
   if (ingestYield) await ingestYield();
-  const after = readFactRows(await loadMemory(memoryDir));
   if (record?.miss) return { recognized: false, rows: [], afterRows: after, decline: String(answer || "") };
-  return { recognized: true, rows: touchedFactRows(before, after), afterRows: after };
+  return { recognized: true, rows: factsTouched || touchedFactRows(before, after), afterRows: after };
 }
 
 /** The recognizer's own words for why it turned a sentence down, when it named
@@ -800,6 +805,13 @@ function canonicalLines(facts, storeRows) {
  *                 are the only output.
  *     sourceTag   the label the audit provenance carries (extracted:<tag> /
  *                 optimistic-extract:<tag>). Default "text".
+ *     attributeToSource
+ *                 file the recognizer's own assertion under `sourceTag`'s
+ *                 publication instead of a fresh chat session per sentence.
+ *                 Off by default: an operator running `tmct extract` over their
+ *                 own notes IS the asserting party, so that lane keeps minting
+ *                 a session. A feed or a reference work is not, and one
+ *                 publication's sentences must never corroborate each other.
  *     optimistic  also run the fuzzy tier over strict-skipped sentences.
  *     canonical   include a `canonical` array: one enriched triple line per
  *                 ingested fact.
@@ -830,7 +842,12 @@ function canonicalLines(facts, storeRows) {
 export async function ingestText(text, {
   memoryDir = null, sourceTag = "text", optimistic = false,
   canonical = false, config = null, lexicon = null, observedAt = "", findings = false,
+  attributeToSource = false,
 } = {}) {
+  // The session id every sentence's recognizer turn runs under. Stable and
+  // derived from the publication when the caller attributes to it, so the whole
+  // run lands on one Source; a fresh uuid per sentence otherwise (runSentence).
+  const recognizerSessionId = attributeToSource ? `${INGEST_SESSION_MARKER}${sourceTag.split("@")[0]}` : "";
   // Paragraphs first (blank-line separated), so the pronoun carry never bridges
   // a topic break: a fresh paragraph clears the last-subject it would resolve
   // "they"/"it" against. Each paragraph then splits into sentences the shared
@@ -900,7 +917,7 @@ export async function ingestText(text, {
     if (ingestYield) await ingestYield();
     const knownIds = new Set(currentRows.map((r) => r.id));
     const { recognized, rows, afterRows, decline } = await runSentence(form, {
-      config: cfg, memoryDir: dir, env: runEnv, beforeRows: currentRows,
+      config: cfg, memoryDir: dir, env: runEnv, beforeRows: currentRows, sessionId: recognizerSessionId,
     });
     currentRows = afterRows;
     if (!recognized) { lastDecline = decline || lastDecline; return null; }

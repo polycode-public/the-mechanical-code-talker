@@ -59,8 +59,8 @@ const SPANS_A_SENTENCE_BOUNDARY_RE = /[.!?]\s+\w/;
 // never for the group part: a hand-built individual with a short opaque id is a
 // legitimate sparse write, and rejecting it is exactly the false positive this
 // gate must never produce. The source suffix is matched loosely on purpose — a
-// Source id legitimately carries colons, spaces and an `@revid` of its own
-// ("src:reference:simplewiki:Polar bear@912").
+// Source id legitimately carries colons and spaces of its own
+// ("src:corpus:mud:amber fox").
 const FACT_RECORD_ID_RE = /^[^@]+@(.+?)(#v[1-9][0-9]*)?$/;
 const looksLikeFactRecordId = (id) => id.includes("@") || /#v\d/.test(id);
 
