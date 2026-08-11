@@ -16,6 +16,10 @@ const app = new App();
 //   hostedZoneId / zoneName            (optional — lets CDK write the A-record)
 //   rowServiceTtlDays / rowServiceTableRowCap (optional — the row service's
 //     TTL_DAYS/TABLE_ROW_CAP deployment parameters, default 7 / 2,000,000)
+//   imageTag                          (required for the website stack — the
+//     container image tag the three Lambdas deploy)
+//   ecrRepo                           (optional — the ECR repo the image
+//     lives in, default tmct-web-lambdas)
 const envName = app.node.tryGetContext("env") ?? "ci";
 const account = app.node.tryGetContext("account") ?? process.env.CDK_DEFAULT_ACCOUNT;
 const slug = app.node.tryGetContext("slug") ?? "local";
@@ -26,6 +30,8 @@ const hostedZoneId = app.node.tryGetContext("hostedZoneId");
 const zoneName = app.node.tryGetContext("zoneName");
 const rowServiceTtlDays = app.node.tryGetContext("rowServiceTtlDays");
 const rowServiceTableRowCap = app.node.tryGetContext("rowServiceTableRowCap");
+const imageTag = app.node.tryGetContext("imageTag");
+const ecrRepo = app.node.tryGetContext("ecrRepo");
 
 // Apex (DNS) stack — deploy once per environment to create the delegated zone.
 // Run this first (`cdk deploy tmct-<env>-apex`), wire up the NS delegation +
@@ -62,6 +68,8 @@ if (certArn) {
     rowServiceTtlDays: rowServiceTtlDays ? Number(rowServiceTtlDays) : undefined,
     rowServiceTableRowCap: rowServiceTableRowCap ? Number(rowServiceTableRowCap) : undefined,
     webAclArn: edgeGuard?.webAcl.attrArn,
+    imageTag,
+    ecrRepo,
     env: { account, region },
     crossRegionReferences: true,
   });

@@ -26,25 +26,9 @@ import {
   aws_events as events,
   aws_events_targets as events_targets,
   aws_iam as iam,
+  aws_ecr as ecr,
 } from "aws-cdk-lib";
 import { Construct } from "constructs";
-
-// The row service's bundle (`npm run build:row-service`, esbuild, AWS SDK
-// left external because the Lambda Node runtime ships it) — a sibling of the
-// built site, not part of it.
-const ROW_SERVICE_DIST_DIR = join(__dirname, "..", "..", "server", "row-service", "dist");
-
-// The turn service's bundle (`npm run build:turn-service`) plus its
-// cold-boot seed (`npm run build:turn-seed`, written beside the source
-// handler rather than into dist/ — see the mid-seed copy below).
-const TURN_SERVICE_DIST_DIR = join(__dirname, "..", "..", "server", "turn-service", "dist");
-const TURN_SERVICE_MID_SEED_SOURCE = join(__dirname, "..", "..", "server", "turn-service", "mid-seed.json");
-
-// The news worker's bundle (`npm run build:news-worker`) — its xl seed is
-// bundled INSIDE handler.mjs by esbuild (a static `import()` of
-// public/chat-seed.json, §3.22), so unlike the turn service this directory
-// needs no sibling file staged beside it.
-const NEWS_WORKER_DIST_DIR = join(__dirname, "..", "..", "server", "news-worker", "dist");
 
 export interface WebsiteStackProps extends StackProps {
   readonly envName: string;
@@ -65,6 +49,15 @@ export interface WebsiteStackProps extends StackProps {
    *  posture a synth with no edge-guard stack in context still needs to
    *  produce a valid template. */
   readonly webAclArn?: string;
+  /** The container image tag the three Lambdas deploy — required, no
+   *  default. Passed as `-c imageTag=<tag>` (the tag `build:image` pushed to
+   *  the ECR repo). */
+  readonly imageTag?: string;
+  /** The ECR repository name the image tag lives in. The repo itself is
+   *  created out-of-band (never by this stack — creating it here would be a
+   *  first-deploy chicken-and-egg, since the image has to exist before this
+   *  stack can reference it). */
+  readonly ecrRepo?: string;
 }
 
 // CloudFront only compresses on the fly up to this size; anything larger has
@@ -161,7 +154,16 @@ export class WebsiteStack extends Stack {
   constructor(scope: Construct, id: string, props: WebsiteStackProps) {
     super(scope, id, props);
 
-    const { envName, slug, hostname, certArn, hostedZoneId, zoneName } = props;
+    const { envName, slug, hostname, certArn, hostedZoneId, zoneName, imageTag, ecrRepo = "tmct-web-lambdas" } = props;
+
+    if (!imageTag) {
+      throw new Error(
+        "Missing CDK context key 'imageTag' — pass -c imageTag=<tag>, the image tag " +
+          "the build:image job pushed to the ECR repo, so the three Lambdas know which " +
+          "container image to deploy.",
+      );
+    }
+    const lambdaImageRepo = ecr.Repository.fromRepositoryName(this, "LambdaImageRepo", ecrRepo);
 
     const cert = acm.Certificate.fromCertificateArn(this, "Cert", certArn);
 
@@ -360,11 +362,12 @@ export class WebsiteStack extends Stack {
       removalPolicy: envName === "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
     });
 
-    const rowServiceFn = new lambda.Function(this, "RowServiceFn", {
+    const rowServiceFn = new lambda.DockerImageFunction(this, "RowServiceFn", {
       functionName: `tmct-${envName}-${slug}-row-service`,
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: "handler.handler",
-      code: lambda.Code.fromAsset(ROW_SERVICE_DIST_DIR),
+      code: lambda.DockerImageCode.fromEcr(lambdaImageRepo, {
+        tagOrDigest: imageTag,
+        cmd: ["row-service/handler.handler"],
+      }),
       memorySize: 256,
       timeout: Duration.seconds(10),
       // No reserved concurrency: this account's total concurrency sits at the
@@ -391,19 +394,15 @@ export class WebsiteStack extends Stack {
     // ---------- the news worker: one Lambda, invoked async by the row
     // service's poll/enrich/ingest trigger routes and by the turn service
     // (materialize mode) — never invoked directly by a caller.
-    const newsWorkerFn = new lambda.Function(this, "NewsWorkerFn", {
+    const newsWorkerFn = new lambda.DockerImageFunction(this, "NewsWorkerFn", {
       functionName: `tmct-${envName}-${slug}-news-worker`,
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: "handler.handler",
-      code: lambda.Code.fromAsset(NEWS_WORKER_DIST_DIR),
-      // Module init parses the bundled xl seed (61,724 facts) plus the
-      // engine, which needs a full vCPU (granted from 1769 MB) just to boot —
-      // and a real poll cycle's working set on that seed then exhausted
-      // 1769 MB outright (observed live: Runtime.OutOfMemory at the cap), so
-      // the size covers the cycle, not only init. 3008 is this account's
-      // Lambda memory quota ceiling; going higher needs a service-quota
-      // increase. The 300s timeout gives its cycles room to poll external
-      // sources under their own budgets.
+      code: lambda.DockerImageCode.fromEcr(lambdaImageRepo, {
+        tagOrDigest: imageTag,
+        cmd: ["news-worker/handler.handler"],
+      }),
+      // 3008 MB is this account's Lambda memory quota ceiling; going higher
+      // needs a service-quota increase. The 300s timeout gives its cycles
+      // room to poll external sources under their own budgets.
       memorySize: 3008,
       timeout: Duration.seconds(300),
       // No reserved concurrency: the account's total concurrency sits at the
@@ -412,6 +411,12 @@ export class WebsiteStack extends Stack {
         TABLE_NAME: rowTable.tableName,
         TTL_DAYS: String(props.rowServiceTtlDays ?? 7),
       },
+    });
+    // A failed cycle should read as one failed cycle a visitor can re-press,
+    // not three auto-billed retries stacked on top of it.
+    new lambda.EventInvokeConfig(this, "NewsWorkerEventInvokeConfig", {
+      function: newsWorkerFn,
+      retryAttempts: 0,
     });
     rowTable.grantReadWriteData(newsWorkerFn);
     newsWorkerFn.grantInvoke(rowServiceFn);
@@ -427,32 +432,14 @@ export class WebsiteStack extends Stack {
     // CloudFront matches path patterns in the order they're listed, first
     // match wins, so the more specific pattern has to come first or every
     // turn request would be served by the row service instead.
-    if (!existsSync(join(TURN_SERVICE_DIST_DIR, "handler.mjs"))) {
-      throw new Error(
-        `${TURN_SERVICE_DIST_DIR}/handler.mjs is missing — run npm run build:turn-service before synth.`,
-      );
-    }
-    if (!existsSync(TURN_SERVICE_MID_SEED_SOURCE)) {
-      throw new Error(
-        `${TURN_SERVICE_MID_SEED_SOURCE} is missing — run npm run build:turn-seed before synth.`,
-      );
-    }
-    // build-seed.mjs writes mid-seed.json beside the source handler, not
-    // into dist/ (esbuild's own output target) — copied in here so the one
-    // asset directory `lambda.Code.fromAsset` packages carries both files
-    // side by side, the shape `loadMidSeed`'s own `import.meta.url`-relative
-    // default expects at runtime.
-    copyFileSync(TURN_SERVICE_MID_SEED_SOURCE, join(TURN_SERVICE_DIST_DIR, "mid-seed.json"));
-
-    const turnServiceFn = new lambda.Function(this, "TurnServiceFn", {
+    const turnServiceFn = new lambda.DockerImageFunction(this, "TurnServiceFn", {
       functionName: `tmct-${envName}-${slug}-turn-service`,
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: "handler.handler",
-      code: lambda.Code.fromAsset(TURN_SERVICE_DIST_DIR),
-      // Same shape as the news worker above: module init parses the bundled
-      // 20 MB mid seed plus the engine, which needs a full vCPU that 512 MB
-      // doesn't grant, so init alone times out before the first request.
-      // 1769 MB is the threshold where Lambda grants one full vCPU.
+      code: lambda.DockerImageCode.fromEcr(lambdaImageRepo, {
+        tagOrDigest: imageTag,
+        cmd: ["turn-service/handler.handler"],
+      }),
+      // 1769 MB is the threshold where Lambda grants one full vCPU, which
+      // init needs to open the mid seed and stand up the engine.
       memorySize: 1769,
       timeout: Duration.seconds(30),
       // No reserved concurrency, same account-wide floor as the row service
