@@ -161,19 +161,24 @@ export function createDynamoRowBackend({
 
   async function readRows() {
     assertOpen();
-    const expressionAttributeNames = { "#pk": names.pk, "#sk": names.sk };
-    const filterClauses = ["NOT begins_with(#sk, :metaPrefix)"];
+    // Meta rows are excluded here in code, not in the FilterExpression:
+    // DynamoDB rejects any filter that references a key attribute, and the
+    // sort key is one.
+    const expressionAttributeNames = { "#pk": names.pk };
+    let filterExpression;
     if (softDelete) {
-      filterClauses.push("attribute_not_exists(#deletedAt)");
+      filterExpression = "attribute_not_exists(#deletedAt)";
       expressionAttributeNames["#deletedAt"] = names.deletedAt;
     }
     const items = await query({
       keyConditionExpression: "#pk = :pk",
-      filterExpression: filterClauses.join(" AND "),
+      filterExpression,
       expressionAttributeNames,
-      expressionAttributeValues: { ":pk": sessionKey, ":metaPrefix": META_SK_PREFIX },
+      expressionAttributeValues: { ":pk": sessionKey },
     });
-    return items.map(rowFromItem);
+    return items
+      .filter((item) => !String(item[names.sk] ?? "").startsWith(META_SK_PREFIX))
+      .map(rowFromItem);
   }
 
   async function readRowsByTerm(term) {

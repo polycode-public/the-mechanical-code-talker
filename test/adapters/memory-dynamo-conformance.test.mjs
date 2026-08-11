@@ -96,10 +96,14 @@ test("the key expressions match the contract's layout exactly: sk is rowClass#te
   assert.equal(query.input.KeyConditionExpression, "#pk = :pk AND begins_with(#sk, :skPrefix)");
   assert.equal(query.input.ExpressionAttributeValues[":skPrefix"], "fact#tariff#");
 
-  await backend.readRows();
+  await backend.putMeta("nodeId", "n-1");
+  const rows = await backend.readRows();
   const fullQuery = client.calls.at(-1);
   assert.equal(fullQuery.input.KeyConditionExpression, "#pk = :pk");
-  assert.equal(fullQuery.input.FilterExpression, "NOT begins_with(#sk, :metaPrefix)");
+  // DynamoDB refuses a FilterExpression that touches a key attribute, so
+  // meta rows are dropped in code after the Query, never filtered on #sk.
+  assert.equal(fullQuery.input.FilterExpression, undefined);
+  assert.deepEqual(rows.map((r) => r.rowKey), ["fact:1a2b@src:x"]);
 });
 
 test("every Query carries ConsistentRead: true by default, and false when the option disables it", async () => {

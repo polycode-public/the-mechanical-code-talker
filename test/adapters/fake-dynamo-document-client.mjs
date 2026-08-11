@@ -45,12 +45,15 @@ export function createFakeDynamoDocumentClient({
   const storeKeyForKey = (key) => `${key[names.pk]}|${key[names.sk]}`;
 
   function applyFilterClause(items, clause, values) {
+    // Real DynamoDB rejects any FilterExpression that references a key
+    // attribute, and the live table enforced it where this fake once did
+    // not — a meta-row filter on #sk passed every test and 503ed in
+    // production. The fake now refuses the same way the service does.
+    if (clause.includes("#sk") || clause.includes("#pk")) {
+      throw new Error(`Filter Expression can only contain non-primary key attributes: "${clause}"`);
+    }
     if (clause === "attribute_not_exists(#deletedAt)") {
       return items.filter((item) => item[names.deletedAt] === undefined);
-    }
-    if (clause === "NOT begins_with(#sk, :metaPrefix)") {
-      const prefix = values[":metaPrefix"];
-      return items.filter((item) => !String(item[names.sk]).startsWith(prefix));
     }
     throw new Error(`fake dynamo document client: unrecognized filter clause "${clause}"`);
   }

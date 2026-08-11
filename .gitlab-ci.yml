@@ -636,7 +636,11 @@ corpus:load:
     - npm ci
     - command -v aws >/dev/null || pip install --quiet awscli
     - source scripts/assume-aws.sh prod
-    - export TMCT_DYNAMO_TABLE=$(aws cloudformation describe-stacks --stack-name tmct-prod-prod-website --query "Stacks[0].Outputs[?OutputKey=='RowTableName'].OutputValue" --output text)
+    # --region spelled out: the pip-installed awscli v1 reads
+    # AWS_DEFAULT_REGION, not the AWS_REGION assume-aws.sh exports, and a
+    # region-less describe-stacks fails into an empty variable.
+    - export TMCT_DYNAMO_TABLE=$(aws cloudformation describe-stacks --region eu-west-2 --stack-name tmct-prod-prod-website --query "Stacks[0].Outputs[?OutputKey=='RowTableName'].OutputValue" --output text)
+    - test -n "$TMCT_DYNAMO_TABLE"
     - node scripts/corpus-bands/build-wordnet-complete.mjs --out wordnet-complete.band.jsonl
     - node bin/tmct.mjs corpus load wordnet-complete --source wordnet-complete.band.jsonl
     - >
