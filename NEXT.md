@@ -29,14 +29,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **ConceptNet band load — loaded, verification pending** — the load summary printed
-  2026-08-11: 2,344,809 rows, source digest matching the recorded sha256. Remaining:
-  the operator runs `AWS_PROFILE=tmct-prod node probe-conceptnet-band.tmp.mjs` (repo
-  root, read-only: `bandStatus` manifest read-back + `queryBandTerm("dog")`; the
-  credentialed call is permission-gated away from the assistant). Probe looks right →
-  this item closes and the temp script is deleted. The reusable band jsonl lives
-  durably in `~/tmct-dumps/`.
-
 - [ ] **Wikidata dump download — operator-run, outside any session** — run
   `bash scripts/resume-wikidata-dump.sh` from the repo root (re-run after any
   interruption; it resumes, prints a progress line per minute, and verifies the final

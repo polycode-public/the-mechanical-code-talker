@@ -128,22 +128,12 @@ full suite only at push moments, `e2e:deployed:news-live` is the rollout's accep
 
 ## 4. The operator-gated data loads (mop-up from NEXT.md)
 
-- **conceptnet-full — the operator's resumed load was at 74% and climbing.** (The first
-  run died on a transient DynamoDB 500; the loader now retries — 5 attempts, exponential
-  backoff, full jitter — and logs a progress line per minute.) The reusable artifacts
-  live durably in `~/tmct-dumps/`: `conceptnet-full.band.jsonl` + `.NOTICE` — loadable
-  against ANY table, re-loads are digest-checked no-ops. Session-scratchpad copies also
-  exist but are temporary:
-  `conceptnet-full.band.jsonl` (2,344,809 rows, 3.02 GiB, sha256
-  `7937e30c…ad8e91c`), `conceptnet-full.band.jsonl.NOTICE`, `conceptnet-dump.tsv`
-  (9.46 GiB). The load is idempotent and resumes from what is there. The command
-  (permission-gated away from the assistant; the operator runs it, ~$6 one-time write
-  cost):
-  `AWS_PROFILE=tmct-prod node bin/tmct.mjs corpus load conceptnet-full --table tmct-prod-prod-website-RowServiceTable2B650E09-1AG9XEDHMG359 --source <scratchpad>/conceptnet-full.band.jsonl`
-  Then verify: `bandStatus` manifest read-back plus a `queryBandTerm("dog")` probe.
-  If the scratchpad has been cleaned, rebuild: re-download the dump (URL in the build
-  script's header), `node scripts/corpus-bands/build-conceptnet-full.mjs --source <tsv>`
-  (now streams; digest must match the sha256 above for the same dump).
+- **conceptnet-full — loaded and verified 2026-08-11.** 2,344,809 rows in the live
+  table; manifest read-back matches (source digest `7937e30c…ad8e91c`), and
+  `queryBandTerm("dog")` returns 565 well-formed rows. Re-loads are digest-checked
+  no-ops. The reusable band jsonl + `.NOTICE` live durably in `~/tmct-dumps/`;
+  rebuild path if ever needed: re-download the dump (URL in the build script's
+  header), `node scripts/corpus-bands/build-conceptnet-full.mjs --source <tsv>`.
 - **wikidata-slice — full-dump route chosen; the download is operator-run.**
   `bash scripts/resume-wikidata-dump.sh` resumes it from any interruption and verifies
   the final byte count. Target: `~/tmct-dumps/wikidata-latest-all.json.gz`
