@@ -208,6 +208,7 @@
     "build:seed-sqlite:mid": "node scripts/build-seed-sqlite.mjs mid",
     "build:seed-sqlite:xl": "node scripts/build-seed-sqlite.mjs xl",
     "build:seed-sqlite": "node scripts/build-seed-sqlite.mjs",
+    "verify:image": "bash scripts/verify-image-local.sh",
     "build:demo-graph": "node scripts/build-demo-graph.mjs",
     "build:demo-pack": "node scripts/build-demo-pack.mjs",
     "build:demo-sprites-pack": "node scripts/build-demo-sprites-pack.mjs",
