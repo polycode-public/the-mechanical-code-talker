@@ -47,6 +47,11 @@ const DEFAULT_WRITE_CONCURRENCY = 25;
 const DEFAULT_RETRY_ATTEMPTS = 5;
 const RETRY_BASE_DELAY_MS = 100;
 
+// A load against millions of rows can run for an hour or more with nothing
+// on the terminal to show it's alive, so `loadBand` reports progress on a
+// timer rather than leaving the operator staring at a silent shell.
+const DEFAULT_PROGRESS_INTERVAL_MS = 60_000;
+
 const defaultSleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 const defaultRandom = () => Math.random();
 
@@ -178,10 +183,18 @@ async function queryWholePartition({ client, tableName, band, retry }) {
  *  `{status: "unchanged" | "loaded" | "dry-run", band, rowCount, sourceDigest}`.
  *  `dryRun` computes the digest and reports what would happen without
  *  writing anything. `retryAttempts`/`retryBaseDelayMs`/`sleep`/`random` tune
- *  the retry policy every store call below shares; see `retryPolicyFrom`. */
+ *  the retry policy every store call below shares; see `retryPolicyFrom`.
+ *  `onProgress({loaded, total, elapsedMs})` fires at most once per
+ *  `progressIntervalMs` while rows are being written, plus once more when the
+ *  write finishes. It defaults to a no-op, so a caller that doesn't pass it
+ *  sees no behavior change. `progressNow` is the clock the interval is
+ *  measured against (default `Date.now`), injectable the same way
+ *  `sleep`/`random` are, so a test can drive it deterministically instead of
+ *  racing real time. */
 export async function loadBand({
   client, tableName, band, source, dryRun = false,
   writeConcurrency = DEFAULT_WRITE_CONCURRENCY, now = () => new Date().toISOString(),
+  onProgress = () => {}, progressIntervalMs = DEFAULT_PROGRESS_INTERVAL_MS, progressNow = () => Date.now(),
   retryAttempts, retryBaseDelayMs, sleep, random,
 }) {
   if (!client) throw new TypeError("loadBand needs a client");
@@ -204,13 +217,23 @@ export async function loadBand({
     const rows = [];
     for await (const row of readWireRows(source)) rows.push(row);
     rowCount = rows.length;
+    const startedAtMs = progressNow();
+    let lastReportedAtMs = startedAtMs;
+    let loaded = 0;
     await mapWithConcurrency(rows, writeConcurrency, async (row) => {
       const item = {
         pk, sk: bandSortKeyForRow(row.rowClass, row.term, row.rowKey),
         rowKey: row.rowKey, rowClass: row.rowClass, term: row.term, json: row.json,
       };
       await call(() => client.put({ TableName: tableName, Item: item }), "put", retry);
+      loaded += 1;
+      const tickMs = progressNow();
+      if (tickMs - lastReportedAtMs >= progressIntervalMs) {
+        lastReportedAtMs = tickMs;
+        onProgress({ loaded, total: rowCount, elapsedMs: tickMs - startedAtMs });
+      }
     });
+    onProgress({ loaded: rowCount, total: rowCount, elapsedMs: progressNow() - startedAtMs });
     const manifest = buildBandManifest({
       band, rowCount, loadedAt: now(), sourceDigest, license, notice,
     });

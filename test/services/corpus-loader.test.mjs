@@ -289,3 +289,64 @@ test("queryBandTerm returns nothing for a term the band never held", async () =>
   const found = await queryBandTerm(client, "t", "conceptnet-full", "zzzqx-nonsense");
   assert.deepEqual(found, []);
 });
+
+/** A clock that advances by a fixed step every call, regardless of who
+ *  calls it — lets a test decide exactly how much time each written row
+ *  "takes" without depending on wall-clock timing. */
+function stepClock(stepMs) {
+  let ms = 0;
+  return () => { const value = ms; ms += stepMs; return value; };
+}
+
+test("onProgress fires once a fake clock crosses the interval, with the loaded/total count at that point", async () => {
+  const client = createFakeCorpusDocumentClient();
+  const rows = sampleRows("wikidata-slice", 5);
+  const { path, dir } = await writeWireRowsJsonl(rows);
+  const ticks = [];
+  try {
+    await loadBand({
+      client, tableName: "t", band: "wikidata-slice", source: path, writeConcurrency: 1,
+      progressIntervalMs: 1000, progressNow: stepClock(400),
+      onProgress: (progress) => ticks.push(progress),
+    });
+    // one row every 400ms of fake time: the interval (1000ms) is crossed
+    // after the 3rd row (1200ms since start), then again after the 5th
+    // (2000ms) at completion — the final call always reports rowCount/rowCount.
+    assert.deepEqual(ticks.map((t) => t.loaded), [3, 5]);
+    for (const tick of ticks) assert.equal(tick.total, 5);
+    assert.equal(ticks.at(-1).loaded, ticks.at(-1).total, "the completion report always carries the final count");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("onProgress never fires mid-load when the fake clock never crosses the interval, only at completion", async () => {
+  const client = createFakeCorpusDocumentClient();
+  const rows = sampleRows("wikidata-slice", 4);
+  const { path, dir } = await writeWireRowsJsonl(rows);
+  const ticks = [];
+  try {
+    await loadBand({
+      client, tableName: "t", band: "wikidata-slice", source: path, writeConcurrency: 1,
+      progressIntervalMs: 60_000, progressNow: stepClock(1),
+      onProgress: (progress) => ticks.push(progress),
+    });
+    assert.equal(ticks.length, 1, "only the completion report, no mid-load tick");
+    assert.equal(ticks[0].loaded, 4);
+    assert.equal(ticks[0].total, 4);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("onProgress is unset by default and changes nothing about a load's result", async () => {
+  const client = createFakeCorpusDocumentClient();
+  const { path, dir } = await writeWireRowsJsonl(sampleRows("wikidata-slice", 3));
+  try {
+    const result = await loadBand({ client, tableName: "t", band: "wikidata-slice", source: path });
+    assert.equal(result.status, "loaded");
+    assert.equal(result.rowCount, 3);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

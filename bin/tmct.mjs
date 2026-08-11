@@ -669,6 +669,20 @@ async function refuseMissingRepoPath(argv) {
   process.exit(2);
 }
 
+/** One `tmct corpus load` progress line for `corpus-loader.mjs`'s
+ *  `onProgress({loaded, total, elapsedMs})` — a load against millions of
+ *  rows can run for an hour or more, so this is the only sign of life on
+ *  the terminal until it finishes. The rate is the average since the load
+ *  started, not since the last tick, which is steadier once a run has been
+ *  going for a while. */
+function corpusLoadProgressLine(band, { loaded, total, elapsedMs }) {
+  const pct = total > 0 ? Math.floor((loaded / total) * 100) : 100;
+  const elapsedSeconds = elapsedMs / 1000;
+  const rowsPerSecond = elapsedSeconds > 0 ? loaded / elapsedSeconds : 0;
+  const minutesLeft = rowsPerSecond > 0 ? Math.round((total - loaded) / rowsPerSecond / 60) : 0;
+  return `corpus load ${band}: ${loaded}/${total} rows (${pct}%) — ${Math.round(rowsPerSecond)} rows/s, ~${minutesLeft} min left\n`;
+}
+
 async function main() {
   const mode = process.argv[2];
   if (mode !== "init") await refuseMissingRepoPath(process.argv.slice(3));
@@ -1870,7 +1884,10 @@ async function main() {
         return;
       }
       const { loadBand } = await import("../src/services/corpus-loader.mjs");
-      const result = await loadBand({ client, tableName, band, source, dryRun: rest.includes("--dry-run") });
+      const result = await loadBand({
+        client, tableName, band, source, dryRun: rest.includes("--dry-run"),
+        onProgress: (progress) => process.stderr.write(corpusLoadProgressLine(band, progress)),
+      });
       const verb = { unchanged: "unchanged", loaded: "loaded", "dry-run": "would load" }[result.status];
       process.stdout.write(`tmct corpus load ${band}: ${verb} (${result.rowCount} row(s), source digest ${result.sourceDigest})\n`);
       return;
