@@ -19,16 +19,22 @@ RUN apt-get update \
 WORKDIR /build
 
 # A standalone manifest, not the repo's own package.json: the image only
-# ever needs the Lambda runtime interface client plus the AWS SDK clients
-# the bundles externalize (server/*/handler.mjs strip these at bundle time
-# because the managed runtime used to provide them; a container does not).
-# Versions match the repo's own devDependencies pin so behavior matches CI.
+# ever needs the Lambda runtime interface client, the AWS SDK clients the
+# bundles externalize (server/*/handler.mjs strip these at bundle time
+# because the managed runtime used to provide them; a container does not),
+# and wink-nlp with its English model — the engine resolves wink through a
+# genuine runtime require() the bundler cannot inline, and without it every
+# handler silently runs with no POS tagging at all (fact extraction starves
+# and function words leak into the term ledger). Versions match the repo's
+# own package.json pins so behavior matches CI.
 RUN npm init -y \
     && npm install --omit=dev \
         aws-lambda-ric@4.0.2 \
         @aws-sdk/client-dynamodb@3.1106.0 \
         @aws-sdk/lib-dynamodb@3.1106.0 \
-        @aws-sdk/client-lambda@3.1106.0
+        @aws-sdk/client-lambda@3.1106.0 \
+        wink-nlp@2.4.0 \
+        wink-eng-lite-web-model@1.8.1
 
 FROM node:24-slim AS final
 
