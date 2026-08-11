@@ -209,7 +209,12 @@ function sortFactIndividualsById(individuals) {
 /** Re-derive each record's backward supersession pointer from the union of the
  *  forward ones. Two turns that superseded the same record concurrently both
  *  land, because each wrote its own row and neither touched the record they
- *  replaced. */
+ *  replaced.
+ *
+ *  Idempotent: a record that no longer has any successor loses the pointer it
+ *  used to carry. Rows never carry one (`storedIndividualForm` strips it), so
+ *  that arm is dead when this runs over a fresh projection and live when it
+ *  runs again over individuals it already derived. */
 function applyDerivedSupersessions(individuals) {
   const successorsById = new Map();
   for (const ind of individuals) {
@@ -222,11 +227,12 @@ function applyDerivedSupersessions(individuals) {
   }
   for (const ind of individuals) {
     const successors = successorsById.get(ind?.id);
-    if (!successors) continue;
-    ind.attributes = [
-      ...(ind.attributes || []).filter((a) => a?.prop !== SUPERSEDED_BY_PROP),
-      { prop: SUPERSEDED_BY_PROP, key: "supersededBy", value: [...successors].sort().join(" ") },
-    ];
+    const carried = (ind?.attributes || []).some((a) => a?.prop === SUPERSEDED_BY_PROP);
+    if (!successors && !carried) continue;
+    const rest = (ind.attributes || []).filter((a) => a?.prop !== SUPERSEDED_BY_PROP);
+    ind.attributes = successors
+      ? [...rest, { prop: SUPERSEDED_BY_PROP, key: "supersededBy", value: [...successors].sort().join(" ") }]
+      : rest;
   }
 }
 
@@ -275,13 +281,27 @@ export function rowsToPayload(rows, { meta = null } = {}) {
   individualEntries.sort(byOrdThenRowKey);
   groupEntries.sort(byOrdThenRowKey);
 
-  const individuals = individualEntries.map((e) => e.individual).filter(Boolean);
+  payload.individuals = individualEntries.map((e) => e.individual).filter(Boolean);
+  payload.objectProperties = groupEntries.map((e) => e.group).filter(Boolean);
+  return renormalizeAssembledPayload(payload);
+}
+
+/** Everything an assembled payload derives from its own individuals: the fact
+ *  ordering, the backward supersession pointers, the class counts, the prose
+ *  index and `generated_at`. `rowsToPayload` ends here, and so does a caller
+ *  that assembled a payload once and then changed a few of its individuals in
+ *  place — running this leaves the same payload either route, which is what
+ *  lets a cached assembly be patched instead of rebuilt from its rows.
+ *  Mutates and returns `payload`. */
+export function renormalizeAssembledPayload(payload) {
+  const individuals = payload.individuals || [];
   sortFactIndividualsById(individuals);
   applyDerivedSupersessions(individuals);
-
-  payload.individuals = individuals;
-  payload.objectProperties = groupEntries.map((e) => e.group).filter(Boolean);
   payload.classes = recountedClasses(individuals);
+  // Released before the replacement is built, not after: over a seed-sized
+  // store the prose index is the largest derived structure here, and holding
+  // the outgoing one while the incoming one grows doubles it for no reason.
+  payload.proseIndex = null;
   payload.proseIndex = buildProseIndex(individuals);
   payload.generated_at = latestUtteranceTimestamp(individuals);
   return payload;

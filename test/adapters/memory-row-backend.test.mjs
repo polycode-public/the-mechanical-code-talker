@@ -532,6 +532,35 @@ test("a write over a sqlite seed projects only the session's own rows, so an ove
   }
 });
 
+test("a write over a sqlite seed leaves the same payload a fresh handle assembles, write after write", async () => {
+  const seed = await buildSeedSqlite();
+  const inner = createRowMemoryBackend();
+  try {
+    const dir = wrapRowBackendOverSqliteSeed(inner, seed.store);
+    const rebuiltNow = async () => loadMemory(wrapRowBackendOverSqliteSeed(inner, seed.store));
+
+    await appendFact(dir, { subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T2), createdAt: T2 });
+    assert.deepEqual(await loadMemory(dir), await rebuiltNow(), "after the first write");
+
+    await appendFacts(dir, [
+      { subject: "hall", predicate: "IsA", object: "room", provenance: teach(T3), createdAt: T3 },
+      { subject: "kim", predicate: "IsA", object: "person", provenance: teach(T3), createdAt: T3 },
+    ]);
+    assert.deepEqual(await loadMemory(dir), await rebuiltNow(), "after a second write on the same handle");
+
+    // The same fact again from a second source: an existing record is rewritten
+    // in place rather than appended, and the supersession pointers move.
+    await appendFact(dir, { subject: "kim", predicate: "isIn", object: "kitchen", provenance: ace(T4), createdAt: T4 });
+    assert.deepEqual(await loadMemory(dir), await rebuiltNow(), "after a write that supersedes");
+
+    const kimFacts = readFactRows(await loadMemory(dir)).filter((r) => r.subject === "kim" && r.predicate === "isIn");
+    await removeFacts(dir, kimFacts.map((r) => r.id), { retractedAt: T4 });
+    assert.deepEqual(await loadMemory(dir), await rebuiltNow(), "after a removal");
+  } finally {
+    await seed.cleanup();
+  }
+});
+
 test("a sqlite seed's fact terms come off its own columns, matching the records it holds", async () => {
   const seed = await buildSeedSqlite();
   try {

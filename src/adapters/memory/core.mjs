@@ -68,7 +68,7 @@ export {
 // fine as long as neither side READS an imported binding while the other's
 // body is still running — rows.mjs builds its class map on first use, and
 // every use here is inside a function.
-import { payloadToRows, rowsToPayload, diffRows } from "./rows.mjs";
+import { payloadToRows, rowsToPayload, diffRows, renormalizeAssembledPayload } from "./rows.mjs";
 
 // The rollup vocabulary and its tuning constants live with the compaction
 // layer; re-exported here so store consumers keep one import site.
@@ -846,11 +846,14 @@ async function readRowMeta(handle, key, fallback) {
   try { return JSON.parse(raw); } catch { return fallback; }
 }
 
-/** loadMemory's read for Backend D: one `readRows()` per cold open, assembled
- *  once with the seed overlay, then served from `cachedPayload` with no
- *  further backend traffic. Bookkeeping rows are held aside — they round-trip
- *  through the store but never compose into a payload. */
-async function readRowPayload(handle) {
+/** The assembled payload ITSELF, assembled on the first call and served from
+ *  `cachedPayload` after that with no further backend traffic. Bookkeeping rows
+ *  are held aside — they round-trip through the store but never compose into a
+ *  payload. The caller must not hand this object out: `readRowPayload` is the
+ *  seam that clones, and cloning a seed-sized payload is the single most
+ *  expensive thing this backend does, so a caller that only needs the cache
+ *  warm calls this one instead. */
+async function ensureRowPayload(handle) {
   if (!handle.cachedPayload) {
     const empty = emptyMemory();
     const stored = await collectRows(handle.impl.readRows());
@@ -872,7 +875,13 @@ async function readRowPayload(handle) {
       handle.cachedPayload = rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta });
     }
   }
-  return cloneJson(handle.cachedPayload);
+  return handle.cachedPayload;
+}
+
+/** loadMemory's read for Backend D: one `readRows()` per cold open, then a
+ *  clone of the assembled payload per call. */
+async function readRowPayload(handle) {
+  return cloneJson(await ensureRowPayload(handle));
 }
 
 /** A record with its audit stamp removed. `mgx:updatedAt` moves on every
@@ -903,7 +912,7 @@ function movedBeyondAuditStamp(beforeRow, row) {
  *  write drops the cache so the next read rebuilds from the store rather than
  *  from a payload that never landed. */
 async function persistRowPayload(handle, payload) {
-  await readRowPayload(handle);
+  await ensureRowPayload(handle);
   const seedKeys = seedOnlyKeys(handle);
   // On the sqlite path the seed is out of BOTH sides of the diff: the rows it
   // holds are exactly the keys no write may touch, so projecting them would
@@ -936,13 +945,18 @@ async function persistRowPayload(handle, payload) {
   for (const row of writes) next.set(row.rowKey, row);
   handle.storedRows = [...next.values()];
   const meta = { memory: payload.memory, prefixes: payload.prefixes };
-  // Dropped before the rebuild, not after it: the payload this replaces is the
-  // largest object the handle holds, and keeping it reachable while the next
-  // one assembles doubles the peak for no reason.
-  handle.cachedPayload = null;
-  handle.cachedPayload = handle.sqliteSeedStore
-    ? assembleSqliteSeededPayload(handle, meta)
-    : rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta });
+  if (handle.sqliteSeedStore && !removals.length) {
+    patchAssembledPayload(handle.cachedPayload, meta, writes);
+  } else if (handle.sqliteSeedStore) {
+    handle.cachedPayload = null;
+    handle.cachedPayload = assembleSqliteSeededPayload(handle, meta);
+  } else {
+    // Dropped before the rebuild, not after it: the payload this replaces is the
+    // largest object the handle holds, and keeping it reachable while the next
+    // one assembles doubles the peak for no reason.
+    handle.cachedPayload = null;
+    handle.cachedPayload = rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta });
+  }
 }
 
 /** The payload minus a set of row keys, for a projection that must not spend
@@ -1049,6 +1063,58 @@ function assembleSqliteSeededPayload(handle, meta) {
     chainedRows(sqliteSeedRowStream(handle.sqliteSeedStore, (key) => covered.has(key)), overlay, handle.storedRows),
     { meta },
   );
+}
+
+/** The assembled payload after a write that only added or rewrote rows, brought
+ *  up to date without reading the seed again.
+ *
+ *  Why the positions work out: a write only ever carries session rows, and
+ *  `payloadToRows` gives a newly-keyed row an ord past every ord already
+ *  assembled, so a new individual belongs at the tail and a rewritten one
+ *  belongs exactly where it already sits. Both are where a rebuild from the
+ *  same rows would put them, and the fact set is unchanged or grown, so the
+ *  fact ordering `renormalizeAssembledPayload` reapplies lands the same way.
+ *  Everything the payload derives goes through that one function, the same one
+ *  `rowsToPayload` itself ends on, so a patched payload and a rebuilt one
+ *  cannot drift apart.
+ *
+ *  A REMOVAL is not patchable this way and does not come here: dropping an
+ *  individual from the assembled array drops it from wherever the fact ordering
+ *  moved it to, which is a different position from the one it occupied in row
+ *  order, and every fact after it shifts. `persistRowPayload` rebuilds for those.
+ *  Mutates and returns `payload`. */
+function patchAssembledPayload(payload, meta, writes) {
+  payload.memory = meta.memory;
+  payload.prefixes = meta.prefixes;
+  if (!writes.length) return renormalizeAssembledPayload(payload);
+
+  const individualPositions = new Map();
+  for (let i = 0; i < payload.individuals.length; i += 1) individualPositions.set(payload.individuals[i]?.id, i);
+  const groupPositions = new Map();
+  for (let i = 0; i < payload.objectProperties.length; i += 1) groupPositions.set(payload.objectProperties[i]?.prop, i);
+
+  for (const row of writes) {
+    if (row.rowClass === BOOKKEEPING_ROW_CLASS) continue;
+    const record = JSON.parse(row.json);
+    if (row.rowClass === EDGE_GROUP_ROW_CLASS) {
+      const group = record?.group;
+      if (!group?.prop) continue;
+      const at = groupPositions.get(group.prop);
+      if (at === undefined) {
+        groupPositions.set(group.prop, payload.objectProperties.length);
+        payload.objectProperties.push(group);
+      } else payload.objectProperties[at] = group;
+      continue;
+    }
+    const individual = record?.individual;
+    if (!individual?.id) continue;
+    const at = individualPositions.get(individual.id);
+    if (at === undefined) {
+      individualPositions.set(individual.id, payload.individuals.length);
+      payload.individuals.push(individual);
+    } else payload.individuals[at] = individual;
+  }
+  return renormalizeAssembledPayload(payload);
 }
 
 /** Every distinct subject and object a seed store's facts carry, off the

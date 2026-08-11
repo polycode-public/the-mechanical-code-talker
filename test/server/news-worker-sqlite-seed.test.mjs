@@ -147,6 +147,47 @@ test("the console log seam stamps every line, so a deployed cycle is readable in
   assert.match(lines[0], /^\d{4}-\d{2}-\d{2}T[\d:.]+Z news-worker \{"event":"cycle-start","mode":"poll"\}$/);
 });
 
+/** The same seed store with every statement it prepares counted, so a test can
+ *  say how much a cycle READ the seed rather than how long it took — the same
+ *  claim, without a clock in it. */
+function countingSeedStore(store) {
+  const counter = { prepares: 0 };
+  return {
+    counter,
+    store: { ...store, db: { ...store.db, prepare: (sql) => { counter.prepares += 1; return store.db.prepare(sql); } } },
+  };
+}
+
+async function seedReadsForCycle(seed, text) {
+  const counted = countingSeedStore(seed.store);
+  const backend = recordingBackend();
+  const worker = createNewsWorker({
+    createSessionBackend: () => backend.backend,
+    seedStore: counted.store,
+    now: () => "2026-07-11T10:00:00.000Z",
+  });
+  await worker.runCycle({ sessionKey: SESSION, cycleId: "cycle-1", mode: "ingest", body: { text } });
+  return { seedReads: counted.counter.prepares, written: backend.writtenKeys.length };
+}
+
+test("what a cycle reads from the seed is fixed by the seed, not by how much the cycle writes", async () => {
+  const seed = await buildSeed(200);
+  try {
+    const light = await seedReadsForCycle(seed, "A dog is a mammal.");
+    const heavy = await seedReadsForCycle(
+      seed, "A dog is a mammal. A mammal is an animal. Paris is a city. A gannet is a seabird. Bergen is a city.",
+    );
+
+    assert.ok(heavy.written > light.written, "the heavier cycle really did write more");
+    assert.equal(
+      heavy.seedReads, light.seedReads,
+      "a write no longer drags a full seed read along behind it",
+    );
+  } finally {
+    await seed.cleanup();
+  }
+});
+
 // The measured peak, not a guess: one cycle over a 2,000-fact seed in a clean
 // process peaked at 105.5-105.8 MB across repeated runs when this landed, and
 // the budget takes its headroom from there. It is measured in a CHILD process

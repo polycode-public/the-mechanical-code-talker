@@ -109,6 +109,22 @@ function foldingStore() {
 
 const megabytes = (bytes) => Math.round((bytes / (1024 * 1024)) * 10) / 10;
 
+export const DEFAULT_HEARTBEAT_MS = 15_000;
+
+/** A line every `heartbeatMs` for as long as a phase is running, so a cycle
+ *  that is going to run out of time says so while it still has time to say it.
+ *  A phase only narrates when it finishes, and a phase that never finishes
+ *  reads in CloudWatch exactly like a cycle that never started. */
+function narrateWhileRunning(log, phase, heartbeatMs) {
+  if (!(heartbeatMs > 0)) return () => {};
+  const startedMs = Date.now();
+  const timer = setInterval(() => {
+    log({ event: "phase-running", phase, ms: Date.now() - startedMs, heapMb: megabytes(process.memoryUsage().heapUsed) });
+  }, heartbeatMs);
+  if (typeof timer.unref === "function") timer.unref();
+  return () => clearInterval(timer);
+}
+
 /** What a cycle cost in memory. `maxRSS` is the kernel's own high-water mark,
  *  the number a Lambda's memory ceiling is actually measured against; the heap
  *  peak is sampled, because the peak lands in the middle of a phase (assembling
@@ -310,6 +326,7 @@ export function createNewsWorker({
   now = isoNow,
   nowMs = () => Date.now(),
   budgetMs = DEFAULT_WORKER_BUDGET_MS,
+  heartbeatMs = DEFAULT_HEARTBEAT_MS,
   log = () => {},
 } = {}) {
   if (typeof createSessionBackend !== "function") {
@@ -366,6 +383,7 @@ export function createNewsWorker({
     let cycleResult = { aborted: false };
     let failure = null;
     const phaseStartedMs = Date.now();
+    const stopPhaseNarration = narrateWhileRunning(log, mode, heartbeatMs);
     try {
       if (mode === "poll") {
         cycleResult = await pollNewsSources(ctx);
@@ -382,6 +400,7 @@ export function createNewsWorker({
     } catch (error) {
       failure = error;
     }
+    stopPhaseNarration();
     memoryWatch.sample();
     log({
       event: "phase-done", phase: mode, ms: Date.now() - phaseStartedMs,
@@ -396,11 +415,13 @@ export function createNewsWorker({
     let feedResult = null;
     if (!failure) {
       const materializeStartedMs = Date.now();
+      const stopMaterializeNarration = narrateWhileRunning(log, "materialize", heartbeatMs);
       try {
         feedResult = await materializeFeed(ctx, rawBackend);
       } catch (error) {
         failure = error;
       }
+      stopMaterializeNarration();
       memoryWatch.sample();
       log({
         event: "phase-done", phase: "materialize", ms: Date.now() - materializeStartedMs,
@@ -476,7 +497,14 @@ export function createInMemorySourceGate({
 // (`npm run build:news-worker`), invoked asynchronously by the row service's
 // trigger routes (event mode) or by the turn handler (materialize mode).
 
-const WORKER_SAFETY_MARGIN_MS = 2000;
+/** What the abort budget leaves behind for everything that happens AFTER a
+ *  phase gives up: the eviction sweep's own read and write, the news-state
+ *  write, the whole feed materialization, and the two log lines that say what
+ *  the cycle did. Over a seed-sized graph each of those is seconds, so a margin
+ *  sized for a fixture leaves a real cycle killed mid-tail — narrating nothing
+ *  at all, which is how a timed-out cycle reads exactly like a cycle that never
+ *  started. */
+const WORKER_SAFETY_MARGIN_MS = 30_000;
 const CORPUS_BREAKER_META_PARTITION_KEY = "_meta";
 
 let cachedDynamoClientPromise = null;
@@ -491,14 +519,23 @@ async function loadDocumentClient() {
   return cachedDynamoClientPromise;
 }
 
-/** The full xl seed bundled alongside the Lambda's own code — the same
- *  payload `scripts/build-chat-seed.mjs` writes for the browser, imported
- *  lazily so a test importing this module for `createNewsWorker` alone never
- *  touches a file that only exists after a deploy build. */
+/** The full xl seed as JSON — the same payload `scripts/build-chat-seed.mjs`
+ *  writes for the browser, read and parsed lazily so a test importing this
+ *  module for `createNewsWorker` alone never touches a file that only exists
+ *  after a build.
+ *
+ *  READ, never `import`: a static import specifier is one esbuild inlines into
+ *  the bundle, which put 86 MB of JSON inside the handler that every cold start
+ *  then paid to load — including the deployed one, which opens the sqlite seed
+ *  below and never reads a byte of this. */
+const XL_SEED_JSON_PATH = new URL("../../public/chat-seed.json", import.meta.url);
 let cachedSeedPayloadPromise = null;
-async function loadXlSeedPayload() {
+async function loadXlSeedPayload(seedPath = XL_SEED_JSON_PATH) {
   if (!cachedSeedPayloadPromise) {
-    cachedSeedPayloadPromise = import("../../public/chat-seed.json", { with: { type: "json" } }).then((m) => m.default);
+    cachedSeedPayloadPromise = (async () => {
+      const { readFile } = await import("node:fs/promises");
+      return JSON.parse(await readFile(seedPath, "utf8"));
+    })();
   }
   return cachedSeedPayloadPromise;
 }
