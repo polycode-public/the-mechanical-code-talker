@@ -64,3 +64,36 @@ export function poisonPutCall(client, failOnCallNumber) {
     },
   };
 }
+
+/** A client wrapper whose every `put` call fails `failCount` times with an
+ *  error named `errorName` before finally succeeding — a transient store
+ *  outage that clears on its own, the shape the loader's retry logic exists
+ *  for. Each call counts its own failures independently, matching a real
+ *  store where different rows land on different partitions. */
+export function flakyPutCall(client, failCount, errorName = "InternalServerError") {
+  const failuresLeftByKey = new Map();
+  return {
+    ...client,
+    async put(params) {
+      const key = `${params.Item.pk}|${params.Item.sk}`;
+      const failuresLeft = failuresLeftByKey.get(key) ?? failCount;
+      if (failuresLeft > 0) {
+        failuresLeftByKey.set(key, failuresLeft - 1);
+        throw Object.assign(new Error(`simulated ${errorName}`), { name: errorName });
+      }
+      return client.put(params);
+    },
+  };
+}
+
+/** A client wrapper whose every `put` call fails every time with an error
+ *  named `errorName` — a store outage that never clears, so the loader's
+ *  retry budget runs out. */
+export function alwaysFailingPutCall(client, errorName = "InternalServerError") {
+  return {
+    ...client,
+    async put() {
+      throw Object.assign(new Error(`simulated ${errorName}`), { name: errorName });
+    },
+  };
+}

@@ -33,9 +33,37 @@ import {
   bandPartitionKey, bandSortKeyForRow, buildBandManifest, bandLicenseInfo, MANIFEST_SORT_KEY,
 } from "../adapters/memory/corpus-bands.mjs";
 import { BackendRejected, BackendUnavailable, assertValidRow } from "../adapters/memory/row-backend.mjs";
+import { isSystemicFailure } from "../adapters/memory/systemic-failure.mjs";
 import { termQueryOverDocumentClient } from "./subgraph-retrieval.mjs";
 
 const DEFAULT_WRITE_CONCURRENCY = 25;
+
+// A run against millions of rows meets an occasional transient 500 or
+// throttle as a certainty, not a rare event, so every store call gets its
+// own retry budget rather than treating the first one as fatal. Five
+// attempts with exponential backoff from 100 ms, full jitter, so many
+// concurrent writers recovering from the same outage don't retry in
+// lockstep.
+const DEFAULT_RETRY_ATTEMPTS = 5;
+const RETRY_BASE_DELAY_MS = 100;
+
+const defaultSleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+const defaultRandom = () => Math.random();
+
+/** Delay (ms) before the retry that follows a failed `attempt` (1-based):
+ *  full jitter, a value drawn uniformly from `[0, baseDelayMs * 2^(attempt-1))`. */
+function retryDelayMs(attempt, baseDelayMs, random) {
+  return random() * baseDelayMs * (2 ** (attempt - 1));
+}
+
+/** Build the retry knobs `call` reads from a caller's options object,
+ *  defaulting to the production policy. */
+function retryPolicyFrom({
+  retryAttempts = DEFAULT_RETRY_ATTEMPTS, retryBaseDelayMs = RETRY_BASE_DELAY_MS,
+  sleep = defaultSleep, random = defaultRandom,
+} = {}) {
+  return { attempts: retryAttempts, baseDelayMs: retryBaseDelayMs, sleep, random };
+}
 
 /** Runs `fn` over `items` with at most `limit` calls in flight, mirroring the
  *  DynamoDB row backend's own bounded-concurrency write loop. */
@@ -55,13 +83,28 @@ async function mapWithConcurrency(items, limit, fn) {
 
 /** Every store call funnels through here so a network failure or a
  *  429/5xx-shaped rejection surfaces as `BackendUnavailable`, never a raw
- *  client error a caller would have to string-match. */
-async function call(fn, label) {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error instanceof BackendRejected || error instanceof BackendUnavailable) throw error;
-    throw new BackendUnavailable(`corpus loader's ${label} call failed: ${error.message}`, { cause: error });
+ *  client error a caller would have to string-match. A systemic failure — a
+ *  throttle, a 5xx, a transient network fault — retries with exponential
+ *  backoff up to `retry.attempts` times; a validation/schema rejection is
+ *  not systemic and fails on the first try, because retrying it gets the
+ *  same answer. The final error names how many attempts were made, so a
+ *  genuinely down service reads clearly rather than looking like one bad
+ *  call. */
+async function call(fn, label, retry) {
+  for (let attempt = 1; attempt <= retry.attempts; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error instanceof BackendRejected || error instanceof BackendUnavailable) throw error;
+      if (!isSystemicFailure(error) || attempt === retry.attempts) {
+        const attemptsNote = attempt > 1 ? ` after ${attempt} attempts` : "";
+        throw new BackendUnavailable(
+          `corpus loader's ${label} call failed${attemptsNote}: ${error.message}`,
+          { cause: error },
+        );
+      }
+      await retry.sleep(retryDelayMs(attempt, retry.baseDelayMs, retry.random));
+    }
   }
 }
 
@@ -99,11 +142,15 @@ async function* readWireRows(path) {
   }
 }
 
-/** The manifest row for `band`, or null when the band has never been loaded. */
-export async function bandStatus({ client, tableName, band }) {
+/** The manifest row for `band`, or null when the band has never been loaded.
+ *  `retryAttempts`/`retryBaseDelayMs`/`sleep`/`random` tune the retry policy
+ *  every store call in this module shares; see `retryPolicyFrom`. */
+export async function bandStatus({ client, tableName, band, ...retryOptions }) {
+  const retry = retryPolicyFrom(retryOptions);
   const result = await call(
     () => client.get({ TableName: tableName, Key: { pk: bandPartitionKey(band), sk: MANIFEST_SORT_KEY } }),
     "get",
+    retry,
   );
   return result?.Item ? { ...result.Item } : null;
 }
@@ -111,7 +158,7 @@ export async function bandStatus({ client, tableName, band }) {
 /** Every item (fact rows and the manifest, if present) under a band's
  *  partition, paginated. Shared by `clearBand` and any caller that wants a
  *  full inventory rather than one term's rows. */
-async function queryWholePartition({ client, tableName, band }) {
+async function queryWholePartition({ client, tableName, band, retry }) {
   const items = [];
   let exclusiveStartKey;
   do {
@@ -120,7 +167,7 @@ async function queryWholePartition({ client, tableName, band }) {
       KeyConditionExpression: "pk = :pk",
       ExpressionAttributeValues: { ":pk": bandPartitionKey(band) },
       ...(exclusiveStartKey ? { ExclusiveStartKey: exclusiveStartKey } : {}),
-    }), "query");
+    }), "query", retry);
     items.push(...(response?.Items || []));
     exclusiveStartKey = response?.LastEvaluatedKey || null;
   } while (exclusiveStartKey);
@@ -130,18 +177,21 @@ async function queryWholePartition({ client, tableName, band }) {
 /** Load `band` from a jsonl source of wire rows. Resolves to
  *  `{status: "unchanged" | "loaded" | "dry-run", band, rowCount, sourceDigest}`.
  *  `dryRun` computes the digest and reports what would happen without
- *  writing anything. */
+ *  writing anything. `retryAttempts`/`retryBaseDelayMs`/`sleep`/`random` tune
+ *  the retry policy every store call below shares; see `retryPolicyFrom`. */
 export async function loadBand({
   client, tableName, band, source, dryRun = false,
   writeConcurrency = DEFAULT_WRITE_CONCURRENCY, now = () => new Date().toISOString(),
+  retryAttempts, retryBaseDelayMs, sleep, random,
 }) {
   if (!client) throw new TypeError("loadBand needs a client");
   if (!tableName) throw new TypeError("loadBand needs a tableName");
   if (!band) throw new TypeError("loadBand needs a band");
   if (!source) throw new TypeError("loadBand needs a source path");
 
+  const retry = retryPolicyFrom({ retryAttempts, retryBaseDelayMs, sleep, random });
   const sourceDigest = await digestFile(source);
-  const existing = await bandStatus({ client, tableName, band });
+  const existing = await bandStatus({ client, tableName, band, retryAttempts, retryBaseDelayMs, sleep, random });
   if (existing?.sourceDigest === sourceDigest) {
     return { status: "unchanged", band, rowCount: existing.rowCount, sourceDigest };
   }
@@ -159,7 +209,7 @@ export async function loadBand({
         pk, sk: bandSortKeyForRow(row.rowClass, row.term, row.rowKey),
         rowKey: row.rowKey, rowClass: row.rowClass, term: row.term, json: row.json,
       };
-      await call(() => client.put({ TableName: tableName, Item: item }), "put");
+      await call(() => client.put({ TableName: tableName, Item: item }), "put", retry);
     });
     const manifest = buildBandManifest({
       band, rowCount, loadedAt: now(), sourceDigest, license, notice,
@@ -167,7 +217,7 @@ export async function loadBand({
     await call(() => client.put({
       TableName: tableName,
       Item: { pk, sk: MANIFEST_SORT_KEY, ...manifest },
-    }), "put");
+    }), "put", retry);
     return { status: "loaded", band, rowCount, sourceDigest };
   }
 
@@ -177,21 +227,27 @@ export async function loadBand({
 
 /** Physically delete every item under `band`'s partition, manifest last.
  *  Idempotent: an empty partition (already cleared, or never loaded) is a
- *  no-op. Resolves to `{band, deleted}`. */
-export async function clearBand({ client, tableName, band, writeConcurrency = DEFAULT_WRITE_CONCURRENCY }) {
+ *  no-op. Resolves to `{band, deleted}`. `retryAttempts`/`retryBaseDelayMs`/
+ *  `sleep`/`random` tune the retry policy every store call below shares;
+ *  see `retryPolicyFrom`. */
+export async function clearBand({
+  client, tableName, band, writeConcurrency = DEFAULT_WRITE_CONCURRENCY,
+  retryAttempts, retryBaseDelayMs, sleep, random,
+}) {
   if (!client) throw new TypeError("clearBand needs a client");
   if (!tableName) throw new TypeError("clearBand needs a tableName");
   if (!band) throw new TypeError("clearBand needs a band");
 
-  const items = await queryWholePartition({ client, tableName, band });
+  const retry = retryPolicyFrom({ retryAttempts, retryBaseDelayMs, sleep, random });
+  const items = await queryWholePartition({ client, tableName, band, retry });
   const facts = items.filter((item) => item.sk !== MANIFEST_SORT_KEY);
   const manifestItem = items.find((item) => item.sk === MANIFEST_SORT_KEY);
 
   await mapWithConcurrency(facts, writeConcurrency, async (item) => {
-    await call(() => client.delete({ TableName: tableName, Key: { pk: item.pk, sk: item.sk } }), "delete");
+    await call(() => client.delete({ TableName: tableName, Key: { pk: item.pk, sk: item.sk } }), "delete", retry);
   });
   if (manifestItem) {
-    await call(() => client.delete({ TableName: tableName, Key: { pk: manifestItem.pk, sk: manifestItem.sk } }), "delete");
+    await call(() => client.delete({ TableName: tableName, Key: { pk: manifestItem.pk, sk: manifestItem.sk } }), "delete", retry);
   }
   return { band, deleted: items.length };
 }

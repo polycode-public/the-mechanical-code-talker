@@ -10,8 +10,18 @@ import { join } from "node:path";
 
 import { loadBand, clearBand, bandStatus, digestFile, queryBandTerm } from "../../src/services/corpus-loader.mjs";
 import { bandFactRow, bandPartitionKey, bandSortKeyForRow, MANIFEST_SORT_KEY } from "../../src/adapters/memory/corpus-bands.mjs";
-import { BackendRejected } from "../../src/adapters/memory/row-backend.mjs";
-import { createFakeCorpusDocumentClient, poisonPutCall } from "../helpers/fake-corpus-document-client.mjs";
+import { BackendRejected, BackendUnavailable } from "../../src/adapters/memory/row-backend.mjs";
+import {
+  createFakeCorpusDocumentClient, poisonPutCall, flakyPutCall, alwaysFailingPutCall,
+} from "../helpers/fake-corpus-document-client.mjs";
+
+/** A retry policy for tests: no real waiting, and a fixed "random" draw so a
+ *  test can assert on how many times the loader slept without depending on
+ *  jitter's actual value. */
+function instantRetryPolicy() {
+  const sleepCalls = [];
+  return { sleepCalls, sleep: async (ms) => { sleepCalls.push(ms); }, random: () => 0.5 };
+}
 
 async function writeWireRowsJsonl(rows) {
   const dir = await mkdtemp(join(tmpdir(), "tmct-corpus-loader-"));
@@ -112,6 +122,74 @@ test("a load that dies mid-way leaves valid rows and no manifest, and a retry co
       assert.ok(client.store.get(`${pk}|fact#${row.term}#${row.rowKey}`), `row ${row.rowKey} present after the retry`);
     }
     assert.ok(client.store.get(`${pk}|${MANIFEST_SORT_KEY}`), "the manifest lands once the retry finishes");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a put that fails with a transient 5xx a few times retries and completes the load", async () => {
+  const client = createFakeCorpusDocumentClient();
+  const flaky = flakyPutCall(client, 2, "InternalServerError");
+  const rows = sampleRows("wikidata-slice", 3);
+  const { path, dir } = await writeWireRowsJsonl(rows);
+  const { sleepCalls, sleep, random } = instantRetryPolicy();
+  try {
+    const result = await loadBand({
+      client: flaky, tableName: "t", band: "wikidata-slice", source: path, writeConcurrency: 1, sleep, random,
+    });
+    assert.equal(result.status, "loaded");
+    assert.equal(result.rowCount, 3);
+    assert.ok(sleepCalls.length > 0, "the loader backed off before at least one retry");
+
+    const pk = bandPartitionKey("wikidata-slice");
+    for (const row of rows) {
+      assert.ok(client.store.get(`${pk}|fact#${row.term}#${row.rowKey}`), `row ${row.rowKey} landed after the retries`);
+    }
+    assert.ok(client.store.get(`${pk}|${MANIFEST_SORT_KEY}`), "the manifest landed once every row did");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a put rejected with a validation error fails immediately, with no retry", async () => {
+  const client = createFakeCorpusDocumentClient();
+  const invalid = alwaysFailingPutCall(client, "ValidationException");
+  const { path, dir } = await writeWireRowsJsonl(sampleRows("wikidata-slice", 1));
+  const { sleepCalls, sleep, random } = instantRetryPolicy();
+  try {
+    await assert.rejects(
+      loadBand({ client: invalid, tableName: "t", band: "wikidata-slice", source: path, sleep, random }),
+      (error) => {
+        assert.ok(error instanceof BackendUnavailable);
+        assert.ok(!/after \d+ attempts/.test(error.message), `expected a single-attempt message, got: ${error.message}`);
+        return true;
+      },
+    );
+    assert.equal(sleepCalls.length, 0, "a validation error never backs off");
+    assert.equal(client.store.size, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a put that never recovers exhausts its retries and names the attempt count and last error", async () => {
+  const client = createFakeCorpusDocumentClient();
+  const down = alwaysFailingPutCall(client, "InternalServerError");
+  const { path, dir } = await writeWireRowsJsonl(sampleRows("wikidata-slice", 1));
+  const { sleepCalls, sleep, random } = instantRetryPolicy();
+  try {
+    await assert.rejects(
+      loadBand({
+        client: down, tableName: "t", band: "wikidata-slice", source: path, retryAttempts: 3, sleep, random,
+      }),
+      (error) => {
+        assert.ok(error instanceof BackendUnavailable);
+        assert.match(error.message, /after 3 attempts/);
+        assert.match(error.message, /simulated InternalServerError/);
+        return true;
+      },
+    );
+    assert.equal(sleepCalls.length, 2, "backs off between attempts 1-2 and 2-3, not after the last one");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
