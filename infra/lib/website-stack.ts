@@ -41,7 +41,7 @@ const TURN_SERVICE_DIST_DIR = join(__dirname, "..", "..", "server", "turn-servic
 const TURN_SERVICE_MID_SEED_SOURCE = join(__dirname, "..", "..", "server", "turn-service", "mid-seed.json");
 
 // The news worker's bundle (`npm run build:news-worker`) — its xl seed is
-// bundled INSIDE handler.js by esbuild (a static `import()` of
+// bundled INSIDE handler.mjs by esbuild (a static `import()` of
 // public/chat-seed.json, §3.22), so unlike the turn service this directory
 // needs no sibling file staged beside it.
 const NEWS_WORKER_DIST_DIR = join(__dirname, "..", "..", "server", "news-worker", "dist");
@@ -420,9 +420,9 @@ export class WebsiteStack extends Stack {
     // CloudFront matches path patterns in the order they're listed, first
     // match wins, so the more specific pattern has to come first or every
     // turn request would be served by the row service instead.
-    if (!existsSync(join(TURN_SERVICE_DIST_DIR, "handler.js"))) {
+    if (!existsSync(join(TURN_SERVICE_DIST_DIR, "handler.mjs"))) {
       throw new Error(
-        `${TURN_SERVICE_DIST_DIR}/handler.js is missing — run npm run build:turn-service before synth.`,
+        `${TURN_SERVICE_DIST_DIR}/handler.mjs is missing — run npm run build:turn-service before synth.`,
       );
     }
     if (!existsSync(TURN_SERVICE_MID_SEED_SOURCE)) {
