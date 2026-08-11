@@ -32,11 +32,17 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] **The memory backend and turn surface: the AWS-side remainders** —
   `PLAN_MEMORY_BACKEND.md` is BUILT (every phase carries its marker; 6.0.x on npm ships
   the library half; the closing push is gate-green at 7968/0). What keeps this item open
-  is deployment, not build: (a) pipelines #760/#761's failed deploys left an orphaned
-  `tmct-prod-prod-rows` table (RETAIN on rollback) that collides with re-creation —
-  `aws sso login --profile tmct-prod`, verify it is the empty orphan from those runs,
-  delete it, and the next pipeline's `deploy:website` should go green end to end
-  (site + row/turn/news-worker Lambdas + the CI WordNet band load); (b) the
+  is deployment, not build: (a) the live-API fix set is in flight — the first orphan
+  table is deleted and the stack deploys, and three live-verified defects have their
+  fixes dispatched: Lambda URL auth needs `lambda:InvokeFunction` for the CloudFront
+  principal BESIDE the InvokeFunctionUrl grant CDK adds (proven live: adding it flipped
+  the edge from 403 to serving; a manual out-of-band statement sits on the row service
+  and comes off once CDK owns it), the table's key attributes must be `pk`/`sk` like
+  every shipped consumer (the deployed `sessionKey` table gets replaced; the explicit
+  tableName drops so replacements stop colliding, corpus:load reads the name from a
+  stack output; the replaced table is RETAIN-orphaned and needs one manual delete after
+  the deploy), and every body-carrying client call must send `x-amz-content-sha256`
+  (Lambda URLs behind OAC reject unsigned payloads; GETs stay bare); (b) the
   wikidata-slice and conceptnet-full bands stay empty until their raw dumps are
   downloaded and loaded by hand — the pipelines are built and fixture-proven, only the
   dumps are missing. The exact steps, from each script's own header:
