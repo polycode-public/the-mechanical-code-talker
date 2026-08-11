@@ -14,7 +14,10 @@
 // own `_meta` partition so every invocation of every session paces the same
 // source together, not once per invocation.
 
-import { wrapRowBackend, loadMemory, readFactRows, appendFacts, removeFacts } from "../../src/adapters/memory/core.mjs";
+import {
+  wrapRowBackend, wrapRowBackendOverSqliteSeed, openSqliteSeedStore,
+  loadMemory, readFactRows, appendFacts, removeFacts,
+} from "../../src/adapters/memory/core.mjs";
 import { createDynamoRowBackend } from "../../src/adapters/memory/row-backend-dynamo.mjs";
 import { loadLexicon } from "../../src/domain/grammar/lexicon.mjs";
 import { ingestText } from "../../src/services/extract-facts.mjs";
@@ -100,6 +103,40 @@ function foldingStore() {
     async removeFacts(...args) {
       foldedRows = null;
       return removeFacts(...args);
+    },
+  };
+}
+
+const megabytes = (bytes) => Math.round((bytes / (1024 * 1024)) * 10) / 10;
+
+/** What a cycle cost in memory. `maxRSS` is the kernel's own high-water mark,
+ *  the number a Lambda's memory ceiling is actually measured against; the heap
+ *  peak is sampled, because the peak lands in the middle of a phase (assembling
+ *  a payload) rather than at the boundaries a phase log would catch. The growth
+ *  figures are what a budget assertion reads: they hold whatever the process
+ *  was already carrying before this cycle out of the number. */
+function startMemoryWatch({ intervalMs = 100 } = {}) {
+  const baselineHeapBytes = process.memoryUsage().heapUsed;
+  const baselineMaxRssKb = process.resourceUsage().maxRSS;
+  let peakHeapBytes = baselineHeapBytes;
+  const sample = () => {
+    const { heapUsed } = process.memoryUsage();
+    if (heapUsed > peakHeapBytes) peakHeapBytes = heapUsed;
+  };
+  const timer = setInterval(sample, intervalMs);
+  if (typeof timer.unref === "function") timer.unref();
+  return {
+    sample,
+    stop() {
+      clearInterval(timer);
+      sample();
+      const maxRssKb = process.resourceUsage().maxRSS;
+      return {
+        peakHeapMb: megabytes(peakHeapBytes),
+        heapGrowthMb: megabytes(peakHeapBytes - baselineHeapBytes),
+        maxRssMb: megabytes(maxRssKb * 1024),
+        maxRssGrowthMb: megabytes((maxRssKb - baselineMaxRssKb) * 1024),
+      };
     },
   };
 }
@@ -251,6 +288,11 @@ async function materializeFeed(ctx, rawBackend) {
  *  `getResearchProvider({ source })` — the KB lookup seam enrich walks.
  *  `seedPayload` — the base payload `loadMemory` overlays session rows onto
  *  (the full xl seed in production; §3.22's grounding-parity reasoning).
+ *  `seedStore` — the same seed held as an open read-only sqlite store
+ *  (`openSqliteSeedStore`), which the cycle reads instead of a parsed payload:
+ *  the seed's rows never exist as a row array and the write path never projects
+ *  them, so one cycle holds one assembled copy of the graph rather than three.
+ *  Takes precedence over `seedPayload` when both are set.
  *  `seedStamp` — when set, a session whose own stamp disagrees is purged
  *  before this cycle runs, rather than mixing rows across seed versions.
  *  `sourceGate` — optional `{ shouldFetch(id), noteOutcome(id, ok) }`, the
@@ -262,6 +304,7 @@ export function createNewsWorker({
   createFetchers = () => new Map(),
   getResearchProvider: getProvider = () => null,
   seedPayload = null,
+  seedStore = null,
   seedStamp = "",
   sourceGate = null,
   now = isoNow,
@@ -273,7 +316,12 @@ export function createNewsWorker({
     throw new TypeError("createNewsWorker needs a createSessionBackend(sessionKey) function");
   }
 
-  async function runCycle({ sessionKey, cycleId, mode, body = {} }) {
+  /** The cycle itself. `nowMs` stays the budget's clock alone — every timing
+   *  the narration carries is wall clock, so a test driving the budget with a
+   *  counted fake clock is not also driving the log. */
+  async function runWatchedCycle({ sessionKey, cycleId, mode, body = {} }, memoryWatch) {
+    const cycleStartedMs = Date.now();
+    log({ event: "cycle-start", sessionKey, cycleId, mode, seed: seedStore ? "sqlite" : "json" });
     let rawBackend = await createSessionBackend(sessionKey);
 
     if (seedStamp) {
@@ -285,7 +333,9 @@ export function createNewsWorker({
       await rawBackend.putMeta(META_SEED_STAMP_KEY, seedStamp);
     }
 
-    const handle = wrapRowBackend(rawBackend, { basePayload: seedPayload });
+    const handle = seedStore
+      ? wrapRowBackendOverSqliteSeed(rawBackend, seedStore)
+      : wrapRowBackend(rawBackend, { basePayload: seedPayload });
     const store = foldingStore();
     const config = resolveNewsConfig();
     if (Array.isArray(body?.sources) && body.sources.length) config.sources = normalizeNewsSourceIds(body.sources);
@@ -315,6 +365,7 @@ export function createNewsWorker({
 
     let cycleResult = { aborted: false };
     let failure = null;
+    const phaseStartedMs = Date.now();
     try {
       if (mode === "poll") {
         cycleResult = await pollNewsSources(ctx);
@@ -331,17 +382,30 @@ export function createNewsWorker({
     } catch (error) {
       failure = error;
     }
+    memoryWatch.sample();
+    log({
+      event: "phase-done", phase: mode, ms: Date.now() - phaseStartedMs,
+      facts: cycleResult.facts || 0, aborted: !!cycleResult.aborted,
+      ...(failure ? { failed: failure.message } : {}),
+    });
 
     if (!failure && cycleWroteFacts(cycleResult)) await bumpIntMeta(rawBackend, META_GRAPH_VERSION_KEY);
     await rawBackend.putMeta(META_NEWS_STATE_KEY, JSON.stringify(trimStateForPersistence(state)));
 
     let feedResult = null;
     if (!failure) {
+      const materializeStartedMs = Date.now();
       try {
         feedResult = await materializeFeed(ctx, rawBackend);
       } catch (error) {
         failure = error;
       }
+      memoryWatch.sample();
+      log({
+        event: "phase-done", phase: "materialize", ms: Date.now() - materializeStartedMs,
+        ...(feedResult ? { feedVersion: feedResult.version, trimmed: feedResult.trimmed } : {}),
+        ...(failure ? { failed: failure.message } : {}),
+      });
     }
 
     if (marker) {
@@ -353,9 +417,23 @@ export function createNewsWorker({
       }));
     }
 
-    log({ sessionKey, cycleId, mode, aborted: !!cycleResult.aborted, failed: !!failure });
+    log({
+      event: "cycle-end", sessionKey, cycleId, mode,
+      aborted: !!cycleResult.aborted, failed: !!failure,
+      ms: Date.now() - cycleStartedMs,
+      ...memoryWatch.stop(),
+    });
     if (failure) throw failure;
     return { cycleId, mode, aborted: !!cycleResult.aborted, feedVersion: feedResult?.version };
+  }
+
+  async function runCycle(request) {
+    const memoryWatch = startMemoryWatch();
+    try {
+      return await runWatchedCycle(request, memoryWatch);
+    } finally {
+      memoryWatch.stop();
+    }
   }
 
   return { runCycle };
@@ -422,6 +500,22 @@ async function loadXlSeedPayload() {
     cachedSeedPayloadPromise = import("../../public/chat-seed.json", { with: { type: "json" } }).then((m) => m.default);
   }
   return cachedSeedPayloadPromise;
+}
+
+/** The same seed as a pre-built sqlite file, opened read-only once per
+ *  execution environment: milliseconds, and no parse. The path comes from
+ *  `TMCT_XL_SEED_SQLITE`; unset, the JSON import above stays the seed source,
+ *  so a zip deploy keeps working until the image lands. */
+let cachedSeedStorePromise = null;
+function openXlSeedStore(dbPath) {
+  if (!cachedSeedStorePromise) cachedSeedStorePromise = openSqliteSeedStore(dbPath);
+  return cachedSeedStorePromise;
+}
+
+/** The worker's log seam wired to CloudWatch: one stamped line per entry, so a
+ *  cycle's phases read in order and a failure has a time beside it. */
+export function logToConsole(entry) {
+  console.log(`${isoNow()} news-worker ${typeof entry === "string" ? entry : JSON.stringify(entry)}`);
 }
 
 function isConditionalCheckFailure(error) {
@@ -501,7 +595,12 @@ function buildRealFetchers(config, { fetchImpl = (...args) => globalThis.fetch(.
 
 function newsWorkerConfigFromEnv() {
   const ttlDays = process.env.TTL_DAYS ? Number(process.env.TTL_DAYS) : 7;
-  return { tableName: process.env.TABLE_NAME, ttlSeconds: ttlDays * 86400, seedStamp: process.env.SEED_STAMP || "" };
+  return {
+    tableName: process.env.TABLE_NAME,
+    ttlSeconds: ttlDays * 86400,
+    seedStamp: process.env.SEED_STAMP || "",
+    seedSqlitePath: process.env.TMCT_XL_SEED_SQLITE || "",
+  };
 }
 
 /** The Lambda entry point esbuild bundles. `event` is `{ sessionKey, cycleId,
@@ -510,9 +609,15 @@ function newsWorkerConfigFromEnv() {
  *  reads the invocation's own remaining time, minding a safety margin so the
  *  cycle stops between whole units of work before the runtime kills it. */
 export const handler = async (event, context) => {
-  const { tableName, ttlSeconds, seedStamp } = newsWorkerConfigFromEnv();
+  const { tableName, ttlSeconds, seedStamp, seedSqlitePath } = newsWorkerConfigFromEnv();
+  const initStartedMs = Date.now();
+  const coldSeed = seedSqlitePath ? !cachedSeedStorePromise : !cachedSeedPayloadPromise;
   const client = await loadDocumentClient();
-  const seedPayload = await loadXlSeedPayload();
+  const seedStore = seedSqlitePath ? await openXlSeedStore(seedSqlitePath) : null;
+  const seedPayload = seedStore ? null : await loadXlSeedPayload();
+  logToConsole({
+    event: "init-done", seed: seedStore ? "sqlite" : "json", cold: coldSeed, ms: Date.now() - initStartedMs,
+  });
   const remainingMs = typeof context?.getRemainingTimeInMillis === "function"
     ? context.getRemainingTimeInMillis()
     : DEFAULT_WORKER_BUDGET_MS + WORKER_SAFETY_MARGIN_MS;
@@ -522,9 +627,11 @@ export const handler = async (event, context) => {
     createFetchers: (config) => buildRealFetchers(config, {}),
     getResearchProvider: ({ source } = {}) => getResearchProvider({ source }),
     seedPayload,
+    seedStore,
     seedStamp,
     sourceGate: createDynamoSourceGate({ client, tableName }),
     budgetMs: Math.max(1000, remainingMs - WORKER_SAFETY_MARGIN_MS),
+    log: logToConsole,
   });
 
   return worker.runCycle({
