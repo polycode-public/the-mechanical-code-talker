@@ -29,59 +29,27 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **The memory backend and turn surface: the AWS-side remainders** —
-  `PLAN_MEMORY_BACKEND.md` is BUILT (every phase carries its marker; 6.0.x on npm ships
-  the library half; the closing push is gate-green at 7968/0). What keeps this item open
-  is deployment, not build. The edge auth IS fixed and verified live: after the
-  Host-header policy fix and the second CloudFront grant (`lambda:InvokeFunction`
-  beside the `InvokeFunctionUrl` CDK adds; a manual out-of-band statement sits on the
-  row service until a deploy carries CDK's own), `/api/*` fails with application
-  errors, never CloudFront 403s; body-carrying calls send `x-amz-content-sha256`
-  because OAC'd Lambda URLs reject unsigned payloads. What the first live traffic then
-  exposed, each fixed and committed (2a46330e), redeploy pending: (a) `readRows`
-  filtered meta rows on the sort key and real DynamoDB refuses key attributes in a
-  FilterExpression — meta rows now drop in code, and the fake document client enforces
-  the same refusal so tests catch the class; (b) the turn and news-worker Lambdas
-  crashed at init — the CJS bundle leaves `import.meta.url` empty and chat.mjs's
-  sprite path constant dies on it — so the three server bundles now emit ESM
-  (`handler.mjs`, createRequire banner), each proven to initialize in plain node;
-  (c) `corpus:load`'s table-name lookup returned empty because the pip-installed
-  awscli v1 ignores `AWS_REGION` (wants `AWS_DEFAULT_REGION`) — the query now names
-  `--region` and the job fails fast on an empty name. After the next green deploy:
-  delete the RETAIN-orphaned `sessionKey`-keyed table and the manual permission
-  statement. Also open: (b) the
-  wikidata-slice and conceptnet-full bands stay empty until their raw dumps are
-  downloaded and loaded by hand — the pipelines are built and fixture-proven, only the
-  dumps are missing. The exact steps, from each script's own header:
-  - conceptnet-full (a Sonnet agent is running these exact steps now, under the live SSO
-    session, with a stop-and-report gate at 10M rows):
-    `curl -s https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz | gunzip -c > dump.tsv`,
-    then `node scripts/corpus-bands/build-conceptnet-full.mjs --source dump.tsv`, then
-    `tmct corpus load conceptnet-full --table tmct-prod-prod-rows --source <out>` with
-    `AWS_PROFILE=tmct-prod`. Admits every en→en canonical-relation edge (the superset
-    the capped committed slice moved out into); CC BY-SA 4.0, the pipeline writes its
-    own NOTICE beside the jsonl.
-  - wikidata-slice: download a Wikidata JSON-lines entity dump (the `wikidata-*-all`
-    dump split to one entity per line, or any pre-filtered slice carrying the committed
-    SEED_QIDS), then `node scripts/corpus-bands/build-wikidata-slice.mjs --source
-    <dump.jsonl>`, then `tmct corpus load wikidata-slice --table tmct-prod-prod-rows
-    --source <out>`. Only SEED_QIDS entities' claims through the shared
-    property-relation map become facts; growing the slice is adding SEED_QIDS entries
-    and re-running. CC0, no notice.
-  Loads are idempotent (content-addressed rows; a matching source digest is a no-op)
-  and resumable (a mid-load death re-runs as harmless re-puts; the manifest writes
-  last).
-- [ ] **The two empty leads the composition receipt did not reach** (Opus agent in flight
-  as of the 6.0.6 pipeline watch) — `whereSet` still answers
-  "nothing in the index matches that clause (classes), so there is no location to cite" and
-  `temporal` still answers "nothing in the index matches the inner set", the last two empties
-  that name neither the branch that emptied them nor the population the index holds. The walk
-  that names them exists (`emptiedBranch` in `src/domain/ask.mjs`); these two renderers do
-  not call it, and each has a tail sentence of its own to compose with (whereSet's location
-  cite, temporal's time qualifier), so each needs its own composition rather than a copy of
-  the shared lead. (The combined miss-lead + empty-composition round itself landed: +0.084
-  answer-identity-controlled on changed answers, every cell up, report
-  `reports/BENCHMARK_CEFR_ENGLISH_5.0.46.md`.)
+- [ ] **The memory backend and turn surface: the last live-ops steps** —
+  `PLAN_MEMORY_BACKEND.md` is BUILT and the 6.0.7 pipeline went fully green end to end
+  (deploy, WordNet corpus load, all deployed e2e, and every post-deploy smoke probe:
+  row round trip, turn, corpus read). The orphaned first-generation table and the
+  manual out-of-band Lambda permission are both removed; CDK owns everything deployed.
+  Open:
+  - The news worker OOMs at 1769 MB when a real poll cycle runs over the xl seed
+    (boot is fine; the cycle's working set is not) — the 4096 MB fix is in the 6.0.8
+    pipeline now; after it deploys, re-verify poll → materialized feed on the live
+    page before calling news.html working.
+  - conceptnet-full: 147,922 of 2,344,809 rows are loaded; the first operator run died
+    on a transient DynamoDB 500 and the loader now retries (5 attempts, exponential
+    backoff with jitter). The operator re-runs the staged command (idempotent, resumes
+    from what's there): `AWS_PROFILE=tmct-prod node bin/tmct.mjs corpus load
+    conceptnet-full --table tmct-prod-prod-website-RowServiceTable2B650E09-1AG9XEDHMG359
+    --source <scratchpad>/conceptnet-full.band.jsonl`.
+  - wikidata-slice: the operator chose the full-dump route; the 155 GB gz dump is
+    downloading (hours at ~4 MB/s). Then: two streaming grep passes pull the 12
+    SEED_QIDS entities and their claim-object entities into a dump-derived JSON-lines
+    slice, `node scripts/corpus-bands/build-wikidata-slice.mjs --source <slice>`, and
+    `tmct corpus load wikidata-slice` against the same table. CC0, no notice.
 
 ## Discipline
 
