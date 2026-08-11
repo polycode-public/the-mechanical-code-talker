@@ -61,9 +61,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     verified at the R5 deploy gate
   - R3 CDK — code complete, merged to local `main` (`6b0b00e5`), worktree removed;
     verified at the R5 deploy gate
-  - Wave 2 dispatched 2026-08-11: R1 image agent — worktree
-    `.claude/worktrees/agent-ac9074a80cd9945ee`; R4 CI agent — worktree
-    `.claude/worktrees/agent-afd54967ebd3b1fc7` (both fast-forwarded to `831ac116`)
+  - R1 image agent — worktree `.claude/worktrees/agent-ac9074a80cd9945ee`
+    (Dockerfile + RIE verification, in flight)
+  - R4 CI — code complete, merged to local `main` (`bfe0ba77`): `image` stage with
+    `build:image-artifacts` + kaniko `build:image` (executor tag verified live),
+    deploy consumes `-c imageTag=$CI_COMMIT_SHA`; ECR repo bootstrap is idempotent
+    in-job; verified at the R5 pipeline gate
 
 ## Discipline
 
