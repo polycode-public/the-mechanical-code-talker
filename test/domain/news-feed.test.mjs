@@ -141,6 +141,32 @@ test("renderNewsParagraph caps at five sentences even with many relation groups"
   assert.equal(sentenceCount, 5);
 });
 
+test("renderNewsParagraph renders a relation minted from a source's own verb, which no curated table entry covers", () => {
+  const rows = [
+    row("fact:1", "cyclone", "mgx:hit", "eastern australia"),
+    row("fact:2", "cyclone", "mgx:batter", "queensland"),
+  ];
+  assert.equal(
+    renderNewsParagraph("cyclone", rows),
+    "cyclone batters queensland. cyclone hits eastern australia.",
+  );
+});
+
+test("renderNewsParagraph speaks for a hub that only ever appears as an object", () => {
+  const rows = [row("fact:1", "earthquake", "mgx:strike-near", "anchorage, alaska")];
+  assert.equal(
+    renderNewsParagraph("anchorage, alaska", rows),
+    "earthquake strikes near anchorage, alaska.",
+  );
+});
+
+test("renderNewsParagraph counts the tail of a long object list instead of naming every one", () => {
+  const places = ["a place", "b place", "c place", "d place", "e place", "f place", "g place", "h place"];
+  const rows = places.map((place, i) => row(`fact:${i}`, "earthquake", "mgx:strike-near", place));
+  const paragraph = renderNewsParagraph("earthquake", rows);
+  assert.equal(paragraph, "earthquake strikes near a place, b place, c place, d place, e place, f place and 2 more.");
+});
+
 test("renderNewsParagraph omits the closing sentence when there are no second-hop facts", () => {
   const rows = [row("fact:1", "hub", "mgx:hasA", "a part")];
   const paragraph = renderNewsParagraph("hub", rows);

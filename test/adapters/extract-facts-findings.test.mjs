@@ -95,6 +95,17 @@ test("a phrasal-verb remainder never reads as a term, while a one-word particle 
   assert.equal(readsAsEntityTerm("string instrument"), true);
 });
 
+test("a place named after a compass direction still reads as a term, while a real prepositional phrase does not", () => {
+  // A tagger reading the lowercased term has no capital left to tell the
+  // place from the direction, and calls the leading word an adverb.
+  assert.equal(readsAsEntityTerm("north korea"), true);
+  assert.equal(readsAsEntityTerm("south sandwich islands"), true);
+  assert.equal(readsAsEntityTerm("western australia"), true);
+  // "of" after the compass word means it really is heading a phrase.
+  assert.equal(readsAsEntityTerm("north of the border"), false);
+  assert.equal(readsAsEntityTerm("south of anchorage"), false);
+});
+
 test("an identifier-shaped surface is detected before it folds to a stored term", () => {
   for (const token of ["normalizeFeedItems", "parseXML", "feed_items", "news.feed", "src/domain/prose.mjs"]) {
     assert.equal(readsAsIdentifierToken(token), true, `${token} reads as an identifier`);
