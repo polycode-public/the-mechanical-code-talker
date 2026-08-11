@@ -673,6 +673,17 @@ const FRAGMENT_LEAD_TAGS = new Set(["VERB", "AUX", "ADP", "CCONJ", "SCONJ", "PAR
 // which names nothing. Read lexically so a checkout with no wink model catches
 // it too, and only for a multi-word term — "back" alone is a fine noun.
 const PARTICLE_LEAD_WORDS = new Set(["back", "up", "down", "out", "off", "away", "along", "around"]);
+// A compass word opening a place name is a modifier, not a clause lead —
+// "north korea", "south sandwich islands". A tagger reading the LOWERCASED
+// term has no capital left to tell the place from the direction and tags
+// "north"/"south" as an adverb, so the POS rule below would turn every one of
+// them down. Followed by "of" the word really is heading a prepositional
+// phrase ("north of the border"), and that stays declined.
+const COMPASS_LEAD_WORDS = new Set([
+  "north", "south", "east", "west",
+  "northeast", "northwest", "southeast", "southwest",
+  "northern", "southern", "eastern", "western",
+]);
 
 /** Does `term` read as a thing's name rather than a clause fragment? Bounds
  *  the word count and rejects a leading conjunction, auxiliary, preposition,
@@ -689,6 +700,7 @@ export function readsAsEntityTerm(term, nlp) {
   if (FRAGMENT_LEAD_WORDS.has(first)) return false;
   if (words.length === 1) return true;
   if (PARTICLE_LEAD_WORDS.has(first)) return false;
+  if (COMPASS_LEAD_WORDS.has(first) && words[1].toLowerCase() !== "of") return true;
   const engine = nlp === undefined ? winkInstance() : nlp;
   if (!engine) return true;
   try {

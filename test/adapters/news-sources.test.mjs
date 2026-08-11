@@ -272,7 +272,7 @@ test("hn: without overriding minIntervalMs, the record's own lower floor paces t
 
 // ---- usgs ---------------------------------------------------------------------
 
-test("usgs: geojson features map to snapshots with a magnitude/place summary, an injected place stripped inert", async () => {
+test("usgs: a geojson feature becomes a sentence naming the place, its distance descriptor dropped and an injected place stripped inert", async () => {
   const body = readJson("usgs-quakes.geojson");
   body.features[0].properties.place = "68km SSW of <script>alert(1)</script> Kodiak, Alaska";
   const record = recordFor("usgs-quakes");
@@ -280,8 +280,10 @@ test("usgs: geojson features map to snapshots with a magnitude/place summary, an
   const result = await fetcher.fetchItems();
   assert.equal(result.items.length, 2);
   const first = result.items[0];
-  assert.match(first.summary, /^magnitude 4\.2 earthquake near /);
+  assert.match(first.summary, /^An earthquake struck near /, "the summary carries a verb, so the recognizer has a sentence to read");
+  assert.ok(!/68km SSW of/.test(first.summary), "the bearing and distance are a measurement, not the place's name");
   assert.ok(!first.summary.includes("<script>"));
+  assert.equal(result.items[1].summary, "An earthquake struck near Ridgecrest, CA.");
   assert.equal(first.url, "https://earthquake.usgs.gov/earthquakes/eventpage/ak02abc123");
 });
 

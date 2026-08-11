@@ -487,6 +487,28 @@ function joinWithAnd(items) {
 
 const IDENTITY_PREDICATES = new Set(["rdf:type", "rdfs:subClassOf"]);
 const SENTENCE_CAP = 5;
+// How many objects one sentence names before it counts the rest. A live source
+// reports the same relation over and over inside one window — every quake of
+// the day strikes near somewhere — and an unbounded list turns a card into a
+// wall of text.
+const OBJECTS_PER_SENTENCE = 6;
+
+function joinObjects(objects) {
+  if (objects.length <= OBJECTS_PER_SENTENCE) return joinWithAnd(objects);
+  const shown = objects.slice(0, OBJECTS_PER_SENTENCE);
+  return `${shown.join(", ")} and ${objects.length - OBJECTS_PER_SENTENCE} more`;
+}
+
+/** The predicates `rows` carry, curated-table order first and then whatever
+ *  is left, sorted. A relation minted from a source's own verb ("mgx:hit",
+ *  "mgx:strike-near") has no curated entry, and reading the table alone left
+ *  every card built from live headlines with an empty paragraph. */
+function predicatesInRenderOrder(rows) {
+  const present = new Set(rows.map((r) => r.predicate));
+  const curated = Object.keys(FACT_PREDICATE_PHRASES).filter((predicate) => present.has(predicate));
+  const rest = [...present].filter((predicate) => !Object.hasOwn(FACT_PREDICATE_PHRASES, predicate)).sort();
+  return [...curated, ...rest];
+}
 
 /** The fixed five-sentence paraphrase template (PLAN_NEWS_FEED.md section
  *  8.3): identity first, then the hub's own relations grouped by predicate in
@@ -519,17 +541,30 @@ export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = 
     .sort();
   if (identityObjects.length) {
     const withArticles = identityObjects.map((object) => `${articleFor(object)} ${object}`);
-    sentences.push(`${hub} is ${joinWithAnd(withArticles)}`);
+    sentences.push(`${hub} is ${joinObjects(withArticles)}`);
   }
 
-  for (const predicate of Object.keys(FACT_PREDICATE_PHRASES)) {
+  for (const predicate of predicatesInRenderOrder(reportedHubRows)) {
     if (IDENTITY_PREDICATES.has(predicate) || sentences.length >= SENTENCE_CAP) continue;
     const objects = reportedHubRows
       .filter((r) => r.predicate === predicate)
       .map((r) => r.object)
       .sort();
     if (!objects.length) continue;
-    sentences.push(`${hub} ${predicatePhrase(predicate)} ${joinWithAnd(objects)}`);
+    sentences.push(`${hub} ${predicatePhrase(predicate)} ${joinObjects(objects)}`);
+  }
+
+  // A hub that only ever appears as an OBJECT — the place a quake struck, the
+  // story a site discussed — has no subject-side row to build a sentence from,
+  // and its card came out blank. What was reported about it still says
+  // something, so those rows render whole, subject and all.
+  if (!sentences.length) {
+    const aboutHub = subgraphRows
+      .filter((r) => normFactTerm(r.object) === hubTerm && normFactTerm(r.subject) !== hubTerm && isReported(r.id))
+      .sort(byId)
+      .slice(0, OBJECTS_PER_SENTENCE)
+      .map((r) => factSentence(r));
+    if (aboutHub.length) sentences.push(aboutHub.join("; "));
   }
 
   if (sentences.length < SENTENCE_CAP && secondHopRows.length) {
