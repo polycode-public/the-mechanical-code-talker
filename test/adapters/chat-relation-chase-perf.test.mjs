@@ -37,26 +37,37 @@ async function seededStore() {
   return store;
 }
 
+// Best of two runs: a loaded CI runner can smear one measurement past the
+// bound (observed 1003ms on a shared runner for a path that measures <100ms
+// alone), but the minimum of two stays near the true cost, while the broken
+// whole-store chase stays ~2.9s on every run at this size.
+async function minRefusalMs(store, question) {
+  let best = Infinity;
+  let out;
+  for (let run = 0; run < 2; run += 1) {
+    const t0 = performance.now();
+    out = await factReadBack(store, question, null, true);
+    best = Math.min(best, performance.now() - t0);
+  }
+  return { out, best };
+}
+
 test("an unknown relation name in 'who is the <role> of <thing>' refuses in well under a second over a seed-sized store", async () => {
   const store = await seededStore();
-  const t0 = performance.now();
-  const out = await factReadBack(store, "who is the president of France", null, true);
-  const elapsed = performance.now() - t0;
+  const { out, best } = await minRefusalMs(store, "who is the president of France");
   assert.match(out.text, /I don't know a relation or rule called 'president' yet\./);
   // The pre-fix path measured ~2.9s at this size and grew with the square of
   // the store; the fixed path measures under 100ms. A second is far above the
   // fixed cost and far below the broken one, so this fails on the slow path
   // without being sensitive to a loaded machine.
-  assert.ok(elapsed < 1000, `the refusal took ${elapsed.toFixed(0)}ms — the whole-store chase is back`);
+  assert.ok(best < 1000, `the refusal took ${best.toFixed(0)}ms — the whole-store chase is back`);
 });
 
 test("the same refusal for a 'what is the <role> of <thing>' phrasing is equally cheap", async () => {
   const store = await seededStore();
-  const t0 = performance.now();
-  const out = await factReadBack(store, "what is the capital of Peru", null, true);
-  const elapsed = performance.now() - t0;
+  const { out, best } = await minRefusalMs(store, "what is the capital of Peru");
   assert.match(out.text, /I don't know a relation or rule called 'capital' yet\./);
-  assert.ok(elapsed < 1000, `the refusal took ${elapsed.toFixed(0)}ms — the whole-store chase is back`);
+  assert.ok(best < 1000, `the refusal took ${best.toFixed(0)}ms — the whole-store chase is back`);
 });
 
 test("findIsaChain takes a prebuilt successor index and finds the same chain as it does from the edge list", () => {
