@@ -116,6 +116,7 @@ function errorFromBackendFailure(error) {
 }
 
 const ROWS_MUTATION_PATH = /^\/api\/sessions\/([^/]+)\/rows$/;
+const ROWS_DELETE_PATH = /^\/api\/sessions\/([^/]+)\/rows\/delete$/;
 const META_MUTATION_PATH = /^\/api\/sessions\/([^/]+)\/meta\/([^/]+)$/;
 const META_READ_PATH = /^\/api\/meta\/([^/]+)$/;
 const CYCLE_TRIGGER_PATH = /^\/api\/sessions\/([^/]+)\/(poll|enrich|ingest)$/;
@@ -405,6 +406,12 @@ export function createRowServiceHandler({
       const rowsMutation = path.match(ROWS_MUTATION_PATH);
       if (rowsMutation && method === "PUT") return await handlePutRows(request, rowsMutation[1]);
       if (rowsMutation && method === "DELETE") return await handleDeleteRows(request, rowsMutation[1]);
+
+      // CloudFront's OAC signs a DELETE as body-less, so a body-carrying
+      // DELETE can never pass edge auth. POST .../rows/delete takes the same
+      // body and does the same thing — the edge-safe spelling of a delete.
+      const rowsDelete = path.match(ROWS_DELETE_PATH);
+      if (rowsDelete && method === "POST") return await handleDeleteRows(request, rowsDelete[1]);
 
       const metaMutation = path.match(META_MUTATION_PATH);
       if (metaMutation && method === "PUT") {

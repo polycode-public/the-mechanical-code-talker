@@ -151,13 +151,15 @@ export async function rowServiceRoundTrip(baseUrl = API_BASE_URL) {
   const { rows } = await getRes.json();
   if (!rows.some((row) => row.rowKey === rowKey)) throw new Error("the row just PUT is missing from GET /api/rows");
 
+  // CloudFront's OAC signs a DELETE as body-less, so a body-carrying DELETE
+  // never passes edge auth. POST .../rows/delete is the edge-safe spelling.
   const deleteBody = JSON.stringify({ all: true });
-  const deleteRes = await fetchJson(`/api/sessions/${sessionKey}/rows`, {
-    method: "DELETE",
+  const deleteRes = await fetchJson(`/api/sessions/${sessionKey}/rows/delete`, {
+    method: "POST",
     body: deleteBody,
     headers: { "x-amz-content-sha256": sha256Hex(deleteBody) },
   });
-  if (deleteRes.status !== 204) throw new Error(`DELETE /api/sessions/:uuid/rows returned ${deleteRes.status}, not 204`);
+  if (deleteRes.status !== 204) throw new Error(`POST /api/sessions/:uuid/rows/delete returned ${deleteRes.status}, not 204`);
 
   return sessionKey;
 }

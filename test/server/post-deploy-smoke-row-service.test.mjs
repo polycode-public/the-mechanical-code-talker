@@ -26,7 +26,7 @@ test("a missing row service reports the failure instead of throwing past the cal
   await assert.rejects(() => rowServiceRoundTrip("http://127.0.0.1:1"), /fetch failed|ECONNREFUSED/);
 });
 
-test("the round trip's PUT and DELETE carry x-amz-content-sha256; its GET never does — the URL auth layer 403s a body-carrying request without it", async () => {
+test("the round trip's PUT and its delete step carry x-amz-content-sha256; its GET never does — the URL auth layer 403s a body-carrying request without it, and the delete step uses the POST twin since CloudFront's OAC signs DELETE as body-less", async () => {
   const service = await createLocalRowService();
   const realFetch = globalThis.fetch;
   const calls = [];
@@ -44,8 +44,9 @@ test("the round trip's PUT and DELETE carry x-amz-content-sha256; its GET never 
   const putCall = calls.find((call) => call.method === "PUT");
   assert.ok(putCall.headers["x-amz-content-sha256"], "the PUT carries the payload-hash header");
 
-  const deleteCall = calls.find((call) => call.method === "DELETE");
-  assert.ok(deleteCall.headers["x-amz-content-sha256"], "the DELETE carries the payload-hash header");
+  const deleteCall = calls.find((call) => call.method === "POST" && call.url.endsWith("/rows/delete"));
+  assert.ok(deleteCall, "the delete step calls the POST twin, not the DELETE verb");
+  assert.ok(deleteCall.headers["x-amz-content-sha256"], "the delete step carries the payload-hash header");
 
   const getCall = calls.find((call) => call.method === "GET");
   assert.equal(getCall.headers["x-amz-content-sha256"], undefined, "a GET must never gain the payload-hash header");

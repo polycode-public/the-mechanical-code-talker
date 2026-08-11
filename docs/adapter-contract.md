@@ -273,6 +273,7 @@ When the backend is remote, `createHttpRowBackend({apiBase, sessionKey, fetchImp
 | GET | /api/rows | readRows | 200 `{rows:[…]}` | key in `x-tmct-session` |
 | PUT | /api/sessions/:uuid/rows | putRows | 204 | body `{puts:[row…]}` |
 | DELETE | /api/sessions/:uuid/rows | deleteRows \| deleteAll | 204 | body `{rowKeys:[…]}` or `{all:true}` |
+| POST | /api/sessions/:uuid/rows/delete | deleteRows \| deleteAll | 204 | same body as DELETE; CloudFront's OAC signs DELETE as body-less, so this is the edge-safe twin the client actually calls |
 | GET | /api/meta/:key | readMeta | 200 `{value}` \| 404 | key in `x-tmct-session` |
 | PUT | /api/sessions/:uuid/meta/:key | putMeta | 204 | body `{value}` |
 
