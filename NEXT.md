@@ -35,20 +35,24 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   byte count). File: `~/tmct-dumps/wikidata-latest-all.json.gz` (155.3 GB). When it
   reports done, the next steps are `PLAN_MEMORY_ROLLOUT.md` section 4.
 
-- [ ] **Stopwords rank as news terms — the ranked ledger surfaces noise words** — the
-  live news page's `terms.ranked` lists "from", "and", "but", "very", "into", "about",
-  all tagged "(unknown word)" (seen 2026-08-11 on 6.0.12 with only 2 ingested facts).
-  Two legs, both wanted regardless of each other:
-  - Function words must never rank as candidate hub terms — filter them out of the
-    ranked ledger/enrichment candidates outright (the lexicon knows "from"; a term the
-    page renders as "(unknown word)" while being a common function word points at the
-    lookup, not the word).
-  - Verify the novelty gate's prior-term universe on the worker's sqlite seed path:
-    if the seed vocabulary isn't consulted there, common words look novel — the exact
-    junk-hub failure `PLAN_MEMORY_ROLLOUT.md` §1 records from the 688-fact seed
-    experiment ("geneva"). Re-check the live ranked terms now that 6.0.13 cycles
-    ground real articles; fix at the vocabulary source if it reproduces.
-  Agent in flight: worktree `.claude/worktrees/agent-a4c4a001dfe1fec89`.
+- [ ] **Stopwords rank as news terms / live cycles admit no facts — one root cause** —
+  the ledger leg is fixed and merged (`9b38f212`: a closed function-word set gates
+  `bumpTerms` and `ledgerFromPayload`, purging persisted junk entries too), and the
+  sqlite-path vocabulary was verified identical to the JSON path (no bug, already
+  pinned by test). Remainder, the root cause of both the junk terms and the
+  zero-facts/zero-cards live feed: the container image never installed `wink-nlp` +
+  `wink-eng-lite-web-model` (the engine resolves wink via a runtime require the
+  bundler can't inline), so deployed handlers run with NO POS tagging — fact
+  extraction starves and the leaky lexical fallback admits function words. The zip
+  deploys had the same gap. Dockerfile fix is in the tree; local image verification
+  (RIE probes + in-image wink require) is running. Second layer, verified by source
+  reading and being fixed by an agent in worktree
+  `.claude/worktrees/agent-a6cd4e28d8bbee4b0`: hacker-news hands the recognizer a
+  bare headline with a hardcoded empty summary, and usgs builds a verb-less summary
+  template — structurally never an extractable sentence; each source's fetcher gets
+  a closed-set template carrying a real verb, and the hub gate gets verified once
+  items admit. Closes when the fixes deploy and a fresh-session probe against prod
+  shows facts AND article cards.
 
 - [ ] **Group-scoped source-reliability fold + per-feed Sources — operator-commissioned
   2026-08-11** — `recomputeSourceReliability` folds all 61,724 fact groups on every
