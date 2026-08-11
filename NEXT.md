@@ -54,14 +54,16 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     cap is 60 s so the first feed lands ~65 s after the press against the gate's
     170 s.
 
-- [ ] **Group-scoped source-reliability fold — operator-commissioned 2026-08-11** —
-  `recomputeSourceReliability` folds all 61,724 fact groups on every write to rescore
-  session Sources (~11 s of an article's ~18 s locally, ~9 of its ~13 folds). Replace
-  with a group-scoped or incremental fold: bit-identical scores, order-independent
-  (resolver purity), seed Sources not rescored by session churn. Agent in flight:
-  worktree `.claude/worktrees/agent-a7fea69eb822cfc5e`. Known follow-on it may
-  surface: `runSentence` mints a per-sentence Source id that reliability rescores
-  forever (semantics-bearing, needs its own decision).
+- [ ] **Group-scoped source-reliability fold + per-feed Sources — operator-commissioned
+  2026-08-11** — `recomputeSourceReliability` folds all 61,724 fact groups on every
+  write to rescore session Sources (~11 s of an article's ~18 s locally). Replace with
+  a group-scoped or incremental fold: exact-equality scores for the same attribution
+  model, order-independent (resolver purity), seed Sources not rescored by session
+  churn. Folded in by operator decision: news ingestion attributes facts to ONE
+  Source per actual feed/reference work (e.g. `NYT World News`), never per sentence
+  or per article — corroboration means independent feeds agreeing; trust-number
+  changes accepted; interactive chat teaching keeps its own minting. Agent in
+  flight: worktree `.claude/worktrees/agent-a7fea69eb822cfc5e`.
   - Secondary, non-blocking: each fresh execution environment overruns the 10 s init
     cap once (`INIT_REPORT ... Status: timeout`), then re-inits fine in 87–992 ms.
   - Then: record the measured cycle peak in the plan's build marker.
