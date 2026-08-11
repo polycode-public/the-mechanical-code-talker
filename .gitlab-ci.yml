@@ -44,6 +44,7 @@ stages:
   - gate
   - test
   - e2e
+  - image
   - deploy
   - verify
   - site-ready
@@ -530,6 +531,89 @@ publish:npm:
           ;;
       esac
 
+# One container image, built once and pushed to ECR tagged with this
+# commit's SHA, run by all three Lambdas — Node 24 (managed Lambda runtimes
+# stop short of it) with both seed sqlite files baked in.
+# Two jobs because kaniko's own "-debug" image carries no AWS CLI and no ECR
+# credential helper: this job (the same python+node image deploy:website
+# uses, so the awscli pip fallback and `source scripts/assume-aws.sh prod`
+# both already work here) builds the three Lambda bundles and both seed
+# sqlite files, logs in to ECR itself, and hands the resulting docker
+# credential file to the kaniko job as an artifact — kaniko never touches
+# AWS credentials directly.
+build:image-artifacts:
+  stage: image
+  image: nikolaik/python-nodejs:python3.13-nodejs24
+  needs:
+    - secret_detection
+  # Needed so this job's own rule can see PROD_AWS_DEPLOY_ROLE_ARN and its
+  # script can see TMCT_PROD_ACCOUNT_ID, both production-scoped variables —
+  # see the same gotcha documented above smoke:post-deploy.
+  environment:
+    name: production
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $PROD_AWS_DEPLOY_ROLE_ARN'
+      changes: *consumer-paths
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
+  script:
+    - npm ci
+    # public/chat-seed.json is what build:news-worker inlines and what
+    # build:seed-sqlite's xl seed reads, so it is built once, first.
+    - npm run build:chat-seed
+    - npm run build:row-service
+    - npm run build:turn-service
+    - npm run build:news-worker
+    - npm run build:seed-sqlite
+    - command -v aws >/dev/null || pip install --quiet awscli
+    - source scripts/assume-aws.sh prod
+    # Idempotent: the first pipeline to reach this point creates the repo,
+    # every one after finds it already there and moves straight past.
+    - >
+      aws ecr describe-repositories --region eu-west-2 --repository-names tmct-web-lambdas
+      || aws ecr create-repository --region eu-west-2 --repository-name tmct-web-lambdas
+    - mkdir -p .kaniko-docker
+    - |
+      ECR_REGISTRY="${TMCT_PROD_ACCOUNT_ID}.dkr.ecr.eu-west-2.amazonaws.com"
+      ECR_AUTH=$(printf 'AWS:%s' "$(aws ecr get-login-password --region eu-west-2)" | base64 | tr -d '\n')
+      printf '{"auths":{"%s":{"auth":"%s"}}}' "$ECR_REGISTRY" "$ECR_AUTH" > .kaniko-docker/config.json
+  artifacts:
+    expire_in: 1 hour
+    paths:
+      - server/row-service/dist/
+      - server/turn-service/dist/
+      - server/news-worker/dist/
+      - server/seeds/
+      - Dockerfile
+      - .kaniko-docker/config.json
+
+# kaniko builds the image from the artifacts above and pushes it to ECR
+# tagged with this commit's SHA. `entrypoint: [""]` hands `script:` to the
+# "-debug" variant's busybox sh instead of the image's own executor
+# entrypoint — the standard way to run kaniko as an ordinary GitLab job.
+build:image:
+  stage: image
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  needs:
+    - job: build:image-artifacts
+      artifacts: true
+  environment:
+    name: production
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $PROD_AWS_DEPLOY_ROLE_ARN'
+      changes: *consumer-paths
+  script:
+    - mkdir -p /kaniko/.docker
+    - cp .kaniko-docker/config.json /kaniko/.docker/config.json
+    - >-
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
+      --destination "${TMCT_PROD_ACCOUNT_ID}.dkr.ecr.eu-west-2.amazonaws.com/tmct-web-lambdas:${CI_COMMIT_SHA}"
+
 # Deploy the built site to the AWS-hosted edge (tmct.polycode.co.uk) via the
 # GitLab OIDC -> AWS role chain (no static keys) — see PLAN_AWS.md. Builds
 # public/ and hands it to CDK instead of a GitLab Pages artifact; no artifact
@@ -557,6 +641,7 @@ deploy:website:
     - secret_detection
     - job: unit:smoke
       optional: true
+    - job: build:image
   # Required for the PROD_* CI/CD variables (environment-scoped to production)
   # to actually inject into this job — GitLab only applies a non-wildcard
   # variable scope to jobs whose `environment` matches it.
@@ -576,14 +661,6 @@ deploy:website:
     - npm run build:ask-bundle
     - npm run gen:worlds-pack
     - npm run demo:build
-    - npm run build:row-service
-    # The turn Lambda's own seed and the news worker's bundled xl seed both
-    # need public/chat-seed.json (demo:build, above) already on disk — the
-    # turn seed is a separate small band set built fresh here, the news
-    # worker's is the same file esbuild inlines whole into its bundle (§3.22).
-    - npm run build:turn-service
-    - npm run build:turn-seed
-    - npm run build:news-worker
     - command -v aws >/dev/null || pip install --quiet awscli
     - source scripts/assume-aws.sh prod
     - cd infra
@@ -596,6 +673,7 @@ deploy:website:
         -c env=prod -c slug=prod -c account="${TMCT_PROD_ACCOUNT_ID}" -c region=eu-west-2
         -c hostname=tmct.polycode.co.uk -c certArn="${TMCT_PROD_CERT_ARN}"
         -c hostedZoneId="${TMCT_PROD_ZONE_ID}" -c zoneName=tmct.polycode.co.uk
+        -c imageTag="${CI_COMMIT_SHA}" -c ecrRepo=tmct-web-lambdas
     - cd ..
     - node scripts/warm-deployed-cache.mjs
 
