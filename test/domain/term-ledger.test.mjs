@@ -150,6 +150,37 @@ test("a ttlMs of 0 is a real zero-hour TTL (immediately eligible again), not \"n
   assert.equal(immediatelyAfter[0].term, "tariff");
 });
 
+test("bumpTerms never admits a function word, even at an occurrence count that would otherwise rank it first", () => {
+  const ledger = createTermLedger();
+  bumpTerms(
+    ledger,
+    new Map([
+      ["from", 50],
+      ["and", 40],
+      ["but", 30],
+      ["very", 20],
+      ["into", 10],
+      ["about", 5],
+      ["tariff", 1],
+    ]),
+    "item-1",
+    "2026-08-08T09:00:00Z",
+  );
+  const ranked = rankedTerms(ledger).map((e) => e.term);
+  assert.deepEqual(ranked, ["tariff"]);
+});
+
+test("ledgerFromPayload drops a function-word entry already sitting in a persisted payload", () => {
+  const payload = {
+    terms: [
+      { term: "from", count: 50, vocabGrounded: false, itemIds: [], firstSeen: "2026-08-08T09:00:00Z", lastSeen: "2026-08-08T09:00:00Z", status: "pending", missedAt: "" },
+      { term: "tariff", count: 1, vocabGrounded: true, itemIds: [], firstSeen: "2026-08-08T09:00:00Z", lastSeen: "2026-08-08T09:00:00Z", status: "pending", missedAt: "" },
+    ],
+  };
+  const ledger = ledgerFromPayload(payload);
+  assert.deepEqual([...ledger.terms.keys()], ["tariff"]);
+});
+
 test("ledgerPayload emits entries in ranking order and round-trips byte-identically", () => {
   const ledger = createTermLedger();
   bumpTerms(

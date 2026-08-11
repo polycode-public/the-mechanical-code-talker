@@ -570,6 +570,36 @@ test("filterRankedTermEntries drops a class object and a bare quantity, keeping 
   assert.deepEqual(filterRankedTermEntries(rows, entries), [{ term: "widget", count: 1 }]);
 });
 
+test("/news rank never lists a function word, no matter how far its raw occurrence count would otherwise carry it", async () => {
+  const state = createNewsState();
+  const ledger = createTermLedger();
+  bumpTerms(
+    ledger,
+    new Map([
+      ["from", 500],
+      ["and", 400],
+      ["but", 300],
+      ["very", 200],
+      ["into", 100],
+      ["about", 50],
+      ["tariff", 1],
+    ]),
+    "item-1",
+    FIXED_NOW,
+  );
+  state.ledger = ledgerPayload(ledger);
+  const { ctx, close } = await makeCtx({ state });
+  try {
+    const { text } = await newsTurn("/news rank", ctx);
+    assert.match(text, /tariff \(1\)/);
+    for (const word of ["from", "and", "but", "very", "into", "about"]) {
+      assert.doesNotMatch(text, new RegExp(`\\b${word} \\(`), `"${word}" must never rank as a news term`);
+    }
+  } finally {
+    await close();
+  }
+});
+
 // ---- the newsworthiness gate (PLAN_NEWS_FEED.md section 17) ---------------
 //
 // The recorded Wikimedia fixture's own text ("A tariff is a tax imposed on

@@ -8,6 +8,33 @@ import { normFactTerm } from "./hash.mjs";
 
 const ITEM_IDS_CAP = 12;
 
+// A preposition, conjunction or degree/frequency adverb scaffolds a
+// sentence; it never names the thing the sentence is about, so no
+// occurrence count makes one a useful ledger term. Closed set, checked
+// against the already-normalized (lowercased) term. bumpTerms uses this to
+// keep a function word from ever being admitted; ledgerFromPayload uses it
+// to drop one that reached a persisted payload before this filter existed.
+const FUNCTION_WORD_TERMS = new Set([
+  // prepositions
+  "about", "above", "across", "after", "against", "along", "among", "around",
+  "at", "before", "behind", "below", "beneath", "beside", "between", "beyond",
+  "by", "despite", "down", "during", "except", "for", "from", "in", "into",
+  "near", "of", "off", "on", "onto", "out", "over", "since", "through",
+  "throughout", "to", "toward", "towards", "under", "underneath", "until",
+  "up", "upon", "with", "within", "without",
+  // conjunctions
+  "and", "or", "nor", "but", "so", "yet", "although", "because", "if",
+  "though", "unless", "when", "whenever", "whereas", "while", "than",
+  // degree and frequency adverbs
+  "very", "quite", "rather", "too", "just", "only", "even", "also", "still",
+  "already", "almost", "always", "never", "ever", "often", "sometimes",
+  "usually", "indeed", "however", "therefore", "thus", "hence", "meanwhile",
+]);
+
+function isFunctionWordTerm(term) {
+  return FUNCTION_WORD_TERMS.has(term);
+}
+
 /** Ledger entry field order fixed once here so `ledgerPayload` serializes
  *  byte-identically across peers regardless of insertion order elsewhere. */
 function newEntry(term, vocabGrounded, now) {
@@ -35,7 +62,7 @@ export function createTermLedger() {
 export function bumpTerms(ledger, termCounts, itemId, now, vocabGroundedByTerm = new Map()) {
   for (const [rawTerm, occurrences] of termCounts) {
     const term = normFactTerm(rawTerm);
-    if (!term) continue;
+    if (!term || isFunctionWordTerm(term)) continue;
     let entry = ledger.terms.get(term);
     if (!entry) {
       const vocabGrounded = vocabGroundedByTerm.has(rawTerm)
@@ -112,6 +139,7 @@ export function ledgerPayload(ledger) {
 export function ledgerFromPayload(payload) {
   const ledger = createTermLedger();
   for (const entry of payload?.terms ?? []) {
+    if (isFunctionWordTerm(entry.term)) continue;
     ledger.terms.set(entry.term, { ...entry, itemIds: [...(entry.itemIds ?? [])] });
   }
   return ledger;
