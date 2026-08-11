@@ -722,7 +722,15 @@ export function closeSqliteMemoryStore(handle) {
 export async function openSqliteSeedStore(dbPath) {
   installSqliteWarningFilter();
   const { DatabaseSync } = await import("node:sqlite");
-  return { backend: BACKEND_SQLITE, db: new DatabaseSync(dbPath, { readOnly: true }), dbPath, readOnly: true };
+  try {
+    return { backend: BACKEND_SQLITE, db: new DatabaseSync(dbPath, { readOnly: true }), dbPath, readOnly: true };
+  } catch (cause) {
+    // A seed file whose writer never closed keeps a live -wal beside it, and
+    // recovering that needs write access the caller does not have. Say which
+    // file and say read-only, or the raw sqlite message sends the reader
+    // looking for a missing file that is right there.
+    throw new BackendUnavailable(`could not open the seed store ${dbPath} read-only: ${cause.message}`, { cause });
+  }
 }
 
 // ---- Backend D — a consumer's own row store ------------------------------

@@ -386,6 +386,7 @@ export function createNewsWorker({
     log({
       event: "phase-done", phase: mode, ms: Date.now() - phaseStartedMs,
       facts: cycleResult.facts || 0, aborted: !!cycleResult.aborted,
+      ...(mode === "poll" ? { sources: sourcesFromPollResult(cycleResult.sources) } : {}),
       ...(failure ? { failed: failure.message } : {}),
     });
 
