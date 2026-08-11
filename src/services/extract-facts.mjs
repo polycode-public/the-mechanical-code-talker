@@ -63,7 +63,7 @@ import { basename, join, resolve } from "node:path";
 import { runTurn, uuidv7, stripLeadingDiscourseAdverb } from "./chat.mjs";
 import { beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentencesPreservingPaths, stripCitationResidue } from "./sentences.mjs";
-import { loadMemory, readFactRows, appendFact, removeFacts } from "../adapters/memory/core.mjs";
+import { loadMemory, readFactRows, appendFacts, removeFacts } from "../adapters/memory/core.mjs";
 import { loadConfig } from "../adapters/config.mjs";
 import { touchedFactRows } from "../domain/memory/touched-facts.mjs";
 import { normFactTerm } from "../domain/hash.mjs";
@@ -971,9 +971,14 @@ export async function ingestText(text, {
           const subjects = new Set(rows.map((r) => r.subject));
           if (subjects.size === 1) carrySubject = [...subjects][0];
           const tag = `extracted:${sourceTag}`;
+          // One write for the whole sentence, not one per row: a write reads
+          // and re-derives the whole graph, so N of them cost N times what one
+          // carrying the same N rows does. The batch stays inside the sentence
+          // — a later sentence still reads everything the earlier ones wrote.
+          const writes = [];
           for (const row of rows) {
             const extraction = findingsForRow(row, readingFindings, identifierTerms);
-            await appendFact(dir, {
+            writes.push({
               subject: row.subject, predicate: row.predicate, object: row.object,
               provenance: tag, quantifier: row.quantifier || "", observedAt,
               ...(extraction.length ? { extraction } : {}),
@@ -985,6 +990,7 @@ export async function ingestText(text, {
             });
             taggedIds.add(row.id);
           }
+          await appendFacts(dir, writes);
           continue;
         }
         const ungrounded = ungroundedTermsIn(lastDecline);
@@ -1009,15 +1015,17 @@ export async function ingestText(text, {
         if (!keptCandidates.length) continue;
         optimisticSentences += 1;
         const tag = `optimistic-extract:${sourceTag}`;
+        const candidateWrites = [];
         for (const t of keptCandidates) {
           const extraction = findingsForRow(t, mintFindings.has(t) ? [mintFindings.get(t)] : [], identifierTerms);
-          const written = await appendFact(dir, {
+          candidateWrites.push({
             subject: t.subject, predicate: t.predicate, object: t.object, provenance: tag, observedAt,
             ...(extraction.length ? { extraction } : {}),
           });
           optimisticFacts.push({ ...t, provenance: tag, sentence, ...(extraction.length ? { extraction } : {}) });
-          taggedIds.add(written.id);
         }
+        const { ids } = await appendFacts(dir, candidateWrites);
+        for (const id of ids) taggedIds.add(id);
       }
     }
 

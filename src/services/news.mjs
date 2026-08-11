@@ -494,6 +494,27 @@ function mergeSnapshotsById(existing, incoming, cap) {
   return { items, added };
 }
 
+const fetchedAtMs = (snapshot) => {
+  const ms = toMs(snapshot?.fetchedAt);
+  return Number.isFinite(ms) ? ms : 0;
+};
+
+/** True once a snapshot has been through a grounding round. `mergeSnapshotsById`
+ *  files a snapshot the moment it arrives, so "known" and "grounded" are two
+ *  different states and only this one means the facts landed. */
+const isGroundedSnapshot = (snapshot) => (snapshot?.processedRounds || 0) > 0;
+
+/** One source's fetched-but-not-yet-grounded snapshots, oldest first. A cycle
+ *  that ran out of time leaves its backlog here, so the next cycle works
+ *  through that before anything newer and the same article is never ingested
+ *  twice. Ordered off the snapshots' own fields, so two cycles reading the same
+ *  state take the same work in the same order. */
+function pendingSnapshotsFor(items, sourceId) {
+  return (items || [])
+    .filter((snap) => snap?.sourceId === sourceId && !isGroundedSnapshot(snap))
+    .sort((a, b) => (fetchedAtMs(a) - fetchedAtMs(b)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
 function emptyCycleAccumulator(at) {
   return { at, sentences: 0, recognized: 0, optimisticCount: 0, factsAdded: 0, termsResolved: 0, derived: 0 };
 }
@@ -548,21 +569,28 @@ export async function pollNewsSources(ctx) {
       perSource.push({ sourceId, status: "failed" });
       continue;
     }
+    let added = [];
     if (result.notModified) {
       recordSuccess(health, nowVal, "not-modified");
-      perSource.push({ sourceId, status: "not-modified" });
-      continue;
+    } else {
+      recordSuccess(health, nowVal, "ok");
+      const merged = mergeSnapshotsById(state.items, result.items, config.itemCap);
+      state.items = merged.items;
+      added = merged.added;
+      newItemsTotal += added.length;
     }
-    recordSuccess(health, nowVal, "ok");
-    const { items: mergedItems, added } = mergeSnapshotsById(state.items, result.items, config.itemCap);
-    state.items = mergedItems;
-    newItemsTotal += added.length;
 
+    // Everything this source has fetched and not yet grounded, not just what
+    // arrived on this fetch: a source that answers 304 still has a backlog to
+    // finish, and an aborted cycle's leftovers would otherwise sit in the state
+    // marked known and never be read again.
     const before = emptyCycleAccumulator(nowVal);
     const after = emptyCycleAccumulator(nowVal);
-    for (const snapshot of added) {
+    let grounded = 0;
+    for (const snapshot of pendingSnapshotsFor(state.items, sourceId)) {
       if (shouldAbort()) { aborted = true; break; }
       const r = await ingestNewsSnapshot(ctx, snapshot);
+      grounded += 1;
       after.sentences += r.sentences;
       after.recognized += r.recognized;
       after.optimisticCount += r.optimisticCount;
@@ -571,10 +599,17 @@ export async function pollNewsSources(ctx) {
       factsTotal += r.facts;
       derivedTotal += r.derived;
     }
-    if (added.length) {
+    if (grounded) {
       state.metrics = [...(state.metrics || []), cycleMetrics(before, after, { source: sourceId })];
     }
-    perSource.push({ sourceId, status: "ok", newItems: added.length });
+    const pendingLeft = pendingSnapshotsFor(state.items, sourceId).length;
+    perSource.push({
+      sourceId,
+      status: result.notModified ? "not-modified" : "ok",
+      newItems: added.length,
+      grounded,
+      pending: pendingLeft,
+    });
     if (aborted) break;
   }
 

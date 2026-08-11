@@ -766,12 +766,22 @@ const ROW_NODE_ID_KEY = "nodeId";
  *  `wrapRowBackendOverSqliteSeed`, the entry point that takes one.
  *  `sqliteSeedOverlayRows` are rows that layer over that seed and under the
  *  session's own (a turn's retrieved corpus subgraph), read-only exactly as
- *  the seed is. */
+ *  the seed is.
+ *
+ *  `copyOnRead: false` hands every reader the assembled payload itself instead
+ *  of a copy of it. Copying a seed-sized payload is the most expensive thing
+ *  this backend does — over a second per read at 60k facts — and a caller that
+ *  drives the whole session through this one handle (a worker cycle, a request
+ *  handler) has nobody to protect the payload from. Anyone sharing a handle
+ *  across independent readers leaves the default alone: without the copy, a
+ *  reader that mutates what it read has changed the store's own view of
+ *  itself. */
 export function wrapRowBackend(impl, {
   basePayload = null,
   sqliteSeedStore = null,
   sqliteSeedOverlayRows = null,
   onOversizedRow = "throw",
+  copyOnRead = true,
   log = undefined,
 } = {}) {
   const problems = rowBackendProblems(impl);
@@ -795,6 +805,7 @@ export function wrapRowBackend(impl, {
     baseRows: null,
     storedRows: null,
     onOversizedRow,
+    copyOnRead,
     log,
   };
 }
@@ -805,8 +816,8 @@ export function wrapRowBackend(impl, {
  *  never materialized as a row array: the assembled payload is the only copy
  *  of it this process holds. `overlayRows` layer over the seed and under the
  *  session's own rows. */
-export function wrapRowBackendOverSqliteSeed(impl, sqliteSeedStore, { overlayRows = null, onOversizedRow = "throw", log = undefined } = {}) {
-  return wrapRowBackend(impl, { sqliteSeedStore, sqliteSeedOverlayRows: overlayRows, onOversizedRow, log });
+export function wrapRowBackendOverSqliteSeed(impl, sqliteSeedStore, { overlayRows = null, onOversizedRow = "throw", copyOnRead = true, log = undefined } = {}) {
+  return wrapRowBackend(impl, { sqliteSeedStore, sqliteSeedOverlayRows: overlayRows, onOversizedRow, copyOnRead, log });
 }
 
 /** Drain whatever `readRows()` returned: the contract allows an array or an
@@ -863,7 +874,7 @@ async function ensureRowPayload(handle) {
       prefixes: await readRowMeta(handle, ROW_META_PREFIXES_KEY, seedScalar(handle, "prefixes", empty.prefixes)),
     };
     if (handle.sqliteSeedStore) {
-      handle.cachedPayload = assembleSqliteSeededPayload(handle, meta);
+      handle.cachedPayload = migrateStoredMemory(assembleSqliteSeededPayload(handle, meta));
     } else {
       // "keep": the base overlay's own rows never reach the wire (persistRowPayload
       // excludes every seed key from every write via seedOnlyKeys below), so the
@@ -872,16 +883,49 @@ async function ensureRowPayload(handle) {
       // band's own high-fan-out property (one edge per fact is normal, not a
       // pathology) and break every read that depends on it.
       handle.baseRows = payloadToRows(handle.basePayload || empty, { onOversizedRow: "keep" });
-      handle.cachedPayload = rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta });
+      handle.cachedPayload = migrateStoredMemory(rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta }));
     }
   }
   return handle.cachedPayload;
 }
 
 /** loadMemory's read for Backend D: one `readRows()` per cold open, then a
- *  clone of the assembled payload per call. */
+ *  clone of the assembled payload per call — unless the handle was opened
+ *  `copyOnRead: false`, where the reader gets the assembled payload itself. */
 async function readRowPayload(handle) {
-  return cloneJson(await ensureRowPayload(handle));
+  const payload = await ensureRowPayload(handle);
+  return handle.copyOnRead === false ? payload : cloneJson(payload);
+}
+
+/** A payload a mutation can work on without any of it reaching the one it was
+ *  copied from. Every container a write reaches into is its own: the individuals
+ *  array and each individual, the edge groups and each group's example list.
+ *  What stays shared is what a write never changes in place — an individual's
+ *  `attributes` array is REPLACED by `setAttr`, never pushed onto, and an edge
+ *  is replaced rather than edited, so both sides keep reading their own.
+ *
+ *  This is `structuredClone`'s job done at the granularity writes actually use.
+ *  At seed scale the deep copy runs well over a second and a cycle pays it on
+ *  every fact it grounds; this is a few milliseconds of pointer copying. */
+function mutablePayloadCopy(payload) {
+  return {
+    ...payload,
+    individuals: (payload.individuals || []).map((ind) => ({ ...ind })),
+    objectProperties: (payload.objectProperties || []).map((group) => ({
+      ...group, examples: [...(group.examples || [])],
+    })),
+  };
+}
+
+/** Forget a row handle's assembled payload, so the next read rebuilds it from
+ *  the store. The one thing that must happen after a mutation dies part-way
+ *  through: the payload it was changing is neither what the store holds nor a
+ *  coherent graph. */
+function dropAssembledRowPayload(handle) {
+  if (!isRowHandle(handle)) return;
+  handle.cachedPayload = null;
+  handle.storedRows = null;
+  handle.baseRows = null;
 }
 
 /** A record with its audit stamp removed. `mgx:updatedAt` moves on every
@@ -935,9 +979,7 @@ async function persistRowPayload(handle, payload) {
     await handle.impl.putMeta(ROW_META_MEMORY_KEY, JSON.stringify(payload.memory ?? emptyMemory().memory));
     await handle.impl.putMeta(ROW_META_PREFIXES_KEY, JSON.stringify(payload.prefixes ?? emptyMemory().prefixes));
   } catch (e) {
-    handle.cachedPayload = null;
-    handle.storedRows = null;
-    handle.baseRows = null;
+    dropAssembledRowPayload(handle);
     throw e;
   }
   const removed = new Set(removals);
@@ -949,13 +991,13 @@ async function persistRowPayload(handle, payload) {
     patchAssembledPayload(handle.cachedPayload, meta, writes);
   } else if (handle.sqliteSeedStore) {
     handle.cachedPayload = null;
-    handle.cachedPayload = assembleSqliteSeededPayload(handle, meta);
+    handle.cachedPayload = migrateStoredMemory(assembleSqliteSeededPayload(handle, meta));
   } else {
     // Dropped before the rebuild, not after it: the payload this replaces is the
     // largest object the handle holds, and keeping it reachable while the next
     // one assembles doubles the peak for no reason.
     handle.cachedPayload = null;
-    handle.cachedPayload = rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta });
+    handle.cachedPayload = migrateStoredMemory(rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta }));
   }
 }
 
@@ -1951,7 +1993,9 @@ export async function snapshotMemory(dir, { retentionVersions } = {}) {
 export async function loadMemory(dir) {
   if (isMemoryHandle(dir)) return migrateStoredMemory(dir.payload);
   if (isSqliteHandle(dir)) return migrateStoredMemory(readSqlitePayload(dir));
-  if (isRowHandle(dir)) return migrateStoredMemory(await readRowPayload(dir));
+  // Not migrated here: a row handle migrates the payload once, as it assembles
+  // it, so every read after the first is spared two walks of the whole graph.
+  if (isRowHandle(dir)) return readRowPayload(dir);
   let text;
   try {
     text = await readFile(memoryGraphFile(dir), "utf8");
@@ -2315,15 +2359,31 @@ function retractionsFor(payload, groupId) {
  *  linear scan in that case. */
 const memoryIndexOf = (payload) => payload?.[MEMORY_INDEX] || null;
 
+/** Load, change, persist. A row handle always works on a copy here, even one
+ *  opened `copyOnRead: false`: a write drops every change that lands on a
+ *  seed-owned row, so a mutation applied straight to the assembled payload
+ *  would leave the handle holding changes the store refused. The copy is what
+ *  keeps "what this handle reads" and "what a fresh handle would assemble" the
+ *  same thing.
+ *
+ *  A row handle does skip the prose index built here: `persistRowPayload`
+ *  re-derives every derived structure from the rows it just wrote, so building
+ *  one now builds it twice over the whole graph. */
 async function mutateMemory(dir, fn) {
-  const payload = await loadMemory(dir);
-  buildMemoryIndex(payload);
-  const out = (await fn(payload)) ?? payload;
-  migrateLegacyProvenance(out);
-  recomputeSourceReliability(out);
-  out.proseIndex = buildProseIndex(out.individuals);
-  await persistMemory(dir, out);
-  return out;
+  const overRowHandle = isRowHandle(dir);
+  const payload = overRowHandle ? mutablePayloadCopy(await ensureRowPayload(dir)) : await loadMemory(dir);
+  try {
+    buildMemoryIndex(payload);
+    const out = (await fn(payload)) ?? payload;
+    migrateLegacyProvenance(out);
+    recomputeSourceReliability(out);
+    if (!overRowHandle) out.proseIndex = buildProseIndex(out.individuals);
+    await persistMemory(dir, out);
+    return overRowHandle ? dir.cachedPayload : out;
+  } catch (e) {
+    dropAssembledRowPayload(dir);
+    throw e;
+  }
 }
 
 const labelOf = (text) => (text.length > LABEL_CAP ? text.slice(0, LABEL_CAP - 1) + "…" : text);
@@ -2552,7 +2612,10 @@ function recomputeSourceReliability(payload) {
   if (!Array.isArray(payload?.individuals) || !Array.isArray(payload?.objectProperties)) return;
   const rows = readFactRows(payload); // Fact-only — contradiction accounting is inherently Fact-shaped
   const contradictedFactIds = new Set();
-  for (const group of findContradictions(payload)) for (const r of group) contradictedFactIds.add(r.id);
+  // The fold above is the same one findContradictions would take for itself,
+  // and over a seed-sized graph it is half a second. Nothing changes the
+  // payload between the two, so it goes across.
+  for (const group of findContradictions(payload, { factRows: rows })) for (const r of group) contradictedFactIds.add(r.id);
 
   const bySource = new Map(); // sessionSourceId -> { factsAsserted, factsContradicted }
   for (const row of rows) {
@@ -4195,8 +4258,8 @@ export const MULTI_VALUED_PREDICATES = MERGE_PREDICATES;
  *  only what its own clock could not order (the resolver's trust and codepoint
  *  tie-breaks — see resolveSiblingGroups), so ordinary succession stops reading
  *  as disagreement; every other predicate keeps the full keep-both contract. */
-export function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR } = {}) {
-  const rows = readFactRows(memory).filter((r) => r.trust >= floor);
+export function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR, factRows = null } = {}) {
+  const rows = (factRows || readFactRows(memory)).filter((r) => r.trust >= floor);
   const byKey = new Map();
   for (const r of rows) {
     if (resolutionStrategyFor(r.predicate) === RESOLUTION_MERGE) continue;

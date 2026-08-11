@@ -561,6 +561,30 @@ test("a write over a sqlite seed leaves the same payload a fresh handle assemble
   }
 });
 
+test("copyOnRead: false hands the reader the handle's own payload, and a write still cannot reach it", async () => {
+  const seed = await buildSeedSqlite();
+  const inner = createRowMemoryBackend();
+  try {
+    const dir = wrapRowBackendOverSqliteSeed(inner, seed.store, { copyOnRead: false });
+    const first = await loadMemory(dir);
+    assert.equal(await loadMemory(dir), first, "two reads hand back the one payload, uncopied");
+
+    const before = JSON.stringify(first);
+    await appendFacts(dir, [{ subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T2), createdAt: T2 }]);
+    assert.equal(
+      JSON.stringify(first) === before, false,
+      "the handle's payload moved on, because it IS the handle's payload",
+    );
+    assert.deepEqual(
+      await loadMemory(dir),
+      await loadMemory(wrapRowBackendOverSqliteSeed(inner, seed.store, { copyOnRead: false })),
+      "and it still says exactly what a fresh handle assembles",
+    );
+  } finally {
+    await seed.cleanup();
+  }
+});
+
 test("a sqlite seed's fact terms come off its own columns, matching the records it holds", async () => {
   const seed = await buildSeedSqlite();
   try {
