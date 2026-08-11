@@ -187,9 +187,19 @@ function gatedFetchers(fetchersById, sourceGate) {
   return gated;
 }
 
+/** What each source did this cycle, for the log line: what it fetched, what
+ *  this cycle actually grounded, and what it left for the next one. A cycle
+ *  that fetches items and grounds none reads as a stall from the line alone. */
 function sourcesFromPollResult(list) {
   const out = {};
-  for (const entry of list || []) out[entry.sourceId] = { status: entry.status, newItems: entry.newItems || 0 };
+  for (const entry of list || []) {
+    out[entry.sourceId] = {
+      status: entry.status,
+      newItems: entry.newItems || 0,
+      grounded: entry.grounded || 0,
+      pending: entry.pending || 0,
+    };
+  }
   return out;
 }
 
@@ -350,9 +360,13 @@ export function createNewsWorker({
       await rawBackend.putMeta(META_SEED_STAMP_KEY, seedStamp);
     }
 
+    // `copyOnRead: false`: this handle is built here, driven by this one cycle
+    // and dropped when it ends, so nobody needs protecting from the payload it
+    // assembles. Copying a seed-sized payload costs more than a second EVERY
+    // read, and an ingest reads many times per article.
     const handle = seedStore
-      ? wrapRowBackendOverSqliteSeed(rawBackend, seedStore)
-      : wrapRowBackend(rawBackend, { basePayload: seedPayload });
+      ? wrapRowBackendOverSqliteSeed(rawBackend, seedStore, { copyOnRead: false })
+      : wrapRowBackend(rawBackend, { basePayload: seedPayload, copyOnRead: false });
     const store = foldingStore();
     const config = resolveNewsConfig();
     if (Array.isArray(body?.sources) && body.sources.length) config.sources = normalizeNewsSourceIds(body.sources);

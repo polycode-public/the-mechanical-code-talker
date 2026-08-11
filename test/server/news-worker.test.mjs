@@ -109,7 +109,9 @@ test("a poll cycle's per-source progress lands in the cycle marker", async () =>
 
     const marker = await readJsonMeta(service.url, SESSION_A, "cycle");
     assert.equal(marker.state, "done");
-    assert.deepEqual(marker.sources, { "wikimedia-featured": { status: "ok", newItems: 1 } });
+    assert.deepEqual(marker.sources, {
+      "wikimedia-featured": { status: "ok", newItems: 1, grounded: 1, pending: 0 },
+    });
   });
 });
 

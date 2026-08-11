@@ -297,11 +297,17 @@ export function createTurnServiceHandler({
     // just wrote to for every turn after this one.
     const sessionBackend = await createSessionBackend(sessionKey);
     const cappedBackend = withGlobalRowCap(sessionBackend, globalRowCapCounter);
+    // `copyOnRead: false` for the same reason the handle is fresh: this turn
+    // is the only thing that ever reads it, so copying the assembled payload
+    // on every read protects nobody and costs the whole seed each time.
     const memoryDir = seedStore
-      ? wrapRowBackendOverSqliteSeed(cappedBackend, seedStore, { overlayRows: retrieval.rows, onOversizedRow: "drop", log })
+      ? wrapRowBackendOverSqliteSeed(cappedBackend, seedStore, {
+        overlayRows: retrieval.rows, onOversizedRow: "drop", copyOnRead: false, log,
+      })
       : wrapRowBackend(cappedBackend, {
         basePayload: mergeSeedAndSubgraph(seedPayload, retrieval.rows, { log }),
         onOversizedRow: "drop",
+        copyOnRead: false,
         log,
       });
 
