@@ -35,6 +35,14 @@ async function deleteRows(url, sessionKey, body) {
   });
 }
 
+async function postDeleteRows(url, sessionKey, body) {
+  return fetch(`${url}/api/sessions/${sessionKey}/rows/delete`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 async function withService(options, run) {
   const service = await createLocalRowService(options);
   try {
@@ -256,6 +264,76 @@ test("a purge never resets the session's own mutation rate", async () => {
 
     const thirdMutation = await putRows(service.url, SESSION_A, [fixtureRow("fact:2@src:1")]);
     assert.equal(thirdMutation.status, 429, "the purge counted toward the same limit as any other mutation");
+  });
+});
+
+test("POST /api/sessions/:uuid/rows/delete: a keyed delete leaves the row absent from every later read, and repeated deletes are idempotent", async () => {
+  await withService({}, async (service) => {
+    await putRows(service.url, SESSION_A, [fixtureRow("fact:1@src:1"), fixtureRow("fact:2@src:1")]);
+
+    const firstDelete = await postDeleteRows(service.url, SESSION_A, { rowKeys: ["fact:1@src:1"] });
+    assert.equal(firstDelete.status, 204);
+    const afterFirstDelete = (await (await getRows(service.url, SESSION_A)).json()).rows.map((row) => row.rowKey);
+    assert.deepEqual(afterFirstDelete, ["fact:2@src:1"]);
+
+    const secondDelete = await postDeleteRows(service.url, SESSION_A, { rowKeys: ["fact:1@src:1"] });
+    assert.equal(secondDelete.status, 204, "deleting an already-deleted key is a no-op 204, not an error");
+    const afterSecondDelete = (await (await getRows(service.url, SESSION_A)).json()).rows.map((row) => row.rowKey);
+    assert.deepEqual(afterSecondDelete, ["fact:2@src:1"]);
+  });
+});
+
+test("POST /api/sessions/:uuid/rows/delete: a {all: true} delete leaves the whole session absent, rows and meta alike", async () => {
+  await withService({}, async (service) => {
+    await putRows(service.url, SESSION_A, [fixtureRow("fact:1@src:1")]);
+    await fetch(`${service.url}/api/sessions/${SESSION_A}/meta/nodeId`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value: "node-1" }),
+    });
+
+    const purge = await postDeleteRows(service.url, SESSION_A, { all: true });
+    assert.equal(purge.status, 204);
+
+    assert.deepEqual((await (await getRows(service.url, SESSION_A)).json()).rows, []);
+    const metaAfterPurge = await fetch(`${service.url}/api/meta/nodeId`, { headers: { "x-tmct-session": SESSION_A } });
+    assert.equal(metaAfterPurge.status, 404);
+  });
+});
+
+test("POST /api/sessions/:uuid/rows/delete: a body naming neither rowKeys nor {all: true}, or both, is a 400", async () => {
+  await withService({}, async (service) => {
+    const neither = await postDeleteRows(service.url, SESSION_A, {});
+    assert.equal(neither.status, 400);
+    const both = await postDeleteRows(service.url, SESSION_A, { rowKeys: ["fact:1@src:1"], all: true });
+    assert.equal(both.status, 400);
+  });
+});
+
+test("POST /api/sessions/:uuid/rows/delete: a purge never resets the session's own mutation rate", async () => {
+  await withService({ mutationRateLimit: 2 }, async (service) => {
+    await putRows(service.url, SESSION_A, [fixtureRow("fact:1@src:1")]);
+    const purge = await postDeleteRows(service.url, SESSION_A, { all: true });
+    assert.equal(purge.status, 204, "the purge itself is the session's second mutation");
+
+    const thirdMutation = await putRows(service.url, SESSION_A, [fixtureRow("fact:2@src:1")]);
+    assert.equal(thirdMutation.status, 429, "the purge counted toward the same limit as any other mutation");
+  });
+});
+
+test("the DELETE route and its POST twin agree: the global table cap answers 507 with nothing applied, and either spelling of a delete never frees it", async () => {
+  await withService({ tableRowCap: 3 }, async (service) => {
+    await putRows(service.url, SESSION_A, [fixtureRow("fact:1@src:1"), fixtureRow("fact:2@src:1"), fixtureRow("fact:3@src:1")]);
+
+    const overCap = await putRows(service.url, SESSION_B, [fixtureRow("fact:1@src:2")]);
+    assert.equal(overCap.status, 507);
+
+    const purge = await postDeleteRows(service.url, SESSION_A, { all: true });
+    assert.equal(purge.status, 204);
+    assert.deepEqual((await (await getRows(service.url, SESSION_A)).json()).rows, []);
+
+    const stillOverCap = await putRows(service.url, SESSION_B, [fixtureRow("fact:2@src:2")]);
+    assert.equal(stillOverCap.status, 507, "the counter never decremented on the POST twin's delete either");
   });
 });
 

@@ -68,9 +68,9 @@ async function runFetch(fetchImpl, url, init, networkFailureMessage) {
 
 /** One retry, on a 5xx only, for the one call the spec singles out.
  *  `deleteAll`'s purge is query-then-mark and idempotent, so a retried
- *  DELETE just re-marks whatever the first attempt already reached; it
+ *  delete just re-marks whatever the first attempt already reached; it
  *  never double-applies. Every other mutation gets one attempt only:
- *  retrying a PUT or a keyed DELETE past a 5xx is a caller decision, not
+ *  retrying a PUT or a keyed delete past a 5xx is a caller decision, not
  *  this backend's. */
 async function fetchWithOneRetryOn5xx(fetchImpl, url, init, networkFailureMessage) {
   const first = await runFetch(fetchImpl, url, init, networkFailureMessage);
@@ -141,12 +141,15 @@ export function createHttpRowBackend({ apiBase, sessionKey, fetchImpl = fetch } 
 
     async deleteRows(rowKeys) {
       assertOpen();
-      await mutate(`/api/sessions/${sessionKey}/rows`, { method: "DELETE", body: { rowKeys } });
+      // CloudFront's OAC signs a DELETE as body-less, so the edge can never
+      // pass a body-carrying DELETE through. POST .../rows/delete is the
+      // edge-safe spelling of the same call.
+      await mutate(`/api/sessions/${sessionKey}/rows/delete`, { method: "POST", body: { rowKeys } });
     },
 
     async deleteAll() {
       assertOpen();
-      await mutate(`/api/sessions/${sessionKey}/rows`, { method: "DELETE", body: { all: true } }, { retryOn5xx: true });
+      await mutate(`/api/sessions/${sessionKey}/rows/delete`, { method: "POST", body: { all: true } }, { retryOn5xx: true });
     },
 
     async readMeta(key) {

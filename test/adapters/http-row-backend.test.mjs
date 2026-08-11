@@ -219,6 +219,33 @@ test("a mutating call carries x-amz-content-sha256; a GET never does — the URL
   assert.equal(getCall.headers["x-amz-content-sha256"], undefined, "a GET must never gain the payload-hash header");
 });
 
+test("deleteRows and deleteAll issue POST .../rows/delete, carrying the payload-hash header — CloudFront's OAC signs DELETE as body-less, so neither method can use the DELETE verb through the edge", async () => {
+  const sessionKey = randomUUID();
+  const realFetchCalls = [];
+  const spyingBackend = createHttpRowBackend({
+    apiBase: service.url,
+    sessionKey,
+    fetchImpl: (url, init) => {
+      realFetchCalls.push({ url: String(url), method: init?.method, headers: init?.headers || {}, body: init?.body });
+      return fetch(url, init);
+    },
+  });
+  await spyingBackend.putRows([{ rowKey: "fact:1@src:1", rowClass: "fact", term: "tariff", json: JSON.stringify({ ord: 0 }) }]);
+  await spyingBackend.deleteRows(["fact:1@src:1"]);
+  await spyingBackend.deleteAll();
+  await spyingBackend.close();
+
+  const deleteRowsCall = realFetchCalls.find((call) => call.body && JSON.parse(call.body).rowKeys);
+  assert.equal(deleteRowsCall.method, "POST");
+  assert.ok(deleteRowsCall.url.endsWith(`/api/sessions/${sessionKey}/rows/delete`));
+  assert.equal(deleteRowsCall.headers["x-amz-content-sha256"], await sha256Hex(deleteRowsCall.body));
+
+  const deleteAllCall = realFetchCalls.find((call) => call.body && JSON.parse(call.body).all === true);
+  assert.equal(deleteAllCall.method, "POST");
+  assert.ok(deleteAllCall.url.endsWith(`/api/sessions/${sessionKey}/rows/delete`));
+  assert.equal(deleteAllCall.headers["x-amz-content-sha256"], await sha256Hex(deleteAllCall.body));
+});
+
 test("close() stops the backend from serving further calls", async () => {
   const backend = createHttpRowBackend({ apiBase: service.url, sessionKey: randomUUID(), fetchImpl: fetch });
   await backend.close();
