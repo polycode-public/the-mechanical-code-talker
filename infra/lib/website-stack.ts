@@ -397,16 +397,15 @@ export class WebsiteStack extends Stack {
       handler: "handler.handler",
       code: lambda.Code.fromAsset(NEWS_WORKER_DIST_DIR),
       // Module init parses the bundled xl seed (61,724 facts) plus the
-      // engine, and that needs a full vCPU — 512 MB only grants a CPU
-      // fraction, so init itself times out before the first request. 1769 MB
-      // is the threshold where Lambda grants one full vCPU. The 300s timeout
-      // gives its cycles room to poll external sources under their own
-      // budgets, not just to finish init.
-      memorySize: 1769,
+      // engine, which needs a full vCPU (granted from 1769 MB) just to boot —
+      // and a real poll cycle's working set on that seed then exhausted
+      // 1769 MB outright (observed live: Runtime.OutOfMemory at the cap), so
+      // the size covers the cycle, not only init. The 300s timeout gives its
+      // cycles room to poll external sources under their own budgets.
+      memorySize: 4096,
       timeout: Duration.seconds(300),
-      // No reserved concurrency, same account-wide floor as the row service
-      // above — §3.9's "default 5" ceiling is aspirational until the account
-      // can support any reservation at all.
+      // No reserved concurrency: the account's total concurrency sits at the
+      // Lambda service floor, so any reservation is rejected at deploy time.
       environment: {
         TABLE_NAME: rowTable.tableName,
         TTL_DAYS: String(props.rowServiceTtlDays ?? 7),
