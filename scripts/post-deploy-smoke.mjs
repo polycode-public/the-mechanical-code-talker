@@ -15,7 +15,7 @@
 // and `corpusReadProbe` are exported so a test can point them at a local
 // double instead of the live origin.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
@@ -37,6 +37,14 @@ const DELAY_MS = Number(process.env.SMOKE_DELAY_MS ?? 30_000);
 const FETCH_TIMEOUT_MS = 20_000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Hex SHA-256 of `text`, for the `x-amz-content-sha256` header every
+ *  body-carrying `/api/*` request needs: Lambda URLs behind OAC 403 at the
+ *  URL auth layer, before the handler runs, if a body-carrying request
+ *  arrives without it. */
+function sha256Hex(text) {
+  return createHash("sha256").update(text).digest("hex");
+}
 
 async function fetchText(url) {
   const res = await fetch(url, {
@@ -130,9 +138,11 @@ export async function rowServiceRoundTrip(baseUrl = API_BASE_URL) {
     headers: { "content-type": "application/json", "user-agent": `${name} post-deploy-smoke`, ...init?.headers },
   });
 
+  const putBody = JSON.stringify({ puts: [{ rowKey, rowClass: "fact", term: "", json: JSON.stringify({ smoke: true }) }] });
   const putRes = await fetchJson(`/api/sessions/${sessionKey}/rows`, {
     method: "PUT",
-    body: JSON.stringify({ puts: [{ rowKey, rowClass: "fact", term: "", json: JSON.stringify({ smoke: true }) }] }),
+    body: putBody,
+    headers: { "x-amz-content-sha256": sha256Hex(putBody) },
   });
   if (putRes.status !== 204) throw new Error(`PUT /api/sessions/:uuid/rows returned ${putRes.status}, not 204`);
 
@@ -141,9 +151,11 @@ export async function rowServiceRoundTrip(baseUrl = API_BASE_URL) {
   const { rows } = await getRes.json();
   if (!rows.some((row) => row.rowKey === rowKey)) throw new Error("the row just PUT is missing from GET /api/rows");
 
+  const deleteBody = JSON.stringify({ all: true });
   const deleteRes = await fetchJson(`/api/sessions/${sessionKey}/rows`, {
     method: "DELETE",
-    body: JSON.stringify({ all: true }),
+    body: deleteBody,
+    headers: { "x-amz-content-sha256": sha256Hex(deleteBody) },
   });
   if (deleteRes.status !== 204) throw new Error(`DELETE /api/sessions/:uuid/rows returned ${deleteRes.status}, not 204`);
 
@@ -158,11 +170,16 @@ export async function rowServiceRoundTrip(baseUrl = API_BASE_URL) {
 export async function turnServiceRoundTrip(baseUrl = API_BASE_URL) {
   const origin = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
   const sessionKey = randomUUID();
+  const turnBody = JSON.stringify({ text: "hello" });
   const res = await fetch(`${origin}/api/sessions/${sessionKey}/turn`, {
     method: "POST",
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    headers: { "content-type": "application/json", "user-agent": `${name} post-deploy-smoke` },
-    body: JSON.stringify({ text: "hello" }),
+    headers: {
+      "content-type": "application/json",
+      "user-agent": `${name} post-deploy-smoke`,
+      "x-amz-content-sha256": sha256Hex(turnBody),
+    },
+    body: turnBody,
   });
   if (res.status !== 200) throw new Error(`POST /api/sessions/:uuid/turn returned ${res.status}, not 200`);
   const { reply } = await res.json();

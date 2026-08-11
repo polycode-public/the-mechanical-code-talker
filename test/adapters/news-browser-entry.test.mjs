@@ -15,6 +15,7 @@ import { createLocalTurnService } from "../../server/turn-service/local.mjs";
 import {
   createNewsSession, NEWS_START_PREF_KEY, NEWS_SESSION_PREF_KEY, parseJsonlRows, turnCitationLines,
 } from "../../src/surfaces/web/news-browser-entry.mjs";
+import { sha256Hex } from "../../src/surfaces/web/http-row-backend.mjs";
 
 function memoryPrefs() {
   const map = new Map();
@@ -227,6 +228,39 @@ test("turn()'s fuzzy option rides the body as retrieval.fuzzy, and is omitted en
     { text: "hello" },
   ]);
   session.destroy();
+});
+
+test("a POST trigger carries x-amz-content-sha256; a GET never does — the URL auth layer 403s a body-carrying request without it", async () => {
+  const { prefs } = memoryPrefs();
+  const calls = [];
+  const spyFetch = async (path, init) => {
+    calls.push({ path: String(path), headers: init?.headers || {}, body: init?.body });
+    return fetchAgainst(service.url)(path, init);
+  };
+  const session = createNewsSession({ prefs, fetchImpl: spyFetch, ...FAST_POLL });
+  await session.enrich();
+  await session.fetchFeed();
+  session.destroy();
+
+  const postCall = calls.find((call) => call.path.includes("/enrich"));
+  assert.equal(postCall.headers["x-amz-content-sha256"], await sha256Hex(postCall.body));
+
+  const getCall = calls.find((call) => call.path.includes("/api/feed"));
+  assert.equal(getCall.headers["x-amz-content-sha256"], undefined, "a GET must never gain the payload-hash header");
+});
+
+test("turn() carries x-amz-content-sha256 on its POST", async () => {
+  const calls = [];
+  const spyFetch = async (path, init) => {
+    calls.push({ path: String(path), headers: init?.headers || {}, body: init?.body });
+    return fetchAgainst(turnService.url)(path, init);
+  };
+  const session = createNewsSession({ prefs: memoryPrefs().prefs, fetchImpl: spyFetch });
+  await session.turn("hello");
+  session.destroy();
+
+  const turnCall = calls.find((call) => call.path.includes("/turn"));
+  assert.equal(turnCall.headers["x-amz-content-sha256"], await sha256Hex(turnCall.body));
 });
 
 test("turn() rejects a 429 with a rate-limit message distinct from the generic unavailable wording, and never marks the session unavailable", async () => {

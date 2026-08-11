@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
 import { createLocalRowService } from "../../server/row-service/local.mjs";
-import { createHttpRowBackend, withOneRetryOnUnavailable } from "../../src/surfaces/web/http-row-backend.mjs";
+import { createHttpRowBackend, sha256Hex, withOneRetryOnUnavailable } from "../../src/surfaces/web/http-row-backend.mjs";
 import { runMemoryBackendConformance } from "../../src/tools/memory-backend-conformance.mjs";
 import { BackendRejected, BackendUnavailable } from "../../src/adapters/memory/row-backend.mjs";
 
@@ -195,6 +195,28 @@ test("readRows sends the session key in the header; a mutation addresses it in t
   assert.equal(getCall.headers["x-tmct-session"], sessionKey, "the read carries the session key in the header");
 
   await spyingBackend.close();
+});
+
+test("a mutating call carries x-amz-content-sha256; a GET never does — the URL auth layer 403s a body-carrying request without it", async () => {
+  const sessionKey = randomUUID();
+  const realFetchCalls = [];
+  const spyingBackend = createHttpRowBackend({
+    apiBase: service.url,
+    sessionKey,
+    fetchImpl: (url, init) => {
+      realFetchCalls.push({ url: String(url), headers: init?.headers || {}, body: init?.body });
+      return fetch(url, init);
+    },
+  });
+  await spyingBackend.putRows([{ rowKey: "fact:1@src:1", rowClass: "fact", term: "tariff", json: JSON.stringify({ ord: 0 }) }]);
+  await spyingBackend.readRows();
+  await spyingBackend.close();
+
+  const putCall = realFetchCalls.find((call) => call.url.includes(`/api/sessions/${sessionKey}/rows`));
+  assert.equal(putCall.headers["x-amz-content-sha256"], await sha256Hex(putCall.body));
+
+  const getCall = realFetchCalls.find((call) => call.url.endsWith("/api/rows"));
+  assert.equal(getCall.headers["x-amz-content-sha256"], undefined, "a GET must never gain the payload-hash header");
 });
 
 test("close() stops the backend from serving further calls", async () => {

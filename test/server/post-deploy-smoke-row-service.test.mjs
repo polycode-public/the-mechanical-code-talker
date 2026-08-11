@@ -26,6 +26,31 @@ test("a missing row service reports the failure instead of throwing past the cal
   await assert.rejects(() => rowServiceRoundTrip("http://127.0.0.1:1"), /fetch failed|ECONNREFUSED/);
 });
 
+test("the round trip's PUT and DELETE carry x-amz-content-sha256; its GET never does — the URL auth layer 403s a body-carrying request without it", async () => {
+  const service = await createLocalRowService();
+  const realFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = (url, init) => {
+    calls.push({ url: String(url), method: init?.method || "GET", headers: init?.headers || {} });
+    return realFetch(url, init);
+  };
+  try {
+    await rowServiceRoundTrip(service.url);
+  } finally {
+    globalThis.fetch = realFetch;
+    await service.close();
+  }
+
+  const putCall = calls.find((call) => call.method === "PUT");
+  assert.ok(putCall.headers["x-amz-content-sha256"], "the PUT carries the payload-hash header");
+
+  const deleteCall = calls.find((call) => call.method === "DELETE");
+  assert.ok(deleteCall.headers["x-amz-content-sha256"], "the DELETE carries the payload-hash header");
+
+  const getCall = calls.find((call) => call.method === "GET");
+  assert.equal(getCall.headers["x-amz-content-sha256"], undefined, "a GET must never gain the payload-hash header");
+});
+
 test("the corpus probe reads its WordNet-only term back from a loaded band", async () => {
   const rows = [
     bandFactRow({ subject: "dolphin", predicate: "rdfs:subClassOf", object: "mammal", provenance: "corpus:wordnet-complete", band: "wordnet-complete", ord: 0 }),
