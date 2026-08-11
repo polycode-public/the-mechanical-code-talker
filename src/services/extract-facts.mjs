@@ -108,15 +108,19 @@ export function parseArgs(argv) {
 async function runSentence(sentence, { config, memoryDir, env, beforeRows, sessionId = "" }) {
   const before = beforeRows || readFactRows(await loadMemory(memoryDir));
   if (ingestYield) await ingestYield();
-  const { record, answer } = await runTurn(sentence, { config, memoryDir, sessionId: sessionId || uuidv7(), env });
+  // The turn takes the caller's fold as its own before-view and hands back the
+  // after-fold it already had to take, so one sentence costs one fold rather
+  // than three of the same graph.
+  const { record, answer, factsTouched, factRowsAfter } = await runTurn(sentence, {
+    config, memoryDir, sessionId: sessionId || uuidv7(), env, factRowsBefore: before,
+  });
+  const after = factRowsAfter || before;
   // Only an assert turn can have written a Fact, so only an assert turn earns
-  // the post-turn fold; every other turn hands the caller's own view straight
-  // back untouched.
+  // a fresh view; every other turn hands the caller's own straight back.
   if (record?.via !== "assert") return { recognized: false, rows: [], afterRows: before, decline: String(answer || "") };
   if (ingestYield) await ingestYield();
-  const after = readFactRows(await loadMemory(memoryDir));
   if (record?.miss) return { recognized: false, rows: [], afterRows: after, decline: String(answer || "") };
-  return { recognized: true, rows: touchedFactRows(before, after), afterRows: after };
+  return { recognized: true, rows: factsTouched || touchedFactRows(before, after), afterRows: after };
 }
 
 /** The recognizer's own words for why it turned a sentence down, when it named

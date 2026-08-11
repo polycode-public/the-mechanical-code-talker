@@ -18487,14 +18487,15 @@ async function factRowSnapshot(memoryDir) {
   try { return readStoredFactRows(await loadMemoryStore(memoryDir)); } catch { return null; }
 }
 
-/** The Fact rows this turn wrote, diffed against the snapshot taken before it.
- *  Empty when the turn had no store to write to, or wrote nothing. */
+/** The Fact rows this turn wrote, diffed against the snapshot taken before it,
+ *  with the after-snapshot handed back beside them. Empty when the turn had no
+ *  store to write to, or wrote nothing. */
 async function factsTouchedSince(memoryDir, before) {
-  if (!before) return [];
+  if (!before) return { factsTouched: [], factRowsAfter: null };
   const after = await factRowSnapshot(memoryDir);
-  if (!after) return [];
+  if (!after) return { factsTouched: [], factRowsAfter: null };
   const { touchedFactRows } = await import("../domain/memory/touched-facts.mjs");
-  return touchedFactRows(before, after);
+  return { factsTouched: touchedFactRows(before, after), factRowsAfter: after };
 }
 
 /** A whole-line miss whose only problem is a closed filler clause in front of a
@@ -18519,12 +18520,19 @@ async function answerWithoutFillerPrefix(input, options, missed) {
 }
 
 /** Run one turn and report which Fact rows it wrote, as `factsTouched` beside
- *  the answer/record/logLines every caller already reads. The dispatch itself
- *  is dispatchTurn, below; this wrapper exists so the field lands on EVERY
- *  return path (dispatched, conversational, multi-sentence) from one place. */
+ *  the answer/record/logLines every caller already reads, with the after-fold
+ *  the diff was taken against as `factRowsAfter`. The dispatch itself is
+ *  dispatchTurn, below; this wrapper exists so the field lands on EVERY return
+ *  path (dispatched, conversational, multi-sentence) from one place.
+ *
+ *  `options.factRowsBefore` is the caller's own already-folded view of the
+ *  store, standing in for the before-snapshot. A caller running many turns over
+ *  one document folds once and threads it; folding a seed-sized graph again per
+ *  turn, to read back the rows the caller just handed over, is the most
+ *  expensive thing an ingest does. */
 export async function runTurn(input, options = {}) {
   const memoryDir = options?.memoryDir ?? null;
-  const before = await factRowSnapshot(memoryDir);
+  const before = options?.factRowsBefore || await factRowSnapshot(memoryDir);
   let result;
   try {
     result = await dispatchTurn(input, options);
@@ -18541,7 +18549,7 @@ export async function runTurn(input, options = {}) {
     });
   }
   if (!result || typeof result !== "object") return result;
-  return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
+  return { ...result, ...(await factsTouchedSince(memoryDir, before)) };
 }
 
 async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, researchSource = null, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, newsState = null, newsConfig = null, newsProviders = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null, domainPacks = null, retrieval = null } = {}) {
