@@ -145,7 +145,13 @@ test("a generous cap counts a turn's writes without refusing them", async () => 
 });
 
 test("a question the seed cannot ground answers from the fixture band, marked supplemented", async () => {
-  const service = await createLocalTurnService({ fixtureBand: { name: "wordnet-complete", rows: DOLPHIN_ROWS } });
+  // A wide wall clock: the production 300ms budget is real time, and this
+  // test proves supplementation, not budget behavior — on a saturated
+  // machine the default budget can honestly empty the retrieval.
+  const service = await createLocalTurnService({
+    fixtureBand: { name: "wordnet-complete", rows: DOLPHIN_ROWS },
+    retrievalBudgets: { wallTimeMs: 60_000 },
+  });
   try {
     const result = await postTurn(service, SESSION, { text: "what is a dolphin" });
     assert.equal(result.status, 200);

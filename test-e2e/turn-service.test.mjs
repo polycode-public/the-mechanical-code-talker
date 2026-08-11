@@ -11,6 +11,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createLocalTurnService } from "../server/turn-service/local.mjs";
+
+// The production retrieval budgets are real-clock; these tests prove
+// grounding and provenance, not budget behavior, and a loaded machine can
+// honestly empty a 300ms retrieval.
+const WIDE_WALL_CLOCK = { wallTimeMs: 60_000 };
 import { MAX_TURN_BODY_BYTES } from "../server/turn-service/handler.mjs";
 import { createRowServiceHandler } from "../server/row-service/handler.mjs";
 import { createRowMemoryBackend } from "../src/adapters/memory/row-backend-memory.mjs";
@@ -38,7 +43,7 @@ const DOLPHIN_FIXTURE_BAND = {
 };
 
 test("a corpus-grounded answer cites the retrieving band's provenance, unbounded scope", async () => {
-  const service = await createLocalTurnService({ fixtureBand: DOLPHIN_FIXTURE_BAND });
+  const service = await createLocalTurnService({ fixtureBand: DOLPHIN_FIXTURE_BAND, retrievalBudgets: WIDE_WALL_CLOCK });
   try {
     const result = await postTurn(service, SESSION, { text: "what is a dolphin" });
     assert.equal(result.status, 200);
@@ -52,7 +57,7 @@ test("a corpus-grounded answer cites the retrieving band's provenance, unbounded
 });
 
 test("an enumeration answer grounded purely in the corpus carries the supplemented marker", async () => {
-  const service = await createLocalTurnService({ fixtureBand: DOLPHIN_FIXTURE_BAND });
+  const service = await createLocalTurnService({ fixtureBand: DOLPHIN_FIXTURE_BAND, retrievalBudgets: WIDE_WALL_CLOCK });
   try {
     // Nothing about dolphin is taught in this session — every fact the
     // answer lists came out of the fixture band's own retrieval, so the
@@ -70,7 +75,7 @@ test("an enumeration answer grounded purely in the corpus carries the supplement
 });
 
 test("a breaker-open turn's honest miss still carries the absent-supplement marker", async () => {
-  const service = await createLocalTurnService({ fixtureBand: DOLPHIN_FIXTURE_BAND });
+  const service = await createLocalTurnService({ fixtureBand: DOLPHIN_FIXTURE_BAND, retrievalBudgets: WIDE_WALL_CLOCK });
   try {
     service.forceBreakerOpen();
     const result = await postTurn(service, SESSION, { text: "what is a dolphin" });
@@ -85,7 +90,7 @@ test("a breaker-open turn's honest miss still carries the absent-supplement mark
 });
 
 test("an ungrounded query stays an honest miss under real retrieval, and a replayed POST is byte-identical", async () => {
-  const service = await createLocalTurnService({ fixtureBand: DOLPHIN_FIXTURE_BAND });
+  const service = await createLocalTurnService({ fixtureBand: DOLPHIN_FIXTURE_BAND, retrievalBudgets: WIDE_WALL_CLOCK });
   try {
     const first = await postTurn(service, SESSION, { text: "what is a zorptronic" });
     assert.equal(first.status, 200);

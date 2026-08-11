@@ -212,6 +212,10 @@ export function createTurnServiceHandler({
   fuzzyConfig = undefined,
   now = () => Date.now(),
   sleep = undefined,
+  // Merged over the production retrieval budgets when set. The budgets are
+  // real-clock, so a test proving supplementation (not budget behavior)
+  // widens wallTimeMs rather than flaking on a saturated machine.
+  retrievalBudgets = null,
   log = () => {},
 } = {}) {
   if (typeof createSessionBackend !== "function") {
@@ -253,12 +257,12 @@ export function createTurnServiceHandler({
       fuzzy: resolveFuzzyMode({ request: requestedFuzzy, env: fuzzyEnv, config: fuzzyConfig }),
       skip: decision.mode === SEED_SESSION_MODE,
       vocabulary: resolvedVocabulary,
-      budgets: decision.probe ? { totalQueries: 1, hopDepth: 0 } : undefined,
+      budgets: decision.probe ? { totalQueries: 1, hopDepth: 0 } : (retrievalBudgets ?? undefined),
       now,
       ...(sleep ? { sleep } : {}),
     });
-    // retrieveSubgraph degrades rather than throwing (§3.15.1), so this
-    // always runs with a real metrics object.
+    // retrieveSubgraph degrades rather than throwing, so this always runs
+    // with a real metrics object.
     await decision.report({ metrics: retrieval.metrics });
 
     // A fresh WRAPPING handle every call, over whatever `createSessionBackend`

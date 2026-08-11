@@ -271,6 +271,7 @@ export async function createLocalTurnService({
   sleep = undefined,
   getSessionBackend: sharedGetSessionBackend = null,
   newsWorker: newsWorkerOptions = {},
+  retrievalBudgets = null,
   log = () => {},
 } = {}) {
   const bandClient = createFakeConvenienceClient();
@@ -320,6 +321,7 @@ export async function createLocalTurnService({
   }
 
   const turnService = createTurnServiceHandler({
+    retrievalBudgets,
     createSessionBackend: getSessionBackend,
     seedPayload,
     bands,
