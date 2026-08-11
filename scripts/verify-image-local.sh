@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # Builds the container image from the prebuilt bundles/seeds already on
 # disk (build:row-service, build:turn-service, build:news-worker,
-# build:seed-sqlite — this script does not run them itself), then probes
+# build:seed-sqlite; this script does not run them itself), then probes
 # each of the three Lambda handlers through the AWS Lambda Runtime
 # Interface Emulator (RIE): boots each with the RIE as entrypoint wrapper
 # and the CDK's own per-function CMD, invokes it, and checks the response
 # came back as structured JSON rather than a hang or a crash.
 set -euo pipefail
-set -o pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -56,7 +55,7 @@ if [ ! -x "$RIE_BIN" ]; then
 fi
 
 # Dummy identity so the AWS SDK's credential/region resolution fails fast
-# on a real (rejected) call instead of stalling on IMDS lookups — this
+# on a real (rejected) call instead of stalling on IMDS lookups. This
 # script proves the image and entrypoint work, not real AWS connectivity.
 RUN_ENV=(
   -e "AWS_REGION=eu-west-2"
@@ -103,10 +102,10 @@ probe() {
   docker rm -f "$container" >/dev/null 2>&1 || true
 
   if ! python3 -c "import json,sys; json.load(open('$response_file'))" 2>/dev/null; then
-    echo "$service: response body is not valid JSON — see $response_file" >&2
+    echo "$service: response body is not valid JSON, see $response_file" >&2
     return 1
   fi
-  echo "$service: OK — response is valid JSON, logs in $logs_file"
+  echo "$service: OK, response is valid JSON, logs in $logs_file"
 }
 
 HTTP_EVENT='{"requestContext":{"http":{"method":"GET"}},"rawPath":"/","headers":{},"queryStringParameters":{}}'

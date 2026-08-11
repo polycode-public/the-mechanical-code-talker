@@ -1,5 +1,5 @@
 # The image only ever COPYs server/*/dist/handler.mjs and server/seeds/*.sqlite
-# from the build context — everything else here is source, tests, docs, or
+# from the build context. Everything else here is source, tests, docs, or
 # dev tooling the build never touches. Trimming the context keeps `docker
 # build` from packing the whole repo (corpus/, test fixtures, node_modules)
 # across to the daemon on every build.
