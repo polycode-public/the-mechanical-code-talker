@@ -673,6 +673,32 @@ const FRAGMENT_LEAD_TAGS = new Set(["VERB", "AUX", "ADP", "CCONJ", "SCONJ", "PAR
 // which names nothing. Read lexically so a checkout with no wink model catches
 // it too, and only for a multi-word term — "back" alone is a fine noun.
 const PARTICLE_LEAD_WORDS = new Set(["back", "up", "down", "out", "off", "away", "along", "around"]);
+// A pronoun names nothing on its own — it points back at whatever the last
+// clause named — so a multi-word term opening with one is a clause the split
+// lost the subject of ("he's also destroyed the city's soul"), never a name. A
+// one-word term is exempt for the same reason the particle rule exempts one:
+// "us" is also how a headline writes the United States.
+const PRONOUN_LEAD_WORDS = new Set([
+  "i", "he", "she", "it", "we", "they", "you", "me", "him", "them", "us",
+  "his", "her", "its", "their", "our", "your", "my",
+]);
+const CLITIC_SUFFIX_RE = /['’](?:s|re|ve|ll|d|m)$/;
+// A term ending in a bare auxiliary is the front half of a clause the split cut
+// ("rooms were"), never the whole of a name.
+const TRAILING_AUXILIARY_WORDS = new Set([
+  "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had",
+]);
+// A compass word opening a place name is a modifier, not a clause lead —
+// "north korea", "south sandwich islands". A tagger reading the LOWERCASED
+// term has no capital left to tell the place from the direction and tags
+// "north"/"south" as an adverb, so the POS rule below would turn every one of
+// them down. Followed by "of" the word really is heading a prepositional
+// phrase ("north of the border"), and that stays declined.
+const COMPASS_LEAD_WORDS = new Set([
+  "north", "south", "east", "west",
+  "northeast", "northwest", "southeast", "southwest",
+  "northern", "southern", "eastern", "western",
+]);
 
 /** Does `term` read as a thing's name rather than a clause fragment? Bounds
  *  the word count and rejects a leading conjunction, auxiliary, preposition,
@@ -689,6 +715,9 @@ export function readsAsEntityTerm(term, nlp) {
   if (FRAGMENT_LEAD_WORDS.has(first)) return false;
   if (words.length === 1) return true;
   if (PARTICLE_LEAD_WORDS.has(first)) return false;
+  if (PRONOUN_LEAD_WORDS.has(first.replace(CLITIC_SUFFIX_RE, ""))) return false;
+  if (TRAILING_AUXILIARY_WORDS.has(words[words.length - 1].toLowerCase())) return false;
+  if (COMPASS_LEAD_WORDS.has(first) && words[1].toLowerCase() !== "of") return true;
   const engine = nlp === undefined ? winkInstance() : nlp;
   if (!engine) return true;
   try {

@@ -107,6 +107,24 @@ test("subgraphAround is cap-stable: the same capped set comes back regardless of
   assert.deepEqual(forward.map((r) => r.id), ["fact:0", "fact:1", "fact:2", "fact:3"]);
 });
 
+test("a card about a term the graph already knows well keeps the report that made it news", () => {
+  // A hub the seed holds hundreds of edges for reaches far more rows than the
+  // subgraph cap, and the report is the newest row — last by id, first to fall
+  // out of an id-ordered slice, which left the card with nothing to say.
+  const rows = [];
+  for (let i = 0; i < 80; i += 1) {
+    rows.push(row(`fact:seed-${String(i).padStart(3, "0")}`, "france", "mgx:relatedTo", `thing${i}`, {
+      provenance: "corpus:conceptnet",
+    }));
+  }
+  rows.push(row("fact:zzz-report", "france", "mgx:host", "the summit"));
+
+  const [card] = buildNewsItems(rows, { now: NOW, windowMs: HOUR });
+  assert.equal(card.hub, "france");
+  assert.ok(card.factIds.includes("fact:zzz-report"), "the reported row survives the cap");
+  assert.match(card.paragraph, /france hosts the summit/);
+});
+
 test("renderNewsParagraph groups identity first, then relations in table order, capped at five sentences", () => {
   const rows = [
     row("fact:1", "ceasefire", "rdf:type", "event"),
@@ -139,6 +157,32 @@ test("renderNewsParagraph caps at five sentences even with many relation groups"
   const paragraph = renderNewsParagraph("hub", rows);
   const sentenceCount = paragraph.split(". ").length;
   assert.equal(sentenceCount, 5);
+});
+
+test("renderNewsParagraph renders a relation minted from a source's own verb, which no curated table entry covers", () => {
+  const rows = [
+    row("fact:1", "cyclone", "mgx:hit", "eastern australia"),
+    row("fact:2", "cyclone", "mgx:batter", "queensland"),
+  ];
+  assert.equal(
+    renderNewsParagraph("cyclone", rows),
+    "cyclone batters queensland. cyclone hits eastern australia.",
+  );
+});
+
+test("renderNewsParagraph speaks for a hub that only ever appears as an object", () => {
+  const rows = [row("fact:1", "earthquake", "mgx:strike-near", "anchorage, alaska")];
+  assert.equal(
+    renderNewsParagraph("anchorage, alaska", rows),
+    "earthquake strikes near anchorage, alaska.",
+  );
+});
+
+test("renderNewsParagraph counts the tail of a long object list instead of naming every one", () => {
+  const places = ["a place", "b place", "c place", "d place", "e place", "f place", "g place", "h place"];
+  const rows = places.map((place, i) => row(`fact:${i}`, "earthquake", "mgx:strike-near", place));
+  const paragraph = renderNewsParagraph("earthquake", rows);
+  assert.equal(paragraph, "earthquake strikes near a place, b place, c place, d place, e place, f place and 2 more.");
 });
 
 test("renderNewsParagraph omits the closing sentence when there are no second-hop facts", () => {

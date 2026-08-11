@@ -220,6 +220,50 @@ test("hn: topstories then item fetches map to snapshots, title only, url from th
   assert.equal(showHn.url, "https://example.com/show-hn-deterministic-parser");
 });
 
+test("hn: a headline short enough to store as a name becomes a quoted sentence; a longer one keeps an empty summary", async () => {
+  const titles = {
+    1: "Mojo 1.0",
+    2: "Show HN: A tiny compiler",
+    3: "Stealing reasoning traces from proprietary model APIs",
+    4: "Jolt: a Clojure compiler",
+  };
+  const record = recordFor("hacker-news");
+  const fetchImpl = async (url) => {
+    const u = String(url);
+    if (u.endsWith("/topstories.json")) return jsonResponse(Object.keys(titles).map(Number));
+    const id = Number(u.match(/\/item\/(\d+)\.json$/)[1]);
+    return jsonResponse({ id, title: titles[id], url: `https://example.com/${id}`, time: 1754640000 });
+  };
+  const fetcher = createNewsFetcher(record, { fetchImpl, minIntervalMs: 0, now: NOW });
+  const { items } = await fetcher.fetchItems();
+  const summaryFor = (title) => items.find((it) => it.title === title).summary;
+
+  assert.equal(summaryFor("Mojo 1.0"), 'Hackernews discusses "Mojo 1.0".');
+  assert.equal(
+    summaryFor("Show HN: A tiny compiler"), 'Hackernews discusses "A tiny compiler".',
+    "the site's own submission prefix is not part of the story's name",
+  );
+  assert.equal(
+    summaryFor("Stealing reasoning traces from proprietary model APIs"), "",
+    "past six words the headline reads as a clause, so no sentence is built at all",
+  );
+  assert.equal(
+    summaryFor("Jolt: a Clojure compiler"), "",
+    "a colon splits the headline, and half a name is not the story's name",
+  );
+});
+
+test("hn: a quoted headline never lets its own verb become a claim about the site", async () => {
+  const record = recordFor("hacker-news");
+  const fetchImpl = async (url) => {
+    if (String(url).endsWith("/topstories.json")) return jsonResponse([7]);
+    return jsonResponse({ id: 7, title: "Take apart your phone", url: "https://example.com/7", time: 1754640000 });
+  };
+  const fetcher = createNewsFetcher(record, { fetchImpl, minIntervalMs: 0, now: NOW });
+  const { items } = await fetcher.fetchItems();
+  assert.equal(items[0].summary, 'Hackernews discusses "Take apart your phone".');
+});
+
 test("hn: an item with no url falls back to the HN discussion link", async () => {
   const ids = [999];
   const record = recordFor("hacker-news");
@@ -272,7 +316,7 @@ test("hn: without overriding minIntervalMs, the record's own lower floor paces t
 
 // ---- usgs ---------------------------------------------------------------------
 
-test("usgs: geojson features map to snapshots with a magnitude/place summary, an injected place stripped inert", async () => {
+test("usgs: a geojson feature becomes a sentence naming the place, its distance descriptor dropped and an injected place stripped inert", async () => {
   const body = readJson("usgs-quakes.geojson");
   body.features[0].properties.place = "68km SSW of <script>alert(1)</script> Kodiak, Alaska";
   const record = recordFor("usgs-quakes");
@@ -280,8 +324,10 @@ test("usgs: geojson features map to snapshots with a magnitude/place summary, an
   const result = await fetcher.fetchItems();
   assert.equal(result.items.length, 2);
   const first = result.items[0];
-  assert.match(first.summary, /^magnitude 4\.2 earthquake near /);
+  assert.match(first.summary, /^An earthquake struck near /, "the summary carries a verb, so the recognizer has a sentence to read");
+  assert.ok(!/68km SSW of/.test(first.summary), "the bearing and distance are a measurement, not the place's name");
   assert.ok(!first.summary.includes("<script>"));
+  assert.equal(result.items[1].summary, "An earthquake struck near Ridgecrest, CA.");
   assert.equal(first.url, "https://earthquake.usgs.gov/earthquakes/eventpage/ak02abc123");
 });
 
@@ -296,6 +342,19 @@ test("mediawiki: wikinews recentchanges map to snapshots with a built wiki URL",
   const ceasefire = result.items.find((it) => it.title.startsWith("Ceasefire talks"));
   assert.equal(ceasefire.url, "https://en.wikinews.org/wiki/Ceasefire_talks_resume_after_week-long_pause");
   assert.equal(ceasefire.publishedAt, "2026-08-08T06:40:00.000Z");
+});
+
+test("mediawiki: the recentchanges query asks for page creations by the action API's own parameter name", async () => {
+  const record = recordFor("wikinews-published");
+  let requested = "";
+  const fetcher = createNewsFetcher(record, {
+    fetchImpl: async (url) => { requested = String(url); return jsonResponse(readJson("wikinews-published.json")); },
+    minIntervalMs: 0,
+    now: NOW,
+  });
+  await fetcher.fetchItems();
+  assert.match(requested, /[?&]rctype=new(&|$)/, "an edit to an old article is not a new story");
+  assert.ok(!requested.includes("rcnewonly"), "the API has no such parameter — it warns and lists every edit");
 });
 
 // ---- courtesy behaviour shared across every format --------------------------

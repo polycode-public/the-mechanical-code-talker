@@ -298,6 +298,30 @@ async function fetchWikimediaFeed(record, gate, { now }) {
   return { items, bytes: jsonByteLength(body) };
 }
 
+// A Hacker News item is a headline and nothing else — the API carries no
+// summary field to fetch — and a headline is rarely a sentence, so nothing in
+// the item grounds on its own. The fixed sentence below states what the site
+// itself did with the story, and it names the headline IN QUOTES: quoted, the
+// headline's own words can never be re-read as a claim of their own, so "Let's
+// take apart your phone" stays a story Hacker News discusses instead of
+// becoming a fact about Hacker News taking a phone apart.
+//
+// "Hackernews" is one word here on purpose. A two-word proper name in subject
+// position reads as noun + verb ("Hacker" doing "News"), and the fact that
+// falls out of that is nonsense.
+const HACKER_NEWS_TITLE_PREFIX_RE = /^(?:show|ask|tell)\s+hn:\s*/i;
+// Past this many words the stored term is a clause, not a name, and the
+// recognizer turns it down — so the sentence is not built at all rather than
+// stored half-read.
+const HACKER_NEWS_HEADLINE_MAX_WORDS = 6;
+
+function hackerNewsSummary(title) {
+  const headline = String(title || "").replace(HACKER_NEWS_TITLE_PREFIX_RE, "").trim();
+  if (!headline || headline.includes(":")) return "";
+  if (headline.split(/\s+/).length > HACKER_NEWS_HEADLINE_MAX_WORDS) return "";
+  return `Hackernews discusses "${headline}".`;
+}
+
 /** topstories.json, then item/<id>.json for the first ten ids, through the
  *  same gate — each item fetch takes its own slot, so the ten round trips
  *  are genuinely paced by the gate's minIntervalMs rather than firing back
@@ -311,16 +335,43 @@ async function fetchHackerNews(record, gate, { now }) {
     const item = await pacedFetchJson(gate, `${record.url}/item/${id}.json`);
     if (!item) continue;
     bytes += jsonByteLength(item);
+    const title = stripMarkup(item.title || "");
     raw.push({
       guid: String(item.id ?? id),
-      title: stripMarkup(item.title || ""),
+      title,
       url: item.url || `https://news.ycombinator.com/item?id=${item.id ?? id}`,
-      summary: "",
+      summary: hackerNewsSummary(title),
       publishedAt: Number.isFinite(item.time) ? new Date(item.time * 1000).toISOString() : "",
     });
   }
   const items = normalizeFeedItems(record.id, raw, { now });
   return { items, bytes };
+}
+
+// A USGS place names a point by its distance and bearing from a settlement
+// ("25 km ENE of Wana, Pakistan"), or by an offshore bearing ("off the west
+// coast of Vancouver Island, Canada"), or outright ("Western Australia"). The
+// distance and the bearing are a measurement, not a name, so they come off
+// before the place reaches the sentence below: a number-led term can never
+// head a feed card, and "near" already covers the few kilometres dropped.
+const USGS_DISTANCE_PREFIX_RE = /^\s*\d+(?:\.\d+)?\s*km\s+[NSEW]{1,3}\s+of\s+/i;
+const USGS_OFFSHORE_PREFIX_RE = /^\s*off\s+(?:the\s+)?[a-z\s]*?coast\s+of\s+/i;
+
+function usgsPlaceName(place) {
+  return String(place || "")
+    .replace(USGS_DISTANCE_PREFIX_RE, "")
+    .replace(USGS_OFFSHORE_PREFIX_RE, "")
+    .trim();
+}
+
+// One fixed sentence per quake: a bare-noun subject, the verb the event did,
+// and the named place. The magnitude stays where USGS itself put it, in the
+// item's title — a stored fact's subject here is the CLASS "earthquake", so
+// writing the number into this sentence would say something about earthquakes
+// in general rather than about this one.
+function usgsSummary(place) {
+  const name = usgsPlaceName(place);
+  return name ? `An earthquake struck near ${name}.` : "";
 }
 
 async function fetchUsgs(record, gate, { now }) {
@@ -332,7 +383,7 @@ async function fetchUsgs(record, gate, { now }) {
     guid: String(f?.id ?? f?.properties?.detail ?? f?.properties?.url ?? ""),
     title: stripMarkup(f?.properties?.title || ""),
     url: f?.properties?.url || "",
-    summary: stripMarkup(`magnitude ${f?.properties?.mag ?? "unknown"} earthquake near ${f?.properties?.place || "an unreported location"}`),
+    summary: stripMarkup(usgsSummary(f?.properties?.place)),
     publishedAt: Number.isFinite(f?.properties?.time) ? new Date(f.properties.time).toISOString() : "",
   }));
   const items = normalizeFeedItems(record.id, raw, { now });
@@ -347,7 +398,11 @@ function wikinewsArticleOrigin(apiUrl) {
  *  recentchanges list — the smallest query that names what is new without a
  *  category to maintain by hand. */
 async function fetchWikinews(record, gate, { now }) {
-  const url = `${record.url}?action=query&list=recentchanges&rcnamespace=0&rcnewonly=1&rclimit=20&format=json&formatversion=2&origin=*`;
+  // `rctype=new` is the action API's own name for "page creations only". An
+  // earlier `rcnewonly` is not a parameter the API has: it answers with an
+  // "Unrecognized parameter" warning and lists every edit, so a re-edited old
+  // article read as a new story.
+  const url = `${record.url}?action=query&list=recentchanges&rcnamespace=0&rctype=new&rclimit=20&format=json&formatversion=2&origin=*`;
   const body = await pacedFetchJson(gate, url);
   if (body === null) return null;
   if (isNotModified(body)) return { items: [], bytes: 0, notModified: true };

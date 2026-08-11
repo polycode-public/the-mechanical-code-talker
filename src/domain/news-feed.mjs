@@ -240,6 +240,19 @@ const ENTITY_FRAGMENT_LEAD_WORDS = new Set([
 // term; "back" alone is a fine noun.
 const ENTITY_PARTICLE_LEAD_WORDS = new Set(["back", "up", "down", "out", "off", "away", "along", "around"]);
 
+// A pronoun points back at whatever the last clause named, so a multi-word
+// term opening with one is a clause the split lost the subject of. A term
+// ending in a bare auxiliary is the front half of one. Both mirror
+// extract-facts.mjs's own lexical rules, for the same reason the sets above do.
+const ENTITY_PRONOUN_LEAD_WORDS = new Set([
+  "i", "he", "she", "it", "we", "they", "you", "me", "him", "them", "us",
+  "his", "her", "its", "their", "our", "your", "my",
+]);
+const ENTITY_CLITIC_SUFFIX_RE = /['’](?:s|re|ve|ll|d|m)$/;
+const ENTITY_TRAILING_AUXILIARY_WORDS = new Set([
+  "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had",
+]);
+
 /** Does `term` read as a thing's name rather than a clause fragment? Bounds
  *  the word count and rejects a leading conjunction, auxiliary or
  *  preposition (test E's condition 3, PLAN_NEWSWORTHINESS.md section 2), plus
@@ -251,7 +264,10 @@ function looksLikeEntityTerm(term) {
   if (words.length > ENTITY_TERM_MAX_WORDS) return false;
   const first = words[0].toLowerCase().replace(/^[^a-z0-9]+/, "");
   if (!first || ENTITY_FRAGMENT_LEAD_WORDS.has(first)) return false;
-  if (words.length > 1 && ENTITY_PARTICLE_LEAD_WORDS.has(first)) return false;
+  if (words.length === 1) return true;
+  if (ENTITY_PARTICLE_LEAD_WORDS.has(first)) return false;
+  if (ENTITY_PRONOUN_LEAD_WORDS.has(first.replace(ENTITY_CLITIC_SUFFIX_RE, ""))) return false;
+  if (ENTITY_TRAILING_AUXILIARY_WORDS.has(words[words.length - 1].toLowerCase())) return false;
   return true;
 }
 
@@ -425,21 +441,29 @@ export function buildTermAdjacency(rows) {
 }
 
 /** Breadth-first over subject/object adjacency from `hub`, exactly `hops`
- *  levels deep, then capped by content-addressed id — so the cap never
- *  depends on `rows`' own order, only on which rows the hop-bounded walk
- *  actually reaches. */
-export function subgraphAround(rows, hub, { hops = NEWS_HUB_HOPS, cap = 60, adjacency = null } = {}) {
+ *  levels deep, then capped: a `priorityIds` row first, then the nearer hop,
+ *  then content-addressed id. The cap never depends on `rows`' own order, only
+ *  on which rows the hop-bounded walk actually reaches and how far out each
+ *  one sits.
+ *
+ *  `priorityIds` is what keeps a card about a term the graph already knows
+ *  thousands of things about from being built out of an arbitrary slice of
+ *  them: a hub like "france" reaches far more rows than the cap, and the one
+ *  report that made it news would otherwise be the row that fell out. */
+export function subgraphAround(rows, hub, { hops = NEWS_HUB_HOPS, cap = 60, adjacency = null, priorityIds = null } = {}) {
   const adj = adjacency ?? buildTermAdjacency(rows);
   const hubTerm = normFactTerm(hub);
   const visited = new Set([hubTerm]);
   let frontier = [hubTerm];
   const collected = new Map();
+  const hopOf = new Map();
   for (let hop = 0; hop < hops; hop += 1) {
     const nextFrontier = new Set();
     for (const term of [...frontier].sort()) {
       for (const idx of adj.byTerm.get(term) ?? []) {
         const row = rows[idx];
         collected.set(row.id, row);
+        if (!hopOf.has(row.id)) hopOf.set(row.id, hop);
         const [s, o] = adj.terms[idx];
         if (!visited.has(s)) nextFrontier.add(s);
         if (!visited.has(o)) nextFrontier.add(o);
@@ -448,7 +472,12 @@ export function subgraphAround(rows, hub, { hops = NEWS_HUB_HOPS, cap = 60, adja
     for (const term of nextFrontier) visited.add(term);
     frontier = [...nextFrontier].sort();
   }
-  return [...collected.values()].sort(byId).slice(0, cap);
+  const isPriority = (id) => (priorityIds instanceof Set ? priorityIds.has(id) : Boolean(priorityIds?.includes?.(id)));
+  return [...collected.values()]
+    .sort((a, b) => (isPriority(b.id) - isPriority(a.id))
+      || (hopOf.get(a.id) - hopOf.get(b.id))
+      || byId(a, b))
+    .slice(0, cap);
 }
 
 /** The strongest prior kind among `rows`, for the item's trust chip — read
@@ -487,6 +516,28 @@ function joinWithAnd(items) {
 
 const IDENTITY_PREDICATES = new Set(["rdf:type", "rdfs:subClassOf"]);
 const SENTENCE_CAP = 5;
+// How many objects one sentence names before it counts the rest. A live source
+// reports the same relation over and over inside one window — every quake of
+// the day strikes near somewhere — and an unbounded list turns a card into a
+// wall of text.
+const OBJECTS_PER_SENTENCE = 6;
+
+function joinObjects(objects) {
+  if (objects.length <= OBJECTS_PER_SENTENCE) return joinWithAnd(objects);
+  const shown = objects.slice(0, OBJECTS_PER_SENTENCE);
+  return `${shown.join(", ")} and ${objects.length - OBJECTS_PER_SENTENCE} more`;
+}
+
+/** The predicates `rows` carry, curated-table order first and then whatever
+ *  is left, sorted. A relation minted from a source's own verb ("mgx:hit",
+ *  "mgx:strike-near") has no curated entry, and reading the table alone left
+ *  every card built from live headlines with an empty paragraph. */
+function predicatesInRenderOrder(rows) {
+  const present = new Set(rows.map((r) => r.predicate));
+  const curated = Object.keys(FACT_PREDICATE_PHRASES).filter((predicate) => present.has(predicate));
+  const rest = [...present].filter((predicate) => !Object.hasOwn(FACT_PREDICATE_PHRASES, predicate)).sort();
+  return [...curated, ...rest];
+}
 
 /** The fixed five-sentence paraphrase template (PLAN_NEWS_FEED.md section
  *  8.3): identity first, then the hub's own relations grouped by predicate in
@@ -519,17 +570,30 @@ export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = 
     .sort();
   if (identityObjects.length) {
     const withArticles = identityObjects.map((object) => `${articleFor(object)} ${object}`);
-    sentences.push(`${hub} is ${joinWithAnd(withArticles)}`);
+    sentences.push(`${hub} is ${joinObjects(withArticles)}`);
   }
 
-  for (const predicate of Object.keys(FACT_PREDICATE_PHRASES)) {
+  for (const predicate of predicatesInRenderOrder(reportedHubRows)) {
     if (IDENTITY_PREDICATES.has(predicate) || sentences.length >= SENTENCE_CAP) continue;
     const objects = reportedHubRows
       .filter((r) => r.predicate === predicate)
       .map((r) => r.object)
       .sort();
     if (!objects.length) continue;
-    sentences.push(`${hub} ${predicatePhrase(predicate)} ${joinWithAnd(objects)}`);
+    sentences.push(`${hub} ${predicatePhrase(predicate)} ${joinObjects(objects)}`);
+  }
+
+  // A hub that only ever appears as an OBJECT — the place a quake struck, the
+  // story a site discussed — has no subject-side row to build a sentence from,
+  // and its card came out blank. What was reported about it still says
+  // something, so those rows render whole, subject and all.
+  if (!sentences.length) {
+    const aboutHub = subgraphRows
+      .filter((r) => normFactTerm(r.object) === hubTerm && normFactTerm(r.subject) !== hubTerm && isReported(r.id))
+      .sort(byId)
+      .slice(0, OBJECTS_PER_SENTENCE)
+      .map((r) => factSentence(r));
+    if (aboutHub.length) sentences.push(aboutHub.join("; "));
   }
 
   if (sentences.length < SENTENCE_CAP && secondHopRows.length) {
@@ -564,7 +628,7 @@ export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId
   if (readsAsEntityTerm) hubOptions.readsAsEntityTerm = readsAsEntityTerm;
   const hubs = newsworthyHubs(rows, reported, hubOptions);
   const items = hubs.map(({ term, changed }) => {
-    const subgraphRows = subgraphAround(rows, term, { adjacency });
+    const subgraphRows = subgraphAround(rows, term, { adjacency, priorityIds: reportedIds });
     const factIds = subgraphRows.map((r) => r.id).sort();
     const { background } = splitCardRows(subgraphRows, reportedIds);
     return {
