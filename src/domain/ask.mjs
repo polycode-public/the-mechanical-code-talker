@@ -2443,7 +2443,10 @@ function evalCommitFilter(graph, ast) {
 function evalTemporal(graph, ast, opts) {
   const inner = evalSet(graph, ast.inner, opts);
   const ids = new Set(inner.map((i) => i.id));
-  if (!ids.size) return { compositeKind: "temporal", matches: [], entityType: ast.entityType, innerCount: 0 };
+  if (!ids.size) {
+    const emptied = emptiedBranch(graph, ast.inner, opts);
+    return { compositeKind: "temporal", matches: [], entityType: ast.entityType, innerCount: 0, ...(emptied ? { emptied } : {}) };
+  }
   // reverseOverSet(touches) collects touching commits across both grains.
   const commits = reverseOverSet(graph, "touches", "Commit", ids);
   const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
@@ -2455,9 +2458,11 @@ function evalTemporal(graph, ast, opts) {
  *  recorded site for the renderer to cite. */
 function evalWhereSet(graph, ast, opts) {
   const matches = evalSet(graph, ast.inner, opts);
+  const emptied = matches.length ? null : emptiedBranch(graph, ast.inner, opts);
   return {
     compositeKind: "whereSet", matches, entityType: ast.entityType,
     sites: matches.map((ind) => (ind.attributes || []).find((a) => a.key === "site")?.value || null),
+    ...(emptied ? { emptied } : {}),
   };
 }
 
@@ -3021,16 +3026,16 @@ function heldBranchQuestion(held) {
  *  can mistake for the answer, however carefully the rest of the sentence
  *  excludes it. Null where the step may claim nothing, which leaves the caller
  *  its own honest empty. */
-function emptiedBranchLine(emptied, entityType, fallbackBranchNote = null) {
+function emptiedBranchLine(emptied, entityType, { branchNote = null, verdictTail = "" } = {}) {
   if (!emptied?.held) return null;
   const step = stepPhrases(emptied.step);
   if (!step) return null;
   const held = emptied.held;
   const phrases = heldPhrases(held);
   const one = held.count === 1;
-  const branch = heldBranchQuestion(held) || fallbackBranchNote;
+  const branch = heldBranchQuestion(held) || branchNote;
   const verdict = entityType ? `no ${nounFor(entityType, 2)} match that` : "nothing matches that";
-  return `${verdict}. ${one ? phrases.one : phrases.many}, but ${one ? step.one : step.many}.${branch ? ` ${branch}` : ""}`;
+  return `${verdict}${verdictTail}. ${one ? phrases.one : phrases.many}, but ${one ? step.one : step.many}.${branch ? ` ${branch}` : ""}`;
 }
 
 /** The empty line for a composition whose first clause held nothing: the
@@ -3048,12 +3053,29 @@ function emptyClauseLine(leaf) {
 /** The last resort, and the one sentence that must never over-claim: an index
  *  holding none of a kind and an index holding plenty of it are different
  *  answers, so they get different words. */
-function emptyKindLine(graph, entityType) {
+function emptyKindClause(graph, entityType) {
   const total = kindPopulation(graph, entityType);
-  if (total === null) return `nothing in the index matches that${entityType ? ` (${nounFor(entityType, 2)})` : ""}.`;
-  if (total === 0) return `no ${nounFor(entityType, 2)} in this index.`;
-  if (total === 1) return `the index has 1 ${nounFor(entityType, 1)}, and it does not match that.`;
-  return `the index has ${total} ${nounFor(entityType, 2)}, and none of them matches that.`;
+  if (total === null) return `nothing in the index matches that${entityType ? ` (${nounFor(entityType, 2)})` : ""}`;
+  if (total === 0) return `no ${nounFor(entityType, 2)} in this index`;
+  if (total === 1) return `the index has 1 ${nounFor(entityType, 1)}, and it does not match that`;
+  return `the index has ${total} ${nounFor(entityType, 2)}, and none of them matches that`;
+}
+
+const emptyKindLine = (graph, entityType) => `${emptyKindClause(graph, entityType)}.`;
+
+/** The empty answer for a lane that has to resolve an inner set before it can
+ *  answer anything at all. It gets the same emptied-branch receipt every other
+ *  empty composition gets, and carries the lane's own consequence — no location
+ *  to cite, no change history to date — on the end of the verdict, so the reader
+ *  is told what emptied the set and what that costs them in one sentence. */
+function emptyInnerSetLine(graph, parsed, result, consequence, fallbackHint) {
+  const branchNote = coverageGrainNote(parsed.inner, result.entityType) || qualifierBranchNote(parsed.inner);
+  const receipt = emptiedBranchLine(result.emptied, result.entityType, { branchNote, verdictTail: consequence });
+  if (receipt) return receipt;
+  const lead = result.emptied?.leaf
+    ? emptyClauseLine(result.emptied.leaf)
+    : emptyKindClause(graph, result.entityType);
+  return `${lead}${consequence}. ${branchNote || fallbackHint}`;
 }
 
 function renderComposite(parsed, result, graph) {
@@ -3267,7 +3289,8 @@ function renderComposite(parsed, result, graph) {
     const setNoun = result.entityType ? nounFor(result.entityType, n || 2) : (n === 1 ? "entity" : "entities");
     const wasWere = n === 1 ? "was" : "were";
     if (!n) {
-      return { content: `nothing in the index matches the inner set, so there is no change history to date. ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false, matches: [] };
+      const lead = emptyInnerSetLine(graph, parsed, result, ", so there is no change history to date", touchesRephraseHint(graph));
+      return { content: lead, miss: true, ambiguous: false, matches: [] };
     }
     if (!result.matches.length) {
       return { content: `no recorded commit touched the ${n} ${setNoun} in that set in this index. ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false, matches: [] };
@@ -3290,9 +3313,9 @@ function renderComposite(parsed, result, graph) {
   // said out loud rather than dropped, so the count of answers always matches
   // the count of entities the clause resolved to.
   if (result.compositeKind === "whereSet") {
-    const setNoun = result.entityType ? nounFor(result.entityType, 2) : "entities";
     if (!result.matches.length) {
-      return { content: `nothing in the index matches that clause (${setNoun}), so there is no location to cite. ${compositionalHint()}.`, miss: true, ambiguous: false, matches: [] };
+      const lead = emptyInnerSetLine(graph, parsed, result, ", so there is no location to cite", `${compositionalHint()}.`);
+      return { content: lead, miss: true, ambiguous: false, matches: [] };
     }
     const lines = result.matches.map((ind, i) => definedAtLine(ind, result.sites[i])
       || `${ind.label} has no recorded code location in this index.`);
@@ -3308,7 +3331,7 @@ function renderComposite(parsed, result, graph) {
     // to them, instead of a blanket "nothing matches" beside an unrelated
     // recovery.
     const branchNote = coverageGrainNote(parsed, result.entityType) || qualifierBranchNote(parsed);
-    const receipt = emptiedBranchLine(result.emptied, result.entityType, branchNote);
+    const receipt = emptiedBranchLine(result.emptied, result.entityType, { branchNote });
     if (receipt) return { content: receipt, miss: true, ambiguous: false, matches: [] };
     const hint = branchNote || touchesRephraseHint(graph);
     const lead = result.emptied?.leaf
