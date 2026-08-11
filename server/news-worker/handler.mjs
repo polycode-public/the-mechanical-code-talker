@@ -522,11 +522,11 @@ const WORKER_SAFETY_MARGIN_MS = 30_000;
 
 /** A poll cycle stops taking new work at this cap even when the invocation
  *  has more time left. The visitor who pressed start is watching an empty
- *  page until the cycle's tail writes land, so a cycle that spends its whole
- *  five Lambda minutes polling shows nothing for five minutes; capped, the
- *  first feed lands in about two, and the next press resumes where the
- *  aborted cycle left off. */
-const POLL_CYCLE_BUDGET_CAP_MS = 120_000;
+ *  page until the cycle's tail writes land, so the cap is sized for the first
+ *  feed to land inside about a minute — roughly one grounded article per press
+ *  at seed scale on Lambda's CPU — and the next press resumes exactly the
+ *  pending items the aborted cycle left behind. */
+const POLL_CYCLE_BUDGET_CAP_MS = 60_000;
 const CORPUS_BREAKER_META_PARTITION_KEY = "_meta";
 
 let cachedDynamoClientPromise = null;
