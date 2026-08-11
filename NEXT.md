@@ -32,17 +32,24 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] **The memory backend and turn surface: the AWS-side remainders** —
   `PLAN_MEMORY_BACKEND.md` is BUILT (every phase carries its marker; 6.0.x on npm ships
   the library half; the closing push is gate-green at 7968/0). What keeps this item open
-  is deployment, not build: (a) the live-API fix set is in flight — the first orphan
-  table is deleted and the stack deploys, and three live-verified defects have their
-  fixes dispatched: Lambda URL auth needs `lambda:InvokeFunction` for the CloudFront
-  principal BESIDE the InvokeFunctionUrl grant CDK adds (proven live: adding it flipped
-  the edge from 403 to serving; a manual out-of-band statement sits on the row service
-  and comes off once CDK owns it), the table's key attributes must be `pk`/`sk` like
-  every shipped consumer (the deployed `sessionKey` table gets replaced; the explicit
-  tableName drops so replacements stop colliding, corpus:load reads the name from a
-  stack output; the replaced table is RETAIN-orphaned and needs one manual delete after
-  the deploy), and every body-carrying client call must send `x-amz-content-sha256`
-  (Lambda URLs behind OAC reject unsigned payloads; GETs stay bare); (b) the
+  is deployment, not build. The edge auth IS fixed and verified live: after the
+  Host-header policy fix and the second CloudFront grant (`lambda:InvokeFunction`
+  beside the `InvokeFunctionUrl` CDK adds; a manual out-of-band statement sits on the
+  row service until a deploy carries CDK's own), `/api/*` fails with application
+  errors, never CloudFront 403s; body-carrying calls send `x-amz-content-sha256`
+  because OAC'd Lambda URLs reject unsigned payloads. What the first live traffic then
+  exposed, each fixed and committed (2a46330e), redeploy pending: (a) `readRows`
+  filtered meta rows on the sort key and real DynamoDB refuses key attributes in a
+  FilterExpression — meta rows now drop in code, and the fake document client enforces
+  the same refusal so tests catch the class; (b) the turn and news-worker Lambdas
+  crashed at init — the CJS bundle leaves `import.meta.url` empty and chat.mjs's
+  sprite path constant dies on it — so the three server bundles now emit ESM
+  (`handler.mjs`, createRequire banner), each proven to initialize in plain node;
+  (c) `corpus:load`'s table-name lookup returned empty because the pip-installed
+  awscli v1 ignores `AWS_REGION` (wants `AWS_DEFAULT_REGION`) — the query now names
+  `--region` and the job fails fast on an empty name. After the next green deploy:
+  delete the RETAIN-orphaned `sessionKey`-keyed table and the manual permission
+  statement. Also open: (b) the
   wikidata-slice and conceptnet-full bands stay empty until their raw dumps are
   downloaded and loaded by hand — the pipelines are built and fixture-proven, only the
   dumps are missing. The exact steps, from each script's own header:
