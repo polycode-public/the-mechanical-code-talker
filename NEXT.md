@@ -47,14 +47,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   (pipeline #781, 6.0.11): container functions live, `smoke:post-deploy` and all page
   e2e green, and the OOM is dead — live cycles peak at 1.9–2.1 GB of 3008 MB with
   87–992 ms sqlite seed opens. Remaining before this item closes:
-  - `e2e:deployed:news-live` still red, narrowed twice (6.0.12 live): the seed
-    re-assembly-per-write hang and the silent five-minute cycle are both fixed —
-    capped cycles now complete, narrate, and materialize (poll ~124–133 s, peak heap
-    ~1.0 GB, RSS 1.9 GB of 3008 MB). What remains: a cycle fetches 23 items but
-    ingests 0 facts in its ~80 s post-assembly budget, and aborted cycles restart
-    from zero (same items re-fetched every press). Suspects: per-item novelty test
-    re-deriving the seed vocabulary from sqlite; per-item engine write cost at xl
-    scale. Fix agent in flight: worktree `.claude/worktrees/agent-af2924c5dc4bba49c`.
+  - `e2e:deployed:news-live` — the zero-ingestion cycle is fixed and merged, pending
+    the 6.0.13 push: reads stop deep-cloning the 86 MB payload (`copyOnRead: false`;
+    an article grounds in ~18 s locally, was ~52 s), aborted cycles resume exactly
+    their pending items (`processedRounds`, new resume tests), and the poll cap is
+    60 s so the first feed lands ~65 s after the press against the gate's 170 s.
+    The remaining per-article cost is the full-graph fold (`recomputeSourceReliability`
+    folds all 61k groups per write, ~11 s of the 18); a group-scoped or incremental
+    fold is the recorded horizon if the gate still flakes.
   - Secondary, non-blocking: each fresh execution environment overruns the 10 s init
     cap once (`INIT_REPORT ... Status: timeout`), then re-inits fine in 87–992 ms.
   - Then: record the measured cycle peak in the plan's build marker.
