@@ -144,7 +144,8 @@ full suite only at push moments, `e2e:deployed:news-live` is the rollout's accep
   script's header), `node scripts/corpus-bands/build-conceptnet-full.mjs --source <tsv>`
   (now streams; digest must match the sha256 above for the same dump).
 - **wikidata-slice — full-dump route chosen; download was in progress.** Target:
-  `<scratchpad>/wikidata-latest-all.json.gz` (155,314,703,515 bytes from
+  `/Users/antony/tmct-dumps/wikidata-latest-all.json.gz` — a durable home outside /tmp,
+  downloading detached from any session (155,314,703,515 bytes from
   `https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.gz`; resume with
   `curl -sS -L -C - -o <target> <url>` — it was hours from done at ~4 MB/s). Then:
   pass A streams `gzip -dc` and extracts the 12 committed `SEED_QIDS` entities' lines
