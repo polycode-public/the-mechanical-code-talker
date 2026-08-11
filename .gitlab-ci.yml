@@ -158,6 +158,10 @@ secret_detection:
   - ontology/**/*
   - public/**/*
   - scripts/**/*
+  - server/**/*
+  - infra/**/*
+  - Dockerfile
+  - .dockerignore
   - test/**/*
   - test-e2e/**/*
   - examples/**/*
