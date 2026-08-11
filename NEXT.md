@@ -42,13 +42,20 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   byte count). File: `~/tmct-dumps/wikidata-latest-all.json.gz` (155.3 GB). When it
   reports done, the next steps are `PLAN_MEMORY_ROLLOUT.md` section 4.
 
-- [ ] **The rollout: container-image Lambdas with sqlite seeds** — the plan of record
-  is `PLAN_MEMORY_ROLLOUT.md`: one Node 24 container image for all three Lambdas
-  carrying `mid-seed.sqlite` + `xl-seed.sqlite`, killing the news worker's OOM (three
-  in-memory seed copies) at its cause. Phases R0–R5 there are written to build on the
-  operator's go; `e2e:deployed:news-live` is the acceptance gate and is red until the
-  worker fix lands. That doc also carries the live-ops facts a fresh session must not
-  re-learn.
+- [ ] **The rollout: container-image Lambdas with sqlite seeds — IN BUILD (operator's go,
+  2026-08-11)** — the plan of record is `PLAN_MEMORY_ROLLOUT.md`: one Node 24 container
+  image for all three Lambdas carrying `mid-seed.sqlite` + `xl-seed.sqlite`, killing the
+  news worker's OOM (three in-memory seed copies) at its cause. `e2e:deployed:news-live`
+  is the acceptance gate and is red until the worker fix lands. That doc also carries the
+  live-ops facts a fresh session must not re-learn. Build runs as coordinator + worktree
+  sub-agents in waves: Wave 1 = R0 (seed sqlite build), R2 (sqlite seed overlay), R3
+  (CDK container functions); Wave 2 = R1 (Dockerfile + RIE verify), R4 (CI image build);
+  R5 acceptance is the coordinator's post-deploy job. In flight now (Wave 1, dispatched
+  2026-08-11):
+  - R0 seed-sqlite agent — worktree `.claude/worktrees/agent-a208c44a55e540d75`
+  - R2 overlay agent — worktree `.claude/worktrees/agent-a8c70a4aab695cfcf`
+  - R3 CDK — code complete, merged to local `main` (`6b0b00e5`), worktree removed;
+    verified at the R5 deploy gate
 
 ## Discipline
 
