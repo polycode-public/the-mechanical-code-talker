@@ -1,6 +1,12 @@
 # PLAN_MEMORY_ROLLOUT.md — container-image Lambdas with sqlite seeds, and the live-ops close-out
 
-Status: DESIGN — decided by the operator on 2026-08-11; build starts on the operator's go.
+Status: BUILT — R0–R5 delivered and accepted 2026-08-11 (6.0.13, pipeline #783 fully
+green including `e2e:deployed:news-live`). Build marker, measured live: the worker's
+cold init opens the 229 MB xl sqlite seed in 87–992 ms (no JSON parse); a poll cycle
+grounds its fetched items (13/13 wikimedia, 10/10 hacker-news, 30-item cap on usgs,
+nyt resumes 24 pending across presses) inside a 60 s poll cap, ~62 s wall per cycle;
+cycle peak heap 475–548 MB, max RSS ~1.1 GB against the 3008 MB ceiling that the old
+triple-copy worker died at. No quota request needed.
 This doc continues `archive/PLAN_MEMORY_BACKEND.md` (Status: BUILT) into its rollout: every code
 phase of that plan is merged and deployed, and this plan owns what the first days of live
 traffic taught, the container re-packaging the operator chose, and the remaining

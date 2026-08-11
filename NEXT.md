@@ -35,25 +35,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   byte count). File: `~/tmct-dumps/wikidata-latest-all.json.gz` (155.3 GB). When it
   reports done, the next steps are `PLAN_MEMORY_ROLLOUT.md` section 4.
 
-- [ ] **The rollout: container-image Lambdas with sqlite seeds — IN BUILD (operator's go,
-  2026-08-11)** — the plan of record is `PLAN_MEMORY_ROLLOUT.md`: one Node 24 container
-  image for all three Lambdas carrying `mid-seed.sqlite` + `xl-seed.sqlite`, killing the
-  news worker's OOM (three in-memory seed copies) at its cause. `e2e:deployed:news-live`
-  is the acceptance gate and is red until the worker fix lands. That doc also carries the
-  live-ops facts a fresh session must not re-learn. Build runs as coordinator + worktree
-  sub-agents in waves: Wave 1 = R0 (seed sqlite build), R2 (sqlite seed overlay), R3
-  (CDK container functions); Wave 2 = R1 (Dockerfile + RIE verify), R4 (CI image build);
-  R5 acceptance is the coordinator's post-deploy job. R0–R4 are merged and DEPLOYED
-  (pipeline #781, 6.0.11): container functions live, `smoke:post-deploy` and all page
-  e2e green, and the OOM is dead — live cycles peak at 1.9–2.1 GB of 3008 MB with
-  87–992 ms sqlite seed opens. Remaining before this item closes:
-  - `e2e:deployed:news-live` — the zero-ingestion cycle is fixed and pushed (6.0.13,
-    pipeline #783 running): reads stop deep-cloning the 86 MB payload (`copyOnRead:
-    false`; an article grounds in ~18 s locally, was ~52 s), aborted cycles resume
-    exactly their pending items (`processedRounds`, new resume tests), and the poll
-    cap is 60 s so the first feed lands ~65 s after the press against the gate's
-    170 s.
-
 - [ ] **Stopwords rank as news terms — the ranked ledger surfaces noise words** — the
   live news page's `terms.ranked` lists "from", "and", "but", "very", "into", "about",
   all tagged "(unknown word)" (seen 2026-08-11 on 6.0.12 with only 2 ingested facts).
@@ -65,8 +46,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   - Verify the novelty gate's prior-term universe on the worker's sqlite seed path:
     if the seed vocabulary isn't consulted there, common words look novel — the exact
     junk-hub failure `PLAN_MEMORY_ROLLOUT.md` §1 records from the 688-fact seed
-    experiment ("geneva"). Re-check the live ranked terms after 6.0.13 cycles ground
-    real articles; fix at the vocabulary source if it reproduces.
+    experiment ("geneva"). Re-check the live ranked terms now that 6.0.13 cycles
+    ground real articles; fix at the vocabulary source if it reproduces.
+
+- [ ] **Group-scoped source-reliability fold + per-feed Sources — operator-commissioned
   2026-08-11** — `recomputeSourceReliability` folds all 61,724 fact groups on every
   write to rescore session Sources (~11 s of an article's ~18 s locally). Replace with
   a group-scoped or incremental fold: exact-equality scores for the same attribution
@@ -76,9 +59,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   or per article — corroboration means independent feeds agreeing; trust-number
   changes accepted; interactive chat teaching keeps its own minting. Agent in
   flight: worktree `.claude/worktrees/agent-a7fea69eb822cfc5e`.
-  - Secondary, non-blocking: each fresh execution environment overruns the 10 s init
-    cap once (`INIT_REPORT ... Status: timeout`), then re-inits fine in 87–992 ms.
-  - Then: record the measured cycle peak in the plan's build marker.
 
 ## Discipline
 
