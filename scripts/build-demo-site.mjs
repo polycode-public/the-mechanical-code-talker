@@ -348,8 +348,7 @@ console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)
 }
 
 // news.html: a thin client over the row service's news routes — no seed, no
-// engine bundle beyond the API client itself, per PLAN_MEMORY_BACKEND.md's
-// news.html-goes-thin revision. Its own browser bundle is built here too, so
+// engine bundle beyond the API client itself. Its own browser bundle is built here too, so
 // a plain `npm run demo:build` leaves nothing for the page to 404 on.
 {
   const { renderNewsHtml } = await import(join(ROOT, "src", "services", "news-viz.mjs"));

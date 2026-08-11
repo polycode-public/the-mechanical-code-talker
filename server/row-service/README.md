@@ -1,8 +1,8 @@
 # The row service
 
-A same-origin HTTP surface over a §3.1 row backend (see `PLAN_MEMORY_BACKEND.md`, §3.8, for the
-full design). `handler.mjs` holds the routing, validation, and caps, and never touches storage
-directly — it calls a backend and a small counters seam it's handed.
+A same-origin HTTP surface over a pluggable row backend — DynamoDB in production, an in-memory
+reference backend for local runs (see below). `handler.mjs` holds the routing, validation, and caps,
+and never touches storage directly — it calls a backend and a small counters seam it's handed.
 
 ## Running it locally
 

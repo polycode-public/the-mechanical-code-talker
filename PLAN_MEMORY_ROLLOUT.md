@@ -1,7 +1,7 @@
 # PLAN_MEMORY_ROLLOUT.md — container-image Lambdas with sqlite seeds, and the live-ops close-out
 
 Status: DESIGN — decided by the operator on 2026-08-11; build starts on the operator's go.
-This doc continues `PLAN_MEMORY_BACKEND.md` (Status: BUILT) into its rollout: every code
+This doc continues `archive/PLAN_MEMORY_BACKEND.md` (Status: BUILT) into its rollout: every code
 phase of that plan is merged and deployed, and this plan owns what the first days of live
 traffic taught, the container re-packaging the operator chose, and the remaining
 operator-gated data loads. A fresh session resumes from here plus `NEXT.md`.
@@ -39,7 +39,7 @@ Broken, with the failure fully characterized:
   a 688-fact seed yielded a spurious "geneva" hub the production seed correctly
   suppresses), and grounding parity is the feed's product claim. The turn service's
   per-query band retrieval cannot substitute: a cycle evaluates novelty across thousands
-  of terms at once, far past the bounded per-turn query budget. `PLAN_MEMORY_BACKEND.md`
+  of terms at once, far past the bounded per-turn query budget. `archive/PLAN_MEMORY_BACKEND.md`
   §29.19 records the asymmetry; the number of in-memory COPIES is the knob.
 
 ## 2. The decision: one container image, sqlite seeds, all three Lambdas
@@ -68,7 +68,7 @@ What it does NOT change, stated so nobody re-learns it:
   memory, 3008 → 10240) — an operator request, likely quick, pennies at demo traffic.
 - **The engine stays synchronous over one assembled payload.** sqlite feeds assembly;
   it does not make resolution lazy. Term-lazy resolution remains the recorded horizon in
-  `PLAN_MEMORY_BACKEND.md` §30.
+  `archive/PLAN_MEMORY_BACKEND.md` §30.
 - **Seed assignments keep §3.18's design**: the image carries BOTH seeds
   (`mid-seed.sqlite`, `xl-seed.sqlite`); the turn service opens mid (its cold-start
   trade is deliberate; WordNet/ConceptNet come per-query from the bands), the news

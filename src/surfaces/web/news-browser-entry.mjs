@@ -42,8 +42,7 @@ const DEFAULT_CYCLE_POLL_MS = 400;
 const DEFAULT_CYCLE_WAIT_TIMEOUT_MS = 20_000;
 
 /** The standing refresh loop's own cadence: `~2 s interval with backoff
- *  toward ~10 s while nothing changes` (PLAN_MEMORY_BACKEND.md's materialized-
- *  feed section). A version change resets the interval back to the floor —
+ *  toward ~10 s while nothing changes`. A version change resets the interval back to the floor —
  *  something is actively happening, so the loop goes back to checking often —
  *  and a quiet tick or a failed read both step it toward the ceiling, never
  *  past it. The loop never stops outright: it only ever slows down. */

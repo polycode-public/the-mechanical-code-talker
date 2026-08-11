@@ -1,6 +1,5 @@
 // news-viz.mjs — news.html: a thin client over the row service's news
-// routes (PLAN_MEMORY_BACKEND.md's news.html-goes-thin revision), on the
-// ledger.html dashboard precedent (src/services/ledger-viz.mjs: `.dash`/
+// routes, on the ledger.html dashboard precedent (src/services/ledger-viz.mjs: `.dash`/
 // `.kpirow`/`.tile`/`.tile-bars`, the same THEME_TOKENS_CSS palette).
 //
 // This page carries no engine and no seed. Every card, tile, bar, source

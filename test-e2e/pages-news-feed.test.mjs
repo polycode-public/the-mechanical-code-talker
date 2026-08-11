@@ -1,5 +1,4 @@
-// news.html's thin-client contract (PLAN_MEMORY_BACKEND.md's news.html-
-// goes-thin revision), driven in a real browser against the real row
+// news.html's thin-client contract, driven in a real browser against the real row
 // service (server/row-service/local.mjs) with its in-process news worker
 // (server/news-worker/local.mjs), fixture-routed fetchers standing in for
 // the live sources. The page itself makes no third-party request of its own

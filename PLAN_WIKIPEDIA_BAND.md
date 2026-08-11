@@ -5,7 +5,7 @@ Status: FUTURE — deferred design.
 This plan is a stub scope. It names one corpus band the memory backend campaign defers to a
 future design wave: `corpus:simplewiki-derived`, extracted article facts at a scale the shipped
 reference pack does not attempt. The partition layout, the loader, and the loader CLI verb live
-in `PLAN_MEMORY_BACKEND.md` (§3.13, §3.14) and `docs/adapter-contract.md` (the turn surface
+in `archive/PLAN_MEMORY_BACKEND.md` (§3.13, §3.14) and `docs/adapter-contract.md` (the turn surface
 section). This scope defines the band itself: what facts it must extract, the quality gate that
 validates them, and how to build it.
 
@@ -127,5 +127,5 @@ This band's own future work remains open:
 This plan is a design scope document, not an execution plan. It names the band, constrains its
 content, and lists the work. The actual extraction code, pipeline, validation harness, and
 deployment integration are future implementation. The partition layout and loader infrastructure
-are already specified in `PLAN_MEMORY_BACKEND.md` §3.13–3.14 and `docs/adapter-contract.md`, so
+are already specified in `archive/PLAN_MEMORY_BACKEND.md` §3.13–3.14 and `docs/adapter-contract.md`, so
 the build work is isolated to the extraction logic itself.
