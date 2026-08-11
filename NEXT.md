@@ -29,6 +29,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
+- [ ] **ConceptNet band load — running in the operator's terminal** — `tmct corpus load
+  conceptnet-full` against the live table, last counted at 74% of 2,344,809 rows and
+  climbing (idempotent; if it dies, re-run the same command — it resumes and now logs
+  progress per minute). When its summary prints: verify with the manifest read-back and
+  a `queryBandTerm("dog")` probe (`PLAN_MEMORY_ROLLOUT.md` section 4), then this item
+  closes. The reusable band jsonl lives durably in `~/tmct-dumps/`.
+
 - [ ] **Wikidata dump download — operator-run, outside any session** — the download now
   belongs to a terminal of the operator's own: run `bash scripts/resume-wikidata-dump.sh`
   from the repo root (re-run after any interruption; it resumes and verifies the byte
