@@ -619,6 +619,9 @@ deploy:website:
 # wordnet-complete and the bundled mid seed alone.
 corpus:load:
   stage: verify
+  # The same python+node image the deploy job uses: the awscli fallback
+  # installs through pip, which the plain node image does not carry.
+  image: nikolaik/python-nodejs:python3.13-nodejs24
   needs:
     - deploy:website
   environment:

@@ -452,11 +452,15 @@ export class WebsiteStack extends Stack {
     const turnServiceUrl = turnServiceFn.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.AWS_IAM,
     });
+    // ALL_VIEWER_EXCEPT_HOST_HEADER, not ALL_VIEWER: forwarding the viewer's
+    // Host header to a Lambda function URL invalidates the OAC's SigV4
+    // signature (the signature is computed against the function URL's own
+    // host), and every request 403s at the edge.
     distribution.addBehavior("/api/sessions/*/turn", origins.FunctionUrlOrigin.withOriginAccessControl(turnServiceUrl), {
       viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
       cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-      originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+      originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
     });
 
     // No caching (every route is a session-scoped read or a mutation) and
@@ -467,7 +471,7 @@ export class WebsiteStack extends Stack {
       viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
       cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-      originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+      originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
     });
 
     if (props.webAclArn) {
