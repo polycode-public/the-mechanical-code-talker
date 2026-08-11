@@ -48,6 +48,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     junk-hub failure `PLAN_MEMORY_ROLLOUT.md` §1 records from the 688-fact seed
     experiment ("geneva"). Re-check the live ranked terms now that 6.0.13 cycles
     ground real articles; fix at the vocabulary source if it reproduces.
+  Agent in flight: worktree `.claude/worktrees/agent-a4c4a001dfe1fec89`.
 
 - [ ] **Group-scoped source-reliability fold + per-feed Sources — operator-commissioned
   2026-08-11** — `recomputeSourceReliability` folds all 61,724 fact groups on every
@@ -57,8 +58,11 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   churn. Folded in by operator decision: news ingestion attributes facts to ONE
   Source per actual feed/reference work (e.g. `NYT World News`), never per sentence
   or per article — corroboration means independent feeds agreeing; trust-number
-  changes accepted; interactive chat teaching keeps its own minting. Agent in
-  flight: worktree `.claude/worktrees/agent-a7fea69eb822cfc5e`.
+  changes accepted; interactive chat teaching keeps its own minting. Code complete,
+  merged to local `main` (5 commits through `d7596792`): grounded articles per press
+  3 → 5 locally, per-article 25.4 s → 12.8 s, peak heap 1.1 GB → 424 MB; news trust
+  lands at the 0.4 web prior (operator accepted). Closes when the 6.0.14 batch's
+  pipeline is green.
 
 ## Discipline
 
