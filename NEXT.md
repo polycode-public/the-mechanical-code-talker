@@ -44,15 +44,17 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   `wink-eng-lite-web-model` (the engine resolves wink via a runtime require the
   bundler can't inline), so deployed handlers run with NO POS tagging — fact
   extraction starves and the leaky lexical fallback admits function words. The zip
-  deploys had the same gap. Dockerfile fix is in the tree; local image verification
-  (RIE probes + in-image wink require) is running. Second layer, verified by source
-  reading and being fixed by an agent in worktree
-  `.claude/worktrees/agent-a6cd4e28d8bbee4b0`: hacker-news hands the recognizer a
-  bare headline with a hardcoded empty summary, and usgs builds a verb-less summary
-  template — structurally never an extractable sentence; each source's fetcher gets
-  a closed-set template carrying a real verb, and the hub gate gets verified once
-  items admit. Closes when the fixes deploy and a fresh-session probe against prod
-  shows facts AND article cards.
+  deploys had the same gap. All layers are now fixed and merged, riding the 6.0.15
+  batch: the Dockerfile installs wink (RIE + in-image tokenize verified); usgs and
+  hacker-news fetchers hand the recognizer closed-set sentences with real verbs
+  (usgs 0/47 → 44/47 admitted, hn 2/20 → 10/20, false-fact phrasing measured and
+  avoided); minted-verb predicates render, object-only hubs speak, and the xl-scale
+  subgraph cap keeps the reported row. Live-shaped simulation over the committed
+  seed: 120 items → 65 news rows → 30 cards, all with non-empty paragraphs. Closes
+  when the batch deploys and a fresh-session probe against prod shows facts AND
+  article cards. Warts left open inside this item: one junk hub in 30 (an NYT
+  headline over-read with no principled closed-set rule found), and "scientists
+  reports" subject-verb agreement in `fact-phrase.mjs`'s `predicatePhrase`.
 
 - [ ] **Group-scoped source-reliability fold + per-feed Sources — operator-commissioned
   2026-08-11** — `recomputeSourceReliability` folds all 61,724 fact groups on every
