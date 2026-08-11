@@ -396,8 +396,14 @@ export class WebsiteStack extends Stack {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: "handler.handler",
       code: lambda.Code.fromAsset(NEWS_WORKER_DIST_DIR),
-      memorySize: 512,
-      timeout: Duration.seconds(60),
+      // Module init parses the bundled xl seed (61,724 facts) plus the
+      // engine, and that needs a full vCPU — 512 MB only grants a CPU
+      // fraction, so init itself times out before the first request. 1769 MB
+      // is the threshold where Lambda grants one full vCPU. The 300s timeout
+      // gives its cycles room to poll external sources under their own
+      // budgets, not just to finish init.
+      memorySize: 1769,
+      timeout: Duration.seconds(300),
       // No reserved concurrency, same account-wide floor as the row service
       // above — §3.9's "default 5" ceiling is aspirational until the account
       // can support any reservation at all.
@@ -442,8 +448,12 @@ export class WebsiteStack extends Stack {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: "handler.handler",
       code: lambda.Code.fromAsset(TURN_SERVICE_DIST_DIR),
-      memorySize: 512,
-      timeout: Duration.seconds(10),
+      // Same shape as the news worker above: module init parses the bundled
+      // 20 MB mid seed plus the engine, which needs a full vCPU that 512 MB
+      // doesn't grant, so init alone times out before the first request.
+      // 1769 MB is the threshold where Lambda grants one full vCPU.
+      memorySize: 1769,
+      timeout: Duration.seconds(30),
       // No reserved concurrency, same account-wide floor as the row service
       // above — §3.12's "default 5" ceiling is aspirational until the
       // account can support any reservation at all.
