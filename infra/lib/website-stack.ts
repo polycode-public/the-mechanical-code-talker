@@ -400,9 +400,11 @@ export class WebsiteStack extends Stack {
       // engine, which needs a full vCPU (granted from 1769 MB) just to boot —
       // and a real poll cycle's working set on that seed then exhausted
       // 1769 MB outright (observed live: Runtime.OutOfMemory at the cap), so
-      // the size covers the cycle, not only init. The 300s timeout gives its
-      // cycles room to poll external sources under their own budgets.
-      memorySize: 4096,
+      // the size covers the cycle, not only init. 3008 is this account's
+      // Lambda memory quota ceiling; going higher needs a service-quota
+      // increase. The 300s timeout gives its cycles room to poll external
+      // sources under their own budgets.
+      memorySize: 3008,
       timeout: Duration.seconds(300),
       // No reserved concurrency: the account's total concurrency sits at the
       // Lambda service floor, so any reservation is rejected at deploy time.
