@@ -33,44 +33,57 @@ The method is `PLAN_NEWS_FEED_QUALITY.md`: run
 (`node scripts/news-bench/capture-fixtures.mjs`, then
 `node scripts/news-bench/run-live-cycle.mjs`), show every card whole in the
 four-part form, fix the top item below, merge, repeat — never waiting on
-pipelines. Position: iterations 1–7 run; the tim-king card is the first
-target-shaped card from live data (looked-up definitions plus a correct gated
-entailment on the card). Harness note: `run-live-cycle.mjs` starts fresh state
-each run, so the negative cache resets and the same misses re-burn lookup slots
-per run; the deployed worker persists state and does not.
+pipelines. Position: iterations 1–8 run. Iteration 8's russia card is the
+sharpest target-shaped case yet: its description carries three claims and we
+extract one, while its background is anatomy (`orifice ⊑ passage`,
+`duct ⊑ passage`) sitting beside the israel/turkey/australia country facts we
+want — items 1 and 3 failing on the same card. Harness note:
+`run-live-cycle.mjs` starts fresh state each run, so the negative cache resets
+and the same misses re-burn lookup slots per run; the deployed worker persists
+state and does not.
 
-The work list, ranked by value against the plan's target card:
+The work list, ranked by value against the plan's target card. Items 1–5 are all
+in flight as worktree sub-agents; each names its own branch.
 
-1. [ ] **Extraction widenings, shape by shape** — the named specimens: the Gilman
+1. [ ] **Extraction widenings, shape by shape** — in flight on
+   `worktree-agent-ac0d4448f66cb44a5`. The named specimens: the Gilman
    description's sentences two and three ("released on a humanitarian basis,
    President Trump said" / "family had said he was in dire physical condition"),
    the "prime | mgx:minister | …" optimistic mint, agentless passives ("is
-   banned from …"), "ecuadorean fishings" pluralization, the "new gun" fragment.
-   Expected: OUR PARAGRAPH grows from one sentence toward the target's three.
-   Effort: one Opus agent, closed-set work, taxonomy already exists.
-2. [ ] **The §3.2 re-grounding proof** — a new definition lets more of the
+   banned from …"), "ecuadorean fishings" pluralization, the "new gun" fragment,
+   and headline-fragment hubs (iteration 8 mints hub `bright` with
+   `bright | mgx:spot-in | colombia as rescuers free quake victim`, the object
+   swallowing the rest of the headline). Expected: OUR PARAGRAPH grows from one
+   sentence toward the target's three. Effort: one Opus agent, closed-set work,
+   taxonomy already exists in `src/services/extract-facts.mjs`.
+2. [ ] **The §3.2 re-grounding proof** — in flight on
+   `worktree-agent-a1ccd873fd9a486b4`. A new definition lets more of the
    article's own sentences ground (`reprocessAfterGrounding` exists, unproven
-   end to end on a card). Expected: FACTS LEARNED grows after enrichment defines
-   a term the article names. Effort: one Opus agent, prove-then-fix.
-3. [ ] **Asserted cross-sense neighbourhood drift** — "orifice ⊑ passage" still
-   wanders near the russia card; the disjointness gate covers derivations only.
-   Expected: RELATED FACTS keeps israel/turkey/australia-are-countries, drops
-   the anatomy strays. Effort: one Opus agent, same-sense discipline applied to
-   neighbourhood selection.
-4. [ ] **Shipping** — 22 commits local-only; 6.0.18 is the last deployed
-   version. Roll, full suite, push; retry the pipeline if GitLab's runner
-   shortage (`stuck_pending_no_matching_runners`) recurs. Effort: ~20 min,
-   mostly unattended.
-5. [ ] **chat.mjs read-time BFS gate** — the chat surface still walks asserted
-   cross-sense edges live (russia can reach body part in a two-hop chase).
-   Same gate, different reader. Effort: one careful Opus agent, 322 KB file.
-6. [ ] **Engine speed remainders** — seed re-assembly on any removal (~2 s
-   each; mid-implementation exploration preserved on branch
+   end to end on a card). Iteration 8's tim-king card is the live case:
+   enrichment defines amigados and the definitions reach RELATED FACTS, but
+   FACTS LEARNED never grows. Expected: FACTS LEARNED grows after enrichment
+   defines a term the article names. Effort: one Opus agent, prove-then-fix.
+3. [ ] **Asserted cross-sense neighbourhood drift** — in flight on
+   `worktree-agent-ae8438ab8504d1e3c`. "orifice ⊑ passage" still wanders near
+   the russia card; the disjointness gate covers derivations only, and
+   `subgraphAround`'s hop-bounded BFS has no sense check at all. Its remainder,
+   same cause: neighbourhood-sourced filler sentences in OUR PARAGRAPH ("dull is
+   the opposite of bright", "Around it: country buys battery"). Expected:
+   RELATED FACTS keeps israel/turkey/australia-are-countries, drops the anatomy
+   strays, and the filler sentences starve. Effort: one Opus agent, same-sense
+   discipline applied to neighbourhood selection.
+4. [ ] **chat.mjs read-time BFS gate** — in flight on
+   `worktree-agent-a89e24fb164e45624`. The chat surface still walks asserted
+   cross-sense edges live (russia can reach body part in a two-hop chase; the
+   loop's own bound is 8 hops). Same gate, different reader. Effort: one careful
+   Opus agent, 1.1 MB file.
+5. [ ] **Engine speed remainders** — in flight on
+   `worktree-agent-a8524b7876375a001`. Seed re-assembly on any removal (~2 s
+   each; 15 lines of unwired slot-structure scaffolding preserved on branch
    `worktree-agent-add917bc647f82f46`, unmerged), `migrateStoredMemory`
    re-running per memory-handle load, `buildMemoryIndex` rebuilt per write.
-   Expected: more articles ground per 60 s press; faster runs. Effort: resume
-   the branch (Opus) plus two small fixes.
-7. [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
+   Expected: more articles ground per 60 s press; faster runs.
+6. [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
    downloads in the operator's terminal; when the loop's evidence says live
    lookups are too thin (plan §5.5), build the bulk band with row count and
    DynamoDB write cost printed before any load. Until then: nothing. The
