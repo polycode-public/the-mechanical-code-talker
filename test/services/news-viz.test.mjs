@@ -167,6 +167,15 @@ test("renderNewsHtml: a card's collapsed background line renders only when backg
   assert.match(html, /item\.backgroundParagraph\s*\?/, "the block is conditional on the item actually carrying background content");
 });
 
+test("renderNewsHtml: a card quotes the report it was built from, headline and description alike, escaped and bounded", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /function reportBlockHtml/, "the quoted report has its own builder");
+  assert.match(html, /blockquote class="report"/, "the source's own words sit in a block set apart from the paragraph");
+  assert.match(html, /esc\(s\.summary\)/, "the description goes through the same escape every fetched string does");
+  assert.match(html, /esc\(s\.title\)/, "so does the headline");
+  assert.match(html, /REPORTS_SHOWN_PER_CARD/, "a card citing dozens of items quotes a bounded few and counts the rest");
+});
+
 test("renderNewsHtml: a card renders straight from factLines/factCount, never from a raw fact row lookup", () => {
   const html = renderNewsHtml();
   assert.match(html, /item\.factLines/, "the fact list reads the document's own pre-rendered lines");

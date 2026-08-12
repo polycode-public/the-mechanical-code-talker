@@ -287,7 +287,15 @@ function buildSourcesByFactId(items) {
   const recordsById = new Map(newsSourceRecords().map((r) => [r.id, r]));
   for (const snap of items || []) {
     const record = recordsById.get(snap.sourceId);
-    const src = { title: snap.title || "", url: snap.url || "", name: record?.name || snap.sourceId || "" };
+    const src = {
+      title: snap.title || "",
+      url: snap.url || "",
+      name: record?.name || snap.sourceId || "",
+      // The item's own description, carried so a card can show the report it
+      // was built from beside the sentences the graph read out of it. Bounded
+      // downstream (collectSources), never rewritten here.
+      summary: snap.summary || "",
+    };
     // A snapshot with no publication timestamp (a source whose own feed never
     // carries one) leaves the key off entirely — never an invented or blank
     // date, and never the fetch's own clock standing in for it.
@@ -926,7 +934,13 @@ function renderFeedText(feed, focus) {
       const sourceNames = it.sources.map((s) => s.title || s.url).filter(Boolean);
       const sourcesText = sourceNames.length ? ` sources: ${sourceNames.join(", ")}` : "";
       const backgroundText = it.backgroundParagraph ? ` what the graph already knew: ${it.backgroundParagraph}` : "";
-      return `${i + 1}. ${it.paragraph} (${it.tier || "unranked"})${sourcesText}${seedTag}${backgroundText}`;
+      // The report the card was built from, quoted, so a reader can check the
+      // graph's own sentences against what the source actually filed.
+      const filed = it.sources
+        .map((s) => [s.title, s.summary].filter(Boolean).join(" — "))
+        .filter(Boolean);
+      const filedText = filed.length ? ` as filed: "${filed[0]}"` : "";
+      return `${i + 1}. ${it.paragraph} (${it.tier || "unranked"})${filedText}${sourcesText}${seedTag}${backgroundText}`;
     })
     .join("\n");
 }

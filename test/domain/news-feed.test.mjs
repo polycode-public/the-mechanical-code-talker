@@ -21,6 +21,10 @@ import {
   newsItemContentKey,
   hubReportRows,
   neighbourRows,
+  hubSeedTerms,
+  knownFactRows,
+  renderKnownFactsParagraph,
+  isDerivedRow,
 } from "../../src/domain/news-feed.mjs";
 
 const NOW = "2026-08-08T12:00:00.000Z";
@@ -129,7 +133,7 @@ test("a card about a term the graph already knows well keeps the report that mad
   assert.match(card.paragraph, /france hosts the summit/);
 });
 
-test("renderNewsParagraph groups identity first, then relations in table order, capped at five sentences", () => {
+test("renderNewsParagraph leads with the report, then the identity clause, then the neighbourhood", () => {
   const rows = [
     row("fact:1", "ceasefire", "rdf:type", "event"),
     row("fact:2", "ceasefire", "rdfs:subClassOf", "diplomatic process"),
@@ -139,16 +143,16 @@ test("renderNewsParagraph groups identity first, then relations in table order, 
     row("fact:6", "relief", "mgx:hasProperty", "temporary"), // second hop
   ];
   const paragraph = renderNewsParagraph("ceasefire", rows);
-  // Identity objects sort alphabetically ("diplomatic process" before
-  // "event"); relation groups render in FACT_PREDICATE_PHRASES table order,
-  // where mgx:atLocation precedes mgx:causes.
+  // Relation groups render in FACT_PREDICATE_PHRASES table order, where
+  // mgx:atLocation precedes mgx:causes; the identity objects sort
+  // alphabetically ("diplomatic process" before "event") behind them.
   assert.equal(
     paragraph,
-    "ceasefire is a diplomatic process and an event. ceasefire is found in geneva. ceasefire causes criticism and relief. Around it: relief is temporary.",
+    "ceasefire is found in geneva. ceasefire causes criticism and relief. ceasefire is a diplomatic process and an event. Around it: relief is temporary.",
   );
 });
 
-test("renderNewsParagraph caps at five sentences even with many relation groups", () => {
+test("renderNewsParagraph caps the report at four relation sentences and the whole paragraph at six", () => {
   const rows = [
     row("fact:1", "hub", "rdf:type", "thing"),
     row("fact:2", "hub", "mgx:hasA", "part-a"),
@@ -158,9 +162,86 @@ test("renderNewsParagraph caps at five sentences even with many relation groups"
     row("fact:6", "hub", "mgx:causes", "effect"),
     row("fact:7", "hub", "mgx:madeOf", "material"),
   ];
-  const paragraph = renderNewsParagraph("hub", rows);
-  const sentenceCount = paragraph.split(". ").length;
-  assert.equal(sentenceCount, 5);
+  const sentences = renderNewsParagraph("hub", rows).split(". ");
+  assert.equal(sentences.length, 5, "four reported relations and the identity clause");
+  assert.equal(sentences[4], "hub is a thing.");
+  assert.ok(sentences.slice(0, 4).every((s) => !s.startsWith("hub is a thing")));
+});
+
+test("a card names what the graph already knew about its own subject after the news, never before it", () => {
+  const rows = [
+    row("fact:report", "france", "mgx:ban", "cold calls"),
+    row("fact:known-1", "france", "rdfs:subClassOf", "country", { provenance: "corpus:conceptnet" }),
+    row("fact:known-2", "snake", "mgx:atLocation", "france", { provenance: "corpus:conceptnet" }),
+  ];
+  const card = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 6 }).find((item) => item.hub === "france");
+  assert.equal(card.paragraph, "france bans cold calls. france is a country. snake is found in france.");
+  assert.equal(card.backgroundParagraph, "snake is found in france.");
+});
+
+test("the subClassOf closure never speaks on a card — a term the graph reads across senses gets no identity clause", () => {
+  const rows = [
+    row("fact:report", "france", "mgx:ban", "cold calls"),
+    row("fact:sco-1", "france", "rdfs:subClassOf", "cognition", { provenance: "entailed:rdfs-sco" }),
+    row("fact:sco-2", "france", "rdfs:subClassOf", "social station", { provenance: "entailed:rdfs-sco" }),
+    row("fact:sco-3", "france", "rdfs:subClassOf", "condition", { provenance: "entailed:rdfs-sco" }),
+  ];
+  const card = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 6 }).find((item) => item.hub === "france");
+  assert.equal(card.paragraph, "france bans cold calls.");
+  assert.equal(card.backgroundParagraph, "");
+});
+
+test("a quake card speaks about its own place, never about the class the report shares with every other quake", () => {
+  const rows = [
+    ...quakeRows(),
+    row("fact:sense-1", "earthquake", "rdfs:subClassOf", "cognition", { provenance: "entailed:rdfs-sco" }),
+    row("fact:sense-2", "earthquake", "rdfs:subClassOf", "tentacle", { provenance: "entailed:rdfs-sco" }),
+    row("fact:sense-3", "earthquake", "rdfs:subClassOf", "item", { provenance: "entailed:rdfs-sco" }),
+    row("fact:quake-known", "earthquake", "mgx:synonym", "seism", { provenance: "corpus:wordnet" }),
+    row("fact:place-known", "wedding chapel", "mgx:atLocation", "nevada", { provenance: "corpus:conceptnet" }),
+  ];
+  const items = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 12 });
+  const mina = items.find((item) => item.hub === "mina, nevada");
+  assert.equal(mina.paragraph, "earthquake strikes near mina, nevada. wedding chapel is found in nevada.");
+  assert.ok(!mina.paragraph.includes("seism"), "the class term's own facts stay off a card about one quake");
+  assert.ok(!mina.paragraph.includes("cognition"));
+});
+
+test("a hub keeps its identity clause when the class it belongs to is a well-populated one — a crowded class is still this thing's own kind", () => {
+  const rows = [
+    row("fact:report", "france", "mgx:ban", "cold calls"),
+    row("fact:known", "france", "rdfs:subClassOf", "country", { provenance: "corpus:conceptnet" }),
+    ...["israel", "turkey", "australia", "chad", "mexico"].map((name, i) => row(
+      `fact:peer-${i}`, name, "rdfs:subClassOf", "country", { provenance: "corpus:conceptnet" },
+    )),
+  ];
+  const card = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 6 }).find((item) => item.hub === "france");
+  assert.match(card.paragraph, /^france bans cold calls\. france is a country\./);
+});
+
+test("hubSeedTerms adds the trailing region of a \"settlement, region\" name and nothing else", () => {
+  assert.deepEqual(hubSeedTerms("mina, nevada"), ["mina, nevada", "nevada"]);
+  assert.deepEqual(hubSeedTerms("san juan, puerto rico"), ["san juan, puerto rico", "puerto rico"]);
+  assert.deepEqual(hubSeedTerms("public investments fund"), ["public investments fund"]);
+});
+
+test("knownFactRows ranks the hub's own facts first, then the more specific other side, and answers the same either row order", () => {
+  const rows = [
+    row("fact:report", "storm alba", "mgx:hit", "the coast"),
+    row("fact:category", "storm alba", "mgx:relatedTo", "weather", { provenance: "corpus:conceptnet" }),
+    row("fact:specific", "storm alba", "mgx:atLocation", "the hebrides", { provenance: "corpus:conceptnet" }),
+    row("fact:not-hub", "a lighthouse", "mgx:atLocation", "the coast", { provenance: "corpus:conceptnet" }),
+    // Four terms under "weather" make it a category node by the graph's own account.
+    row("fact:cat-1", "gale", "rdfs:subClassOf", "weather", { provenance: "corpus:conceptnet" }),
+    row("fact:cat-2", "hail", "rdfs:subClassOf", "weather", { provenance: "corpus:conceptnet" }),
+    row("fact:cat-3", "sleet", "rdfs:subClassOf", "weather", { provenance: "corpus:conceptnet" }),
+    row("fact:cat-4", "frost", "rdfs:subClassOf", "weather", { provenance: "corpus:conceptnet" }),
+  ];
+  const reportedIds = new Set(reportedRows(rows, { now: NOW, windowMs: 6 * HOUR }).map((r) => r.id));
+  const forward = knownFactRows("storm alba", rows, { reportedIds });
+  const backward = knownFactRows("storm alba", [...rows].reverse(), { reportedIds });
+  assert.deepEqual(forward.map((r) => r.id), ["fact:specific", "fact:not-hub"]);
+  assert.deepEqual(forward.map((r) => r.id), backward.map((r) => r.id));
 });
 
 test("renderNewsParagraph renders a relation minted from a source's own verb, which no curated table entry covers", () => {
@@ -523,7 +604,7 @@ test("splitCardRows divides a two-hop sub-graph into its reported rows and every
   assert.deepEqual(background.map((r) => r.id), ["fact:2"]);
 });
 
-test("renderNewsParagraph's reportedIds option keeps the identity sentence from any row, but relations and the closing sentence from reported rows only", () => {
+test("renderNewsParagraph's reportedIds option leads with the reported relation and follows it with what the graph already held", () => {
   const rows = [
     row("fact:1", "ceasefire", "rdf:type", "event", { provenance: "corpus:test" }),
     row("fact:2", "ceasefire", "mgx:atLocation", "geneva"),
@@ -531,8 +612,19 @@ test("renderNewsParagraph's reportedIds option keeps the identity sentence from 
   ];
   const reportedIds = new Set(["fact:2"]); // only the geneva relation was reported
   const paragraph = renderNewsParagraph("ceasefire", rows, { reportedIds });
-  assert.equal(paragraph, "ceasefire is an event. ceasefire is found in geneva.");
-  assert.ok(!paragraph.includes("criticism"), "a relation from a non-reported row is dropped");
+  assert.equal(paragraph, "ceasefire is found in geneva. ceasefire is an event. ceasefire causes criticism.");
+  assert.equal(
+    renderKnownFactsParagraph("ceasefire", rows, { reportedIds }),
+    "ceasefire causes criticism.",
+    "the disclosure names the background alone, and never repeats the identity clause",
+  );
+});
+
+test("isDerivedRow reads an entailment head, an environment and a justification alike", () => {
+  assert.ok(isDerivedRow(row("fact:1", "a", "rdfs:subClassOf", "b", { provenance: "entailed:rdfs-sco" })));
+  assert.ok(isDerivedRow(row("fact:2", "a", "rdfs:subClassOf", "b", { environments: ["e1"] })));
+  assert.ok(isDerivedRow(row("fact:3", "a", "rdfs:subClassOf", "b", { justification: ["fact:0"] })));
+  assert.ok(!isDerivedRow(row("fact:4", "a", "rdfs:subClassOf", "b", { provenance: "corpus:conceptnet" })));
 });
 
 test("buildNewsItems' gated builder still returns byte-identical items when derived, background and reported rows arrive in two different orders", () => {
@@ -548,14 +640,15 @@ test("buildNewsItems' gated builder still returns byte-identical items when deri
   assert.equal(JSON.stringify(forward), JSON.stringify(backward));
 });
 
-test("buildNewsItems' background/backgroundParagraph carry the relation the gate dropped from the card's own paragraph", () => {
+test("buildNewsItems' background ids keep every non-reported row, and backgroundParagraph names the ones this card is about", () => {
   const rows = [
     row("fact:1", "ceasefire", "mgx:causes", "relief"),
     row("fact:2", "ceasefire", "mgx:atLocation", "geneva", { provenance: "research:wikipedia:ceasefire" }),
+    row("fact:3", "relief", "rdfs:subClassOf", "cognition", { provenance: "entailed:rdfs-sco" }),
   ];
-  const [item] = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 6 });
-  assert.deepEqual(item.background, ["fact:2"]);
-  assert.equal(item.paragraph, "ceasefire causes relief.");
+  const item = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 6 }).find((i) => i.hub === "ceasefire");
+  assert.deepEqual(item.background, ["fact:2", "fact:3"]);
+  assert.equal(item.paragraph, "ceasefire causes relief. ceasefire is found in geneva.");
   assert.equal(item.backgroundParagraph, "ceasefire is found in geneva.");
 });
 
