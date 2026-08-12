@@ -44,12 +44,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   research provenance) but never reach their card — background reads only the
   fact's endpoints, and the article's own entities (tim king, amigados inside
   the quoted title) are invisible to it. In flight: background-from-article-
-  entities (worktree `.claude/worktrees/agent-add3051443d22b90a`, Opus); a type
-  gate so a Wikidata album/paper never defines a news term, plus the multi-word
-  wikidata search truncation ("canadian companies" searched as "canadian")
-  (worktree `.claude/worktrees/agent-a6ac401ef540ae6a7`); the sense-disjointness
-  gate on the isa closure (worktree `.claude/worktrees/agent-aecec3feecd621fdd`,
-  Opus) — kills chains like russia → country → region → body part [entailed].
+  entities (worktree `.claude/worktrees/agent-add3051443d22b90a`, Opus); the
+  Wikidata media-work type gate and the provenance-tag truncation fix are merged
+  (`85f79faa`); the sense-disjointness gate on the isa closure is merged
+  (2 commits through `9f4497a9`: a measured top-class table refuses ~38-40% of
+  derivations, russia ⊑ body part dead, asserted rows never blocked; its named
+  remainder — chat.mjs's own read-time BFS still walks asserted edges across
+  senses, same gate would fix it, 322 KB file deferred).
   Next levers after those: extraction widenings from named specimens —
   description sentences two and three of the Gilman article, the
   "prime | mgx:minister | …" optimistic mint, agentless passives ("is banned
