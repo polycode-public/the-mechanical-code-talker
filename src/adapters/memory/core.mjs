@@ -16,7 +16,7 @@
 
 import { access, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { proseTokensFor, buildProseIndex } from "../../domain/prose.mjs";
+import { proseTokensFor } from "../../domain/prose.mjs";
 import { fnv1aHex, normText, normFactTerm, normFactPredicate, factIdFor, factIdForTriple } from "../../domain/hash.mjs";
 
 // Fact identity (normalization + id derivation) lives in hash.mjs — the one
@@ -68,7 +68,7 @@ export {
 // fine as long as neither side READS an imported binding while the other's
 // body is still running — rows.mjs builds its class map on first use, and
 // every use here is inside a function.
-import { payloadToRows, rowsToPayload, diffRows, renormalizeAssembledPayload } from "./rows.mjs";
+import { payloadToRows, rowsToPayload, diffRows, renormalizeAssembledPayload, renormalizeProseIndex } from "./rows.mjs";
 
 // The rollup vocabulary and its tuning constants live with the compaction
 // layer; re-exported here so store consumers keep one import site.
@@ -235,6 +235,14 @@ export function isMemoryOrSqliteHandle(dir) {
   return isMemoryHandle(dir) || isSqliteHandle(dir) || isRowHandle(dir);
 }
 
+/** Move a store handle's write stamp on. `foldedFactRows` keys the fold it
+ *  holds to this number, so anything that changes what the store would fold to
+ *  — a landed write, a payload about to be mutated in place, a dropped
+ *  assembly, a seed assigned over the top — stamps here first. */
+function stampStoreWrite(dir) {
+  if (isMemoryOrSqliteHandle(dir)) dir.storeWrites = (dir.storeWrites || 0) + 1;
+}
+
 /** Backend B — pure in-memory store: `{ backend: "memory", payload }` held by
  *  the caller (never module-global). Zero file I/O; distinct from
  *  `--ephemeral`, which still round-trips a throwaway temp dir. */
@@ -250,7 +258,9 @@ export function createInMemoryStore() {
  *  `seedPayload` is null/undefined — a browser session with nothing to seed
  *  keeps its own fresh empty payload untouched. */
 export function applySeedPayload(memoryDir, seedPayload) {
-  if (seedPayload) memoryDir.payload = { ...memoryDir.payload, ...seedPayload };
+  if (!seedPayload) return;
+  memoryDir.payload = { ...memoryDir.payload, ...seedPayload };
+  stampStoreWrite(memoryDir);
 }
 
 /** A structurally independent copy of a memory payload — `structuredClone`
@@ -923,6 +933,7 @@ function mutablePayloadCopy(payload) {
  *  coherent graph. */
 function dropAssembledRowPayload(handle) {
   if (!isRowHandle(handle)) return;
+  stampStoreWrite(handle);
   handle.cachedPayload = null;
   handle.storedRows = null;
   handle.baseRows = null;
@@ -1271,7 +1282,12 @@ const cloneJson = (v) => (v === undefined ? v : structuredClone(v));
  *  persist would delete them as absent-from-payload. */
 function readSqlitePayload(handle) {
   const dataVersion = handle.db.prepare("PRAGMA data_version").get()?.data_version;
-  if (handle.cachedPayload && handle.cachedDataVersion !== dataVersion) handle.cachedPayload = null;
+  if (handle.cachedPayload && handle.cachedDataVersion !== dataVersion) {
+    // Another connection committed, so the fold this handle holds describes a
+    // store that no longer exists — it goes with the payload it was taken of.
+    stampStoreWrite(handle);
+    handle.cachedPayload = null;
+  }
   if (!handle.cachedPayload) {
     handle.cachedPayload = buildSqlitePayloadFromRows(handle);
     // The head index rides the same cache lifecycle as the payload it indexes,
@@ -2198,6 +2214,7 @@ function migrateFactAssertionKeys(payload) {
  *  SQL write (Backend C, persistSqlitePayload), or a diffed row write into an
  *  injected store (Backend D, persistRowPayload). */
 async function persistMemory(dir, payload) {
+  stampStoreWrite(dir);
   if (isMemoryHandle(dir)) { dir.payload = payload; return; }
   if (isSqliteHandle(dir)) { persistSqlitePayload(dir, payload); return; }
   if (isRowHandle(dir)) { await persistRowPayload(dir, payload); return; }
@@ -2372,12 +2389,16 @@ const memoryIndexOf = (payload) => payload?.[MEMORY_INDEX] || null;
 async function mutateMemory(dir, fn) {
   const overRowHandle = isRowHandle(dir);
   const payload = overRowHandle ? mutablePayloadCopy(await ensureRowPayload(dir)) : await loadMemory(dir);
+  // Stamped before `fn` runs as well as after it lands: Backend B's own
+  // `loadMemory` hands back the live payload, so the store stops matching any
+  // fold taken of it the moment `fn` starts changing it.
+  stampStoreWrite(dir);
   try {
     buildMemoryIndex(payload);
     const out = (await fn(payload)) ?? payload;
     migrateLegacyProvenance(out);
     recomputeSourceReliability(out);
-    if (!overRowHandle) out.proseIndex = buildProseIndex(out.individuals);
+    if (!overRowHandle) renormalizeProseIndex(out);
     await persistMemory(dir, out);
     return overRowHandle ? dir.cachedPayload : out;
   } catch (e) {
@@ -3865,6 +3886,33 @@ export async function resolveRelationChaseReverse(memory, name, objectTerm, help
  */
 export function readFactRows(memory, opts = {}) {
   return foldFactRows(memory, factFoldContext(memory), opts);
+}
+
+/** `readFactRows` over a whole store, held between writes.
+ *
+ *  Folding the graph is the most expensive read tmct does, and the fold is a
+ *  pure function of the payload — so between two writes every caller asking for
+ *  it is asking the same question. This answers it once. `stampStoreWrite`
+ *  moves the stamp the held fold is keyed to, at both ends of `mutateMemory`
+ *  (the single seam every backend's writes pass through) and wherever else a
+ *  handle's payload is replaced or dropped, so a fold taken before a write can
+ *  never be served after one.
+ *
+ *  A repo-path dir has no handle to hold anything on, and another process can
+ *  write its file between two reads, so it folds fresh every call exactly as
+ *  before. */
+export async function foldedFactRows(dir) {
+  if (!isMemoryOrSqliteHandle(dir)) return readFactRows(await loadMemory(dir));
+  const stamp = dir.storeWrites || 0;
+  if (dir.heldFactRows && dir.heldFactRowsStamp === stamp) return dir.heldFactRows;
+  const rows = readFactRows(await loadMemory(dir));
+  // A write that landed while this fold was running has already moved the
+  // stamp; holding these rows would serve that write's own reader stale ones.
+  if ((dir.storeWrites || 0) === stamp) {
+    dir.heldFactRows = rows;
+    dir.heldFactRowsStamp = stamp;
+  }
+  return rows;
 }
 
 /** The fold itself, over whatever slice of the graph a context was built for.
