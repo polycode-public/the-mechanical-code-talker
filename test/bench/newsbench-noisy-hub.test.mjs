@@ -63,13 +63,21 @@ function buildFixture() {
     row("country-2", "country", "rdfs:subClassOf", "geographical area"),
   ];
 
-  const earthquakeFactIds = ["eq-elec", "eq-health", "eq-flesh"];
+  // News-feed.mjs's own identity clause prints at most IDENTITY_MAX_CLASSES
+  // (2) senses for one hub in a single sentence, or none at all past that —
+  // so the three disjoint earthquake senses split across two cards, the way
+  // two different report windows for the same term would in a real feed,
+  // rather than piling all three behind one hub where the render would
+  // suppress the whole clause and print none of them.
+  const earthquakeFactIdsA = ["eq-elec", "eq-health"];
+  const earthquakeFactIdsB = ["eq-flesh"];
   const fundFactIds = ["fund-currency", "fund-abstraction"];
   const franceFactIds = ["france-country"];
 
   const feed = {
     items: [
-      card("card-earthquake", "earthquake", earthquakeFactIds),
+      card("card-earthquake-a", "earthquake", earthquakeFactIdsA),
+      card("card-earthquake-b", "earthquake", earthquakeFactIdsB),
       card("card-fund", "fund", fundFactIds),
       card("card-france", "france", franceFactIds),
     ],
@@ -77,7 +85,12 @@ function buildFixture() {
 
   const state = {
     items: [
-      item("news-earthquake", earthquakeFactIds, "M 4.6 - 14 km NE of Wana, Pakistan", "A moderate quake struck near Wana."),
+      item(
+        "news-earthquake",
+        [...earthquakeFactIdsA, ...earthquakeFactIdsB],
+        "M 4.6 - 14 km NE of Wana, Pakistan",
+        "A moderate quake struck near Wana.",
+      ),
       item(
         "news-fund",
         fundFactIds,
@@ -104,10 +117,16 @@ test("the aggregate rate counts every fixture identity line and carries the clos
 test("earthquake IsA electrical device / good health / flesh are each noisy", async () => {
   const { rows } = buildFixture();
   const { noisyHubIndex, cardIdentityLineClassifications } = await import("../../scripts/news-bench/metrics.mjs");
-  const state = { items: [item("news-earthquake", ["eq-elec", "eq-health", "eq-flesh"], "M 4.6 - 14 km NE of Wana, Pakistan", "A moderate quake struck near Wana.")] };
-  const earthquakeCard = card("card-earthquake", "earthquake", ["eq-elec", "eq-health", "eq-flesh"]);
+  const state = {
+    items: [item("news-earthquake", ["eq-elec", "eq-health", "eq-flesh"], "M 4.6 - 14 km NE of Wana, Pakistan", "A moderate quake struck near Wana.")],
+  };
   const index = noisyHubIndex(rows, state);
-  const classified = cardIdentityLineClassifications(earthquakeCard, index);
+  const cardA = card("card-earthquake-a", "earthquake", ["eq-elec", "eq-health"]);
+  const cardB = card("card-earthquake-b", "earthquake", ["eq-flesh"]);
+  const classified = [
+    ...cardIdentityLineClassifications(cardA, index),
+    ...cardIdentityLineClassifications(cardB, index),
+  ];
   const byObject = new Map(classified.map((c) => [c.row.object, c.noisy]));
   assert.equal(byObject.get("electrical device"), true);
   assert.equal(byObject.get("good health"), true);
@@ -134,6 +153,25 @@ test("france IsA country is not noisy: it shares \"geographical area\" with fran
   const classified = cardIdentityLineClassifications(franceCard, index);
   const byObject = new Map(classified.map((c) => [c.row.object, c]));
   assert.equal(byObject.get("country").noisy, false);
+});
+
+test("an entailed identity row that never renders on the card is excluded from the denominator", async () => {
+  const { rows } = buildFixture();
+  const { noisyHubIndex, cardIdentityLineClassifications } = await import("../../scripts/news-bench/metrics.mjs");
+  const entailedRow = row("eq-entailed", "earthquake", "rdfs:subClassOf", "physical entity");
+  entailedRow.provenance = "entailed:closure";
+  const allRows = [...rows, entailedRow];
+  const state = {
+    items: [item("news-earthquake", ["eq-flesh", "eq-entailed"], "M 4.6 - 14 km NE of Wana, Pakistan", "A moderate quake struck near Wana.")],
+  };
+  const mixedCard = card("card-earthquake-mixed", "earthquake", ["eq-flesh", "eq-entailed"]);
+  const index = noisyHubIndex(allRows, state);
+  const classified = cardIdentityLineClassifications(mixedCard, index);
+  // Only "flesh" reaches the printed identity clause — the entailed row sits
+  // in factIds but news-feed.mjs's own render never puts it on the card, so
+  // it never becomes a context line to classify at all.
+  assert.equal(classified.length, 1);
+  assert.equal(classified[0].row.object, "flesh");
 });
 
 test("the closed-list companion reading is kept alongside the same-sense rate", () => {

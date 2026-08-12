@@ -856,29 +856,42 @@ function predicatesInRenderOrder(rows) {
 
 /** One sentence per (subject, predicate) group over `rows`, in the order the
  *  rows arrive — the same shape the hub's own relation sentences take, so a
- *  background line reads like the rest of the paragraph rather than a dump. */
-function groupedFactSentences(rows) {
+ *  background line reads like the rest of the paragraph rather than a dump.
+ *  Each entry carries the group's own rows alongside its text, so a caller
+ *  that needs to know which facts a sentence came from (the bench's noisy-
+ *  line scoring) reads them off the same grouping the sentence itself used,
+ *  never a second derivation of it. */
+function groupedFactSentenceEntries(rows) {
   const groups = new Map();
   for (const row of rows) {
     const key = `${row.subject} ${row.predicate}`;
     let group = groups.get(key);
-    if (!group) groups.set(key, (group = { subject: row.subject, predicate: row.predicate, objects: [] }));
+    if (!group) groups.set(key, (group = { subject: row.subject, predicate: row.predicate, objects: [], rows: [] }));
     group.objects.push(row.object);
+    group.rows.push(row);
   }
-  return [...groups.values()].map(({ subject, predicate, objects }) => {
+  return [...groups.values()].map(({ subject, predicate, objects, rows: groupRows }) => {
     const sorted = [...objects].sort();
     const rendered = IDENTITY_PREDICATES.has(predicate)
       ? sorted.map((object) => `${articleFor(object)} ${object}`)
       : sorted;
-    return `${subject} ${predicatePhrase(predicate, subject)} ${joinObjects(rendered)}`;
+    return { text: `${subject} ${predicatePhrase(predicate, subject)} ${joinObjects(rendered)}`, rows: groupRows };
   });
+}
+
+function groupedFactSentences(rows) {
+  return groupedFactSentenceEntries(rows).map((entry) => entry.text);
 }
 
 /** The sentences a card's paragraph is made of, as four ordered blocks: the
  *  report (what a source said inside the window), the identity clause, the
- *  related facts the graph already held, and the neighbourhood. Callers that
- *  render only one block — the "what the graph already knew" disclosure —
- *  read the block they want instead of re-deriving it. */
+ *  related facts the graph already held, and the neighbourhood. Each entry is
+ *  `{ text, rows }` — the rendered sentence and the fact row(s) it came from
+ *  — so a caller that needs to know which facts actually reached the printed
+ *  text (the bench's noisy-line scoring) reads them off the same blocks
+ *  `renderNewsParagraph` itself slices, never a second derivation of it.
+ *  Callers that render only one block — the "what the graph already knew"
+ *  disclosure — read the block they want instead of re-deriving it. */
 function paragraphBlocks(hub, subgraphRows, { reportedIds = null } = {}) {
   const hubTerm = normFactTerm(hub);
   const isReported = idMembership(reportedIds);
@@ -887,12 +900,10 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null } = {}) {
   const report = [];
   for (const predicate of predicatesInRenderOrder(reportedHubRows)) {
     if (IDENTITY_PREDICATES.has(predicate) || report.length >= REPORT_SENTENCE_CAP) continue;
-    const objects = reportedHubRows
-      .filter((r) => r.predicate === predicate)
-      .map((r) => r.object)
-      .sort();
+    const groupRows = reportedHubRows.filter((r) => r.predicate === predicate);
+    const objects = groupRows.map((r) => r.object).sort();
     if (!objects.length) continue;
-    report.push(`${hub} ${predicatePhrase(predicate, hub)} ${joinObjects(objects)}`);
+    report.push({ text: `${hub} ${predicatePhrase(predicate, hub)} ${joinObjects(objects)}`, rows: groupRows });
   }
 
   // A hub that only ever appears as an OBJECT — the place a quake struck, the
@@ -900,12 +911,13 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null } = {}) {
   // and its card came out blank. What was reported about it still says
   // something, so those rows render whole, subject and all.
   if (!report.length) {
-    const aboutHub = subgraphRows
+    const aboutHubRows = subgraphRows
       .filter((r) => normFactTerm(r.object) === hubTerm && normFactTerm(r.subject) !== hubTerm && isReported(r.id))
       .sort(byId)
-      .slice(0, OBJECTS_PER_SENTENCE)
-      .map((r) => factSentence(r));
-    if (aboutHub.length) report.push(aboutHub.join("; "));
+      .slice(0, OBJECTS_PER_SENTENCE);
+    if (aboutHubRows.length) {
+      report.push({ text: aboutHubRows.map((r) => factSentence(r)).join("; "), rows: aboutHubRows });
+    }
   }
 
   // The identity clause follows the news, never leads it, and only when
@@ -913,21 +925,39 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null } = {}) {
   // closure names thirteen classes for "france" — a list nobody asked for,
   // most of it the wrong sense — so it opens no card.
   const identity = [];
-  const identityObjects = hubRows
-    .filter((r) => IDENTITY_PREDICATES.has(r.predicate) && !isDerivedRow(r))
-    .map((r) => r.object)
-    .sort();
+  const identityRows = hubRows.filter((r) => IDENTITY_PREDICATES.has(r.predicate) && !isDerivedRow(r));
+  const identityObjects = identityRows.map((r) => r.object).sort();
   const identityIsSingleSense = identityObjects.length > 0 && identityObjects.length <= IDENTITY_MAX_CLASSES;
   if (identityIsSingleSense) {
-    identity.push(`${hub} is ${joinObjects(identityObjects.map((object) => `${articleFor(object)} ${object}`))}`);
+    identity.push({
+      text: `${hub} is ${joinObjects(identityObjects.map((object) => `${articleFor(object)} ${object}`))}`,
+      rows: identityRows,
+    });
   }
 
-  const known = groupedFactSentences(knownFactRows(hub, subgraphRows, { reportedIds }));
+  const known = groupedFactSentenceEntries(knownFactRows(hub, subgraphRows, { reportedIds }));
 
   const neighbours = neighbourRows(hub, subgraphRows, { reportedIds });
-  const around = neighbours.length ? [`Around it: ${neighbours.map((r) => factSentence(r)).join("; ")}`] : [];
+  const around = neighbours.length
+    ? [{ text: `Around it: ${neighbours.map((r) => factSentence(r)).join("; ")}`, rows: neighbours }]
+    : [];
 
   return { report, identity, known, around };
+}
+
+/** The paragraph's own sentence entries (`{ text, rows }`), in print order and
+ *  sliced to exactly what `renderNewsParagraph` shows — the per-block caps
+ *  (identity, known) and the paragraph-wide `SENTENCE_CAP` both applied.
+ *  Shared by `renderNewsParagraph` and `printedParagraphRows` so the two can
+ *  never drift: one reads `.text`, the other reads `.rows`. */
+function paragraphSentenceEntries(hub, subgraphRows, { reportedIds = null } = {}) {
+  const { report, identity, known, around } = paragraphBlocks(hub, subgraphRows, { reportedIds });
+  return [
+    ...report,
+    ...identity.slice(0, IDENTITY_SENTENCE_CAP),
+    ...known.slice(0, KNOWN_FACT_SENTENCE_CAP),
+    ...around,
+  ].slice(0, SENTENCE_CAP);
 }
 
 /** A card's paragraph: what a source reported, then what the thing is, then
@@ -941,14 +971,18 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null } = {}) {
  *  (the background ones). Defaults to null, meaning every row counts as
  *  reported. */
 export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = {}) {
-  const { report, identity, known, around } = paragraphBlocks(hub, subgraphRows, { reportedIds });
-  const sentences = [
-    ...report,
-    ...identity.slice(0, IDENTITY_SENTENCE_CAP),
-    ...known.slice(0, KNOWN_FACT_SENTENCE_CAP),
-    ...around,
-  ].slice(0, SENTENCE_CAP);
+  const sentences = paragraphSentenceEntries(hub, subgraphRows, { reportedIds }).map((entry) => entry.text);
   return sentences.length ? `${sentences.join(". ")}.` : "";
+}
+
+/** Every fact row that survives into the card's rendered main paragraph —
+ *  the same rows `renderNewsParagraph` drew its sentences from, after every
+ *  cap it applies (per-block and the paragraph-wide `SENTENCE_CAP`). A row
+ *  computed but sliced away before render (an "Around it" clause cut by the
+ *  overall cap, an identity class beyond `IDENTITY_MAX_CLASSES`) never
+ *  appears here, because it never appears on the card either. */
+export function printedParagraphRows(hub, subgraphRows, { reportedIds = null } = {}) {
+  return paragraphSentenceEntries(hub, subgraphRows, { reportedIds }).flatMap((entry) => entry.rows);
 }
 
 /** The "what the graph already knew" disclosure: the same related facts the
