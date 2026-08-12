@@ -359,7 +359,7 @@ function quakeSources(places = QUAKE_PLACES) {
   ]));
 }
 
-test("each card cites the item behind its own report, and the shared subject's card cites them all", () => {
+test("each card cites the item behind its own report, and the subject every report shares mints nothing on top of them", () => {
   const items = buildNewsItems(quakeRows(), {
     now: NOW, windowMs: 6 * HOUR, limit: 10, sourcesByFactId: quakeSources(),
   });
@@ -367,9 +367,7 @@ test("each card cites the item behind its own report, and the shared subject's c
 
   assert.deepEqual(byHub.get("mina, nevada").sources.map((s) => s.title), ["M 4.0 - near mina, nevada"]);
   assert.deepEqual(byHub.get("wana, pakistan").sources.map((s) => s.title), ["M 4.3 - near wana, pakistan"]);
-  // "earthquake" is the subject of every report, so its own card reports them
-  // all and cites them all.
-  assert.equal(byHub.get("earthquake").sources.length, QUAKE_PLACES.length);
+  assert.ok(!byHub.has("earthquake"), "every story the shared subject could tell already has its own card");
 });
 
 test("a term shared by more reports than the closing sentence can name is a category node, so it leaks neither a source nor an \"Around it\"", () => {
