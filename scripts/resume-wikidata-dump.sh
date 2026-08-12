@@ -11,16 +11,43 @@
 # and must survive reboots and session cleanups. When it finishes, the next
 # steps are in PLAN_MEMORY_ROLLOUT.md section 4 (the two filter passes, the
 # band build, and the load).
+#
+# The first run PINS a dated dump (…/entities/YYYYMMDD/wikidata-YYYYMMDD-all.json.gz)
+# into a .pinned file beside the target, and every resume reads the pin.
+# Resuming against latest-all.json.gz is how a multi-day download splices two
+# different dump versions into one corrupt file: the symlink moves when
+# Wikimedia regenerates the dump, the byte-count check happily matches the
+# NEW version's size, and the seam only surfaces as a Z_DATA_ERROR deep into
+# the first decompressing read.
 set -euo pipefail
 
-DUMP_URL="https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.gz"
+ENTITIES_BASE="https://dumps.wikimedia.org/wikidatawiki/entities"
 TARGET_DIR="${1:-$HOME/tmct-dumps}"
-TARGET="$TARGET_DIR/wikidata-latest-all.json.gz"
+PIN_FILE="$TARGET_DIR/wikidata-dump.pinned"
 TICK_SECONDS=60
 
 mkdir -p "$TARGET_DIR"
 
 size_of() { stat -f %z "$1" 2>/dev/null || stat -c %s "$1" 2>/dev/null || echo 0; }
+
+if [ -f "$PIN_FILE" ]; then
+  DUMP_URL=$(cat "$PIN_FILE")
+else
+  # Newest dated directory whose -all.json.gz actually answers; the newest
+  # listing entry can be mid-generation, so fall back through the list.
+  DUMP_URL=""
+  for DATE in $(curl -sS "$ENTITIES_BASE/" | grep -oE '[0-9]{8}' | sort -run); do
+    CANDIDATE="$ENTITIES_BASE/$DATE/wikidata-$DATE-all.json.gz"
+    if curl -sIf "$CANDIDATE" >/dev/null 2>&1; then DUMP_URL="$CANDIDATE"; break; fi
+  done
+  if [ -z "$DUMP_URL" ]; then
+    echo "no dated dump found under $ENTITIES_BASE/ — check the listing by hand." >&2
+    exit 1
+  fi
+  printf '%s\n' "$DUMP_URL" > "$PIN_FILE"
+fi
+
+TARGET="$TARGET_DIR/$(basename "$DUMP_URL")"
 
 EXPECTED=$(curl -sI "$DUMP_URL" | tr -d '\r' | awk 'tolower($1)=="content-length:" {print $2}')
 HAVE=$([ -f "$TARGET" ] && size_of "$TARGET" || echo 0)

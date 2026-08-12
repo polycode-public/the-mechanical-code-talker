@@ -227,9 +227,13 @@ export async function extractWikidataSlice({
 }
 
 async function readDumpUrl() {
+  const pinPath = join(homedir(), "tmct-dumps", "wikidata-dump.pinned");
+  if (existsSync(pinPath)) return (await readFile(pinPath, "utf8")).trim();
   const script = await readFile(RESUME_SCRIPT_PATH, "utf8");
   const match = /DUMP_URL="([^"]+)"/.exec(script);
-  if (!match) throw new Error(`could not find DUMP_URL in ${RESUME_SCRIPT_PATH}`);
+  if (!match) {
+    throw new Error(`no pin at ${pinPath} and no DUMP_URL in ${RESUME_SCRIPT_PATH} — run: bash scripts/resume-wikidata-dump.sh`);
+  }
   return match[1];
 }
 
@@ -282,7 +286,14 @@ function flagValue(argv, name) {
 
 async function main() {
   const argv = process.argv.slice(2);
-  const dumpPath = flagValue(argv, "--dump") || DEFAULT_DUMP_PATH;
+  let dumpPath = flagValue(argv, "--dump") || DEFAULT_DUMP_PATH;
+  if (!flagValue(argv, "--dump") && !existsSync(dumpPath)) {
+    const pinPath = join(homedir(), "tmct-dumps", "wikidata-dump.pinned");
+    if (existsSync(pinPath)) {
+      const pinnedUrl = (await readFile(pinPath, "utf8")).trim();
+      dumpPath = join(homedir(), "tmct-dumps", pinnedUrl.split("/").pop());
+    }
+  }
   const outDir = flagValue(argv, "--out") || DEFAULT_OUT_DIR;
 
   try {
