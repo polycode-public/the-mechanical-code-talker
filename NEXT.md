@@ -39,14 +39,22 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   definitions reach cards — "russia is a country" on the russia card). The run
   command pair: `node scripts/news-bench/capture-fixtures.mjs` (fresh articles),
   `node scripts/news-bench/run-live-cycle.mjs` (the enriched cycle, four-part
-  card print). In flight: the sense-disjointness gate on the isa closure
-  (worktree `.claude/worktrees/agent-aecec3feecd621fdd`, Opus) — kills chains
-  like russia → country → geographical area → region → body part [entailed].
-  Next levers, in order: prove a lookup definition re-grounds article facts
-  (§3.2); extraction widenings from named specimens — description sentences two
-  and three of the Gilman article, the "prime | mgx:minister | …" optimistic
-  mint, agentless passives ("is banned from …"), "ecuadorean fishings"
-  pluralization; then bulk knowledge only on §5.5 evidence.
+  card print). Iteration 5 answered §3.2:
+  definitions land in the graph (amigados → disk operating system, three facts,
+  research provenance) but never reach their card — background reads only the
+  fact's endpoints, and the article's own entities (tim king, amigados inside
+  the quoted title) are invisible to it. In flight: background-from-article-
+  entities (worktree `.claude/worktrees/agent-add3051443d22b90a`, Opus); a type
+  gate so a Wikidata album/paper never defines a news term, plus the multi-word
+  wikidata search truncation ("canadian companies" searched as "canadian")
+  (worktree `.claude/worktrees/agent-a6ac401ef540ae6a7`); the sense-disjointness
+  gate on the isa closure (worktree `.claude/worktrees/agent-aecec3feecd621fdd`,
+  Opus) — kills chains like russia → country → region → body part [entailed].
+  Next levers after those: extraction widenings from named specimens —
+  description sentences two and three of the Gilman article, the
+  "prime | mgx:minister | …" optimistic mint, agentless passives ("is banned
+  from …"), "ecuadorean fishings" pluralization, the "new gun" fragment; then
+  bulk knowledge only on §5.5 evidence.
 
 - [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
   downloads in the operator's terminal (started 19:26, ~10 h). No bulk band gets
