@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   FACT_PREDICATE_PHRASES, predicatePhrase, factSentence, phraseRendererSource,
-  baseVerbSurface, thirdPersonSingularSurface,
+  baseVerbSurface, thirdPersonSingularSurface, isSubjectPlural,
   FINDING_CAVEATS, findingCaveat,
 } from "../../src/domain/fact-phrase.mjs";
 
@@ -19,6 +19,56 @@ test("predicatePhrase renders a minted verb predicate as its third-person surfac
   assert.equal(predicatePhrase("mgx:eat"), "eats");
   assert.equal(predicatePhrase("mgx:fly"), "flies");
   assert.equal(predicatePhrase("mgx:rest-on"), "rests on");
+});
+
+test("isSubjectPlural reads the head noun: regular plural, irregular plural, singular, and a multi-word subject's head", () => {
+  assert.equal(isSubjectPlural("scientists"), true);
+  assert.equal(isSubjectPlural("people"), true);
+  assert.equal(isSubjectPlural("children"), true);
+  assert.equal(isSubjectPlural("an earthquake"), false);
+  assert.equal(isSubjectPlural("a scientist"), false);
+  assert.equal(isSubjectPlural("the news"), false);
+  // "the group of scientists" agrees on the head noun "group", not the
+  // trailing "of ..." phrase's own noun.
+  assert.equal(isSubjectPlural("the group of scientists"), false);
+  assert.equal(isSubjectPlural(""), false);
+  assert.equal(isSubjectPlural(undefined), false);
+});
+
+test("predicatePhrase folds a minted verb onto its subject's number: a regular plural takes the bare form, an irregular plural takes it too, a singular subject keeps the third-person fold", () => {
+  assert.equal(predicatePhrase("mgx:report", "scientists"), "report");
+  assert.equal(predicatePhrase("mgx:report", "people"), "report");
+  assert.equal(predicatePhrase("mgx:strike", "an earthquake"), "strikes");
+  assert.equal(predicatePhrase("mgx:rest-on", "the group of scientists"), "rests on");
+  // No subject given at all: today's pre-existing singular default, unchanged.
+  assert.equal(predicatePhrase("mgx:report"), "reports");
+});
+
+test("factSentence agrees a minted verb with its own row.subject", () => {
+  assert.equal(
+    factSentence({ subject: "scientists", predicate: "mgx:report", object: "a finding" }),
+    "scientists report a finding",
+  );
+  assert.equal(
+    factSentence({ subject: "an earthquake", predicate: "mgx:strike", object: "the coast" }),
+    "an earthquake strikes the coast",
+  );
+  assert.equal(
+    factSentence({ subject: "the group of scientists", predicate: "mgx:report", object: "a finding" }),
+    "the group of scientists reports a finding",
+  );
+});
+
+test("predicatePhrase's do-support negation agrees with the subject too: 'do not' for a plural subject, 'does not' for a singular one", () => {
+  assert.equal(predicatePhrase("mgxneg:eat", "scientists"), "do not eat");
+  assert.equal(predicatePhrase("mgxneg:eat", "a fox"), "does not eat");
+  // No subject given at all: today's pre-existing singular default, unchanged.
+  assert.equal(predicatePhrase("mgxneg:eat"), "does not eat");
+});
+
+test("a curated predicate's phrase is fixed English, unaffected by subject plurality", () => {
+  assert.equal(predicatePhrase("mgx:causes", "scientists"), "causes");
+  assert.equal(predicatePhrase("mgx:hasA", "scientists"), "has");
 });
 
 test("baseVerbSurface strips a real -es ending without eating the base's own e", () => {
@@ -123,7 +173,7 @@ test("a row carrying several findings reads them in the table's order, not the r
 
 test("phraseRendererSource carries everything the reader stands on", () => {
   const source = phraseRendererSource();
-  for (const name of ["TEACH_PARTICIPLE_SRC", "thirdPersonSingularSurface", "baseVerbSurface", "predicatePhrase", "factSentence"]) {
+  for (const name of ["TEACH_PARTICIPLE_SRC", "thirdPersonSingularSurface", "baseVerbSurface", "isSubjectPlural", "predicatePhrase", "factSentence"]) {
     assert.match(source, new RegExp(`const ${name} =`));
   }
   // The page supplies the table; everything else has to come from here, or a
@@ -136,4 +186,11 @@ test("phraseRendererSource carries everything the reader stands on", () => {
   assert.equal(browserPhrase("mgx:connected-with"), "is connected with");
   assert.equal(browserPhrase("tmct:needs"), "needs");
   assert.equal(browserSentence({ subject: "fire", predicate: "mgx:causes", object: "smoke" }), "fire causes smoke");
+  // The plural fold has to survive the same round-trip: the browser copy owns
+  // its own IRREGULAR_PLURAL_NOUNS/SINGULAR_NOUNS_ENDING_S tables, not a
+  // shared reference back into this module.
+  assert.equal(
+    browserSentence({ subject: "scientists", predicate: "mgx:report", object: "a finding" }),
+    "scientists report a finding",
+  );
 });
