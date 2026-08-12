@@ -1,0 +1,96 @@
+// The optimistic tier's newswire event frame: a closed band of transitive
+// event verbs read in a tighter frame than the lexicon arm's. What these pin
+// is the frame's bounds — what it admits, and every shape it turns down —
+// because a news report's own prose is the only text in the product that
+// reaches this arm, and a wrong read there becomes a feed card.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+import { optimisticTriples } from "../../src/services/extract-facts.mjs";
+
+const triplesOf = (sentence) =>
+  optimisticTriples(sentence).map((t) => `${t.subject} ${t.predicate} ${t.object}`);
+
+test("an event verb the lexicon never declared mints its relation from a past-tense report", () => {
+  assert.deepEqual(
+    triplesOf("The government adopted a law that might prove a significant step toward peace."),
+    ["government mgx:adopt law"],
+  );
+  assert.deepEqual(
+    triplesOf("Nigel Farage forced a new election in his parliamentary seat."),
+    ["nigel farage mgx:force election"],
+  );
+});
+
+test("a modal chain is one verb complex: the subject is read from left of the whole chain", () => {
+  assert.deepEqual(
+    triplesOf("From Iceland to Spain, people have flocked to places where the moon will completely block the sun."),
+    ["moon mgx:block sun"],
+  );
+});
+
+test("a passive states who it happened to, so an active read of one is declined", () => {
+  assert.deepEqual(triplesOf("Roberto Mosquera was arrested by ICE last year."), []);
+  assert.deepEqual(triplesOf("A group of Cuban men in Mexico was charged with smuggling people."), []);
+  assert.deepEqual(triplesOf("Yabloko, the Russian antiwar party, is banned from parliament elections."), []);
+});
+
+test("a progressive is not an event that happened: the be-form auxiliary declines it", () => {
+  assert.deepEqual(triplesOf("The Yemeni ship was carrying food supplies to a port."), []);
+  assert.deepEqual(triplesOf("The insects are disappearing for many reasons."), []);
+});
+
+test("neither endpoint crosses a preposition or a conjunction into the next clause", () => {
+  assert.deepEqual(triplesOf("The British scholar resigned from Cambridge after the university began investigating him."), []);
+  assert.deepEqual(triplesOf("The rebels attacked at dawn."), []);
+});
+
+test("a counting of-chain reads through to what the event touched; any other of-chain keeps its own head", () => {
+  assert.deepEqual(
+    triplesOf("An Italian diver discovers hundreds of ancient amphorae in Sicily."),
+    ["italian diver mgx:discover amphorae"],
+  );
+  assert.deepEqual(
+    triplesOf("A quest will restore the sacred glow of fireflies."),
+    ["quest mgx:restore glow"],
+  );
+});
+
+test("a relative clause has no subject of its own here, so its event verb is declined", () => {
+  assert.deepEqual(
+    triplesOf("The quake, which killed more than 100 people, damaged hundreds of buildings."),
+    [],
+  );
+});
+
+test("verbs of speech and attribution stay out of the band: the noun after one opens a clause", () => {
+  assert.deepEqual(triplesOf("The Yemeni government said the ship carried food supplies."), []);
+  assert.deepEqual(triplesOf("Experts claimed the region has a complicated history."), []);
+});
+
+test("a lemma the lexicon declares keeps the lexicon's own predicate across tenses", () => {
+  assert.deepEqual(
+    triplesOf("Russia released Robert Gilman on a humanitarian basis."),
+    ["russia tmct:releases robert gilman"],
+  );
+});
+
+test("a sentence-final full stop never enters a stored term; an abbreviation keeps its own stops", () => {
+  const [fact] = optimisticTriples("The moon will completely block the sun.");
+  assert.equal(fact.object, "sun");
+  assert.deepEqual(
+    triplesOf("The storm damaged the U.S."),
+    ["storm mgx:damage u.s."],
+  );
+});
+
+test("the frame adds nothing to prose that named no event", () => {
+  for (const sentence of [
+    "The quick brown fox jumps over something vague.",
+    "Hello there.",
+    "But not without the right glasses.",
+    "Here is the latest.",
+  ]) {
+    assert.deepEqual(triplesOf(sentence), [], `still abstains: ${sentence}`);
+  }
+});

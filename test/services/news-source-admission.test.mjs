@@ -75,6 +75,20 @@ const NYT_RSS = `<?xml version="1.0" encoding="UTF-8"?>
   <description>The storm forced thousands of residents to leave their homes as rivers rose across Queensland.</description>
   <pubDate>Sat, 08 Aug 2026 12:00:00 +0000</pubDate>
 </item>
+<item>
+  <title>A Cold-Call Crackdown in France</title>
+  <link>https://www.nytimes.com/2026/08/08/world/europe/france-cold-calls.html</link>
+  <guid isPermaLink="true">https://www.nytimes.com/2026/08/08/world/europe/france-cold-calls.html</guid>
+  <description>The government adopted a law banning unsolicited telemarketing calls.</description>
+  <pubDate>Sat, 08 Aug 2026 11:00:00 +0000</pubDate>
+</item>
+<item>
+  <title>Prisoner Swap Lands in the U.S.</title>
+  <link>https://www.nytimes.com/2026/08/08/world/europe/prisoner-swap.html</link>
+  <guid isPermaLink="true">https://www.nytimes.com/2026/08/08/world/europe/prisoner-swap.html</guid>
+  <description>Russia released the prisoners.</description>
+  <pubDate>Sat, 08 Aug 2026 10:00:00 +0000</pubDate>
+</item>
 </channel></rss>`;
 
 const WIKINEWS_BODY = {
@@ -201,6 +215,26 @@ test("an NYT world item admits a fact from its headline", async () => {
   const admitted = newsRowsFrom(rows, "nyt-world");
   assert.ok(admitted.length >= 1);
   assert.ok(admitted.some((r) => r.subject === "cyclone"));
+});
+
+test("an NYT world item admits a fact from its description when the headline names no event", async () => {
+  const { rows } = await pollWith(["nyt-world"]);
+  const admitted = newsRowsFrom(rows, "nyt-world");
+  assert.ok(
+    admitted.some((r) => `${r.subject} ${r.predicate} ${r.object}` === "government mgx:adopt law"),
+    "a report's own prose sentence carries the event its headline only alludes to",
+  );
+});
+
+test("an NYT headline ending on an abbreviation never runs into its description's first word", async () => {
+  const { rows } = await pollWith(["nyt-world"]);
+  const admitted = newsRowsFrom(rows, "nyt-world");
+  assert.ok(admitted.some((r) => r.subject === "russia"), "the description's own subject reaches the graph whole");
+  assert.deepEqual(
+    admitted.filter((r) => r.subject.startsWith("u.s. ")).map((r) => r.subject),
+    [],
+    "the headline's trailing abbreviation is never glued onto the sentence after it",
+  );
 });
 
 test("a Wikinews headline admits a fact on its own — the headline is already a sentence", async () => {
