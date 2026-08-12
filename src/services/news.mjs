@@ -60,7 +60,7 @@ import {
 import { DEFAULT_MIN_INTERVAL_MS } from "../adapters/corpus/courtesy.mjs";
 import { researchFacts } from "../adapters/corpus/research-source.mjs";
 import { throughSourceBreaker, sourceSkipStatusLine } from "../domain/source-breaker.mjs";
-import { ingestText, readsAsEntityTerm } from "./extract-facts.mjs";
+import { ingestText, readsAsEntityTerm, ungroundedTermOccurrences } from "./extract-facts.mjs";
 
 export { NEWS_SOURCE_RECORDS, DEFAULT_NEWS_SOURCE_IDS, DEFAULT_NEWS_KB_IDS };
 
@@ -307,6 +307,23 @@ function buildSourcesByFactId(items) {
     for (const factId of snap.factIds || []) map.set(factId, src);
   }
   return map;
+}
+
+/** The entity names a card's own article text carries, read through the same
+ *  capture the enrichment queue is fed from (`ungroundedTermOccurrences`), so a
+ *  name reaches a card's background under exactly the key enrichment stored it
+ *  under. The fact set handed in is empty on purpose: that call's own filter
+ *  drops a term the graph already holds facts about, and a card wants precisely
+ *  those. A single word the lexicon reads as an everyday noun drops out here —
+ *  "developer" names nothing a lookup could define — while a name run keeps its
+ *  whole spelling, "tim king" and "amigados" alike. */
+export function articleEntityNames(texts, { lexicon } = {}) {
+  const lex = lexicon || loadLexicon();
+  const names = [];
+  for (const term of ungroundedTermOccurrences(texts, [], { lexicon: lex }).keys()) {
+    if (term.includes(" ") || !isVocabGroundedTerm(lex, term)) names.push(term);
+  }
+  return names.sort();
 }
 
 // ---------------------------------------------------------------------------
@@ -884,7 +901,15 @@ export async function enrichTopTerms(ctx, { limit } = {}) {
  *
  *  `newName` is a display-only badge (never a gate): true when the lexicon
  *  has no everyday-noun reading for the hub, computed here rather than in
- *  buildNewsItems because the domain layer carries no lexicon. */
+ *  buildNewsItems because the domain layer carries no lexicon.
+ *
+ *  `articleEntityNames` is wired in for the same reason: reading the entity
+ *  names out of a card's own article text takes the lexicon and the wink
+ *  tagger, so the domain asks for them through a seam and this layer answers
+ *  with the capture the enrichment queue already uses. It is what puts a
+ *  definition and the card that needed it on the same page — a lookup on
+ *  "amigados" reaches a card whose only fact is that a site discussed the
+ *  headline the name sits inside. */
 export async function buildFeed(ctx) {
   const { memoryDir, store, config, state, now, lexicon } = ctx;
   const nowVal = resolveNow(now);
@@ -895,7 +920,12 @@ export async function buildFeed(ctx) {
 
   const lex = lexicon || loadLexicon();
   const items = buildNewsItems(rows, {
-    now: nowVal, windowMs, limit: config.itemCap, sourcesByFactId, readsAsEntityTerm,
+    now: nowVal,
+    windowMs,
+    limit: config.itemCap,
+    sourcesByFactId,
+    readsAsEntityTerm,
+    articleEntityNames: (texts) => articleEntityNames(texts, { lexicon: lex }),
   }).map((item) => ({ ...item, newName: !isVocabGroundedTerm(lex, item.hub) }));
   return { items, seedFallback: false, builtAt: nowVal };
 }

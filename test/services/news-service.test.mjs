@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import {
   clampNewsConfig, pollNewsSources, ingestNewsSnapshot, enrichTopTerms, reprocessAfterGrounding,
   isVocabGroundedTerm, isFactGroundedTerm, ingestUploadedFactRows, buildFeed, cycleMetrics, createNewsState,
-  filterRankedTermEntries, newsTurn,
+  filterRankedTermEntries, newsTurn, articleEntityNames,
 } from "../../src/services/news.mjs";
 import { openMemoryBackend, loadMemory, readFactRows, appendFacts, removeFacts } from "../../src/adapters/memory/core.mjs";
 import { normalizeFeedItems } from "../../src/domain/feed-normalize.mjs";
@@ -769,6 +769,38 @@ test("buildFeed's gate: a card the optimistic tier only reached off an identifie
   assert.ok(!hubs.includes("normalizefeeditems"), `an identifier-token row never heads a card: ${JSON.stringify(hubs)}`);
   assert.ok(!hubs.includes("site"), `the same declined row cannot head via its other endpoint either: ${JSON.stringify(hubs)}`);
   assert.ok(hubs.includes("talks") || hubs.includes("ceasefire terms"), `a clean report from the same poll still heads: ${JSON.stringify(hubs)}`);
+});
+
+test("articleEntityNames reads the whole names an article's text carries and drops the everyday nouns beside them", () => {
+  const names = articleEntityNames(['Tim King, AmigaDOS developer, has died', 'Hackernews discusses "Tim King, AmigaDOS developer, has died".']);
+  assert.ok(names.includes("amigados"), `the headline's entity survives whole: ${JSON.stringify(names)}`);
+  assert.ok(names.includes("tim king"), `a two-word name stays one term: ${JSON.stringify(names)}`);
+  assert.ok(!names.includes("developer"), `an everyday noun names no entity: ${JSON.stringify(names)}`);
+  assert.deepEqual(names, [...names].sort(), "the names come back in a fixed order");
+});
+
+test("buildFeed's card carries what the graph holds about an entity named inside its headline, not only its own facts' endpoints", async () => {
+  const { ctx } = await makeCtx({ now: () => FIXED_NOW });
+
+  // What an enrichment lookup on the headline's own entity already wrote.
+  await appendFacts(ctx.memoryDir, [
+    { subject: "amigados", predicate: "rdf:type", object: "disk operating system", provenance: "research:wikidata:amigados" },
+    { subject: "amigados", predicate: "mgx:partOf", object: "amigaos", provenance: "research:wikidata:amigados" },
+  ]);
+
+  // Two stories from the same site, so the site itself is a publication rather
+  // than a card title and the first card stays headed by its quoted headline.
+  const died = snapshotFor("hacker-news", "1", "Tim King, AmigaDOS developer, has died", 'Hackernews discusses "Tim King, AmigaDOS developer, has died".');
+  const rewrite = snapshotFor("hacker-news", "2", "A Rust compiler rewrite", 'Hackernews discusses "A Rust compiler rewrite".');
+  ctx.state.items = [died, rewrite];
+  await ingestNewsSnapshot(ctx, died);
+  await ingestNewsSnapshot(ctx, rewrite);
+
+  const feed = await buildFeed(ctx);
+  const card = feed.items.find((it) => it.sources.some((s) => s.url === died.url));
+  assert.ok(card, `the story mints a card: ${JSON.stringify(feed.items.map((it) => it.hub))}`);
+  assert.match(card.backgroundParagraph, /amigados is a disk operating system/);
+  assert.match(card.backgroundParagraph, /amigados is part of amigaos/);
 });
 
 // ---- metrics ----------------------------------------------------------------
