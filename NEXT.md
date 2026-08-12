@@ -76,12 +76,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     suppressed (repeat 79% → 0%, repeated sentences 37% → 6.8%), feed document
     300 KB → 68 KB, floors ratcheted. Remainder handed to the bench agent: the
     articles log's "backing item(s)" still derives from the two-hop factIds.
-  - **The noisy-context metric under-counts** — "earthquake is a kind of
-    electrical device / good health / flesh" scores zero because the closed
-    abstract-class list can't enumerate sense pollution; a same-sense definition
-    is being built bench-side: worktree
-    `.claude/worktrees/agent-adba3482e3f5e4ea6` (Sonnet; metric revision with
-    both iterations re-scored, not a product change).
+  - **The noisy-context metric is redefined and merged** (8 commits through
+    `fec2b5d1`): a context line needs positive same-sense evidence (the object or
+    its one-hop neighbours sharing a content word with the hub's own company) or
+    it counts as noisy — no evidence means noisy, the honest-miss bias. Corrected
+    reading on the current state: 24.24% of shown context lines are noisy (the
+    blocklist said 3.70%); the old reading rides alongside for one release. New
+    catches include "france is a kind of schema place / social station". That
+    24% is N2's target number.
   - Identity dumps lead card paragraphs ("france is … a cognition, a condition …"
     before the news sentence); clause hubs ("boats hit by mystery attackers")
     still head cards; "ecuadorean fishings boats" pluralization slip (N2/N4).
