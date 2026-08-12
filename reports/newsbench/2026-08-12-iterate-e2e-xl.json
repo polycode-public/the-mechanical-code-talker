@@ -1,0 +1,349 @@
+{
+  "meta": {
+    "seed": "xl",
+    "sourceIds": [
+      "hacker-news",
+      "nyt-world"
+    ],
+    "fixtureDates": {
+      "hacker-news": "2026-08-12",
+      "nyt-world": "2026-08-12"
+    },
+    "now": "2026-08-12T12:00:00.000Z",
+    "take": 5,
+    "doubleIngest": false
+  },
+  "provenance": {
+    "seedDigest": "dcd8b2bdf1a74c9a99babc8e790094af107dcb951874a17ad5d854a024b9c890",
+    "seedRowCount": 61736,
+    "fixtureDates": {
+      "hacker-news": "2026-08-12",
+      "nyt-world": "2026-08-12"
+    },
+    "gitHead": "973e02a3abe8ca090d543a847fd82d573ac5dcac",
+    "sources": [
+      "hacker-news",
+      "nyt-world"
+    ],
+    "take": 5,
+    "doubleIngest": false
+  },
+  "poll": {
+    "fetched": 2,
+    "newItems": 10,
+    "failures": 0,
+    "facts": 3,
+    "derived": 12,
+    "evicted": 0
+  },
+  "metrics": {
+    "admissionRate": {
+      "perSource": {
+        "hacker-news": {
+          "offered": 5,
+          "admitted": 2,
+          "rate": 0.4
+        },
+        "nyt-world": {
+          "offered": 5,
+          "admitted": 1,
+          "rate": 0.2
+        }
+      },
+      "aggregate": {
+        "offered": 10,
+        "admitted": 3,
+        "rate": 0.3
+      }
+    },
+    "groundedTermProportion": {
+      "perSource": {
+        "nyt-world": {
+          "articles": 3,
+          "microAverage": 0.2,
+          "distribution": {
+            "min": 0,
+            "median": 0,
+            "max": 0.4
+          }
+        },
+        "hacker-news": {
+          "articles": 5,
+          "microAverage": 0.2857142857142857,
+          "distribution": {
+            "min": 0,
+            "median": 0,
+            "max": 0.5
+          }
+        }
+      },
+      "aggregate": {
+        "articles": 8,
+        "microAverage": 0.25,
+        "distribution": {
+          "min": 0,
+          "median": 0,
+          "max": 0.5
+        }
+      }
+    },
+    "dedupeRatio": {
+      "cards": 3,
+      "admittedItems": 3,
+      "ratio": 1,
+      "secondPassNewItems": null,
+      "secondPassNewCards": null,
+      "doubleIngestChecked": false
+    },
+    "entityPreservation": {
+      "rawCandidateCount": 36,
+      "anchoredCandidateCount": 2,
+      "factSurvivalRate": 0,
+      "paragraphSurvivalRate": 0
+    },
+    "noisyHubRelationRate": {
+      "contextLines": 0,
+      "noisy": 0,
+      "rate": null,
+      "noisyHubRateClosedList": null
+    },
+    "paragraphShape": {
+      "cards": 3,
+      "sentencesPerCard": {
+        "min": 1,
+        "max": 2,
+        "mean": 1.6666666666666667
+      },
+      "repeatedSentenceRate": 0,
+      "aroundItRepeatRate": 0,
+      "headlinePresentRate": 1,
+      "linkPresentRate": 1,
+      "datePresentRate": 1
+    },
+    "rankedTermNoise": {
+      "entries": 18,
+      "noisy": 0,
+      "rate": 0
+    },
+    "size": {
+      "newsFactRows": 3,
+      "newsFactBytes": 2259,
+      "rowsPerArticle": 1,
+      "bytesPerArticle": 753,
+      "feedDocumentBytes": 6354,
+      "maxFeedDocumentBytes": 358400,
+      "feedDocumentBudgetUsed": 0.01772879464285714
+    }
+  },
+  "definitions": {
+    "admissionRate": "per source: distinct polled items whose snapshot carries >=1 factId after grounding, divided by distinct items the source's fetcher returned.",
+    "groundedTermProportion": "per polled item: normalized subject/object terms of the item's own admitted facts, divided by that same set unioned with the terms the term-ledger recorded against the item's own id (its ungrounded terms) — a micro-average (summed numerators over summed denominators) per source and overall, plus the per-item distribution's min/median/max.",
+    "dedupeRatio": "feed cards built, divided by distinct polled items that admitted >=1 fact (the same set admissionRate's numerator counts) — a ratio below 1 means several admitted items consolidated onto shared hubs. secondPassNewItems/secondPassNewCards re-poll and re-build the same fixtures a second time and report what changed; both target zero.",
+    "entityPreservation": "a candidate is a date (ISO, \"Month D, YYYY\" or \"D Month YYYY\") or a capitalized 1-4 word sequence found in an item's title+summary text, gazetteer-anchored when the whole candidate or its text after the last comma normalizes to a term the seed graph already classifies as a place or person (GAZETTEER_CLASS_TERMS via rdf:type/rdfs:subClassOf). factSurvival counts an anchored candidate whose normalized form appears as a subject/object term of one of the item's own admitted facts; paragraphSurvival counts one whose literal text appears in a card the item contributed facts to. rawCandidateCount (no gazetteer filter) is reported alongside for reference.",
+    "noisyHubRelationRate": "a context line is an rdf:type/rdfs:subClassOf row among what a card's text actually shows, read off news-feed.mjs's own render functions rather than re-derived here: printedParagraphRows for the main paragraph (the report, then the identity clause — only when the hub reads in one sense, IDENTITY_MAX_CLASSES or fewer, otherwise it prints none of them — then the known-facts lead-in, then 'Around it', each block's own cap and the paragraph-wide sentence cap both already applied) plus knownFactRows for the backgroundParagraph disclosure, which shows that same background set in full. A row an entailment closure minted, or one sliced away before render by either cap, is never in this set — never the wider two-hop subgraph a card merely reaches. A hub that only ever appears as an object (a place a quake struck) carries its class-membership noise on the SUBJECT of a background row instead, which knownFactRows already reaches from the anchor side. A line (subject S, object Y) is noisy unless a same-sense test finds positive support for Y in S's own company: build a pool from the card's own news-sentence text (the backing item(s)' title+summary, tokenized) plus every OTHER term S connects to anywhere in the store (S's one-hop neighbourhood, the tested row excluded); a line is NOT noisy when Y itself, or any of Y's own one-hop neighbours, shares a content word (ABSTRACT_ROOT_TERMS-filtered) with that pool. Two disjoint WordNet senses of the same lemma share no such neighbour by construction, which is what catches 'earthquake is a kind of electrical device' with no closed list; a line that fits the hub's own topic almost always shares one (a hub's OTHER identity objects are each other's neighbours; a news article's own words usually name a real hypernym). noisyHubRateClosedList carries the prior closed-abstract-class-list reading of the same denominator, kept alongside for one release.",
+    "paragraphShape": "sentencesPerCard: each card's paragraph split on \". \", min/max/mean across the feed. repeatedSentenceRate: (sentence occurrences beyond each string's first) / (total sentence occurrences), pooled across every card's paragraph. aroundItRepeatRate: of cards whose paragraph carries an \"Around it: ...\" clause, the fraction whose clause text exactly matches another card's. headlinePresent/linkPresent/datePresent: the share of cards whose sources[] entries carry a non-empty title / url / any key named publishedAt or date.",
+    "rankedTermNoise": "ranked-terms panel entries whose term falls in RANKED_NOISE_TERMS, divided by the panel's own entry count (the same list /news rank renders, top 20).",
+    "size": "newsFactRows/newsFactBytes: fact rows (and their JSON byte size) whose provenance carries a news:/news-fixture:/research: tag. rowsPerArticle/bytesPerArticle: those totals divided by admitted-item count. feedDocumentBytes: the materialized feed document's own byte size (server/news-worker/handler.mjs's serializeCard + enforceFeedSizeBound), reported against MAX_FEED_DOCUMENT_BYTES."
+  },
+  "articles": [
+    {
+      "kind": "card",
+      "id": "news-feed:3d3aa3ac2977eb33",
+      "hub": "\"deepseek v4 pro 0813\"",
+      "paragraph": "hackernews discuss \"deepseek v4 pro 0813\". Around it: hackernews discuss \"glaciers on the climate dashboard\".",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "DeepSeek V4 Pro 0813",
+          "url": "https://openrouter.ai/deepseek/deepseek-v4-pro-0813",
+          "name": "Hacker News",
+          "publishedAt": "2026-08-12T16:04:50.000Z",
+          "summary": "Hackernews discusses \"DeepSeek V4 Pro 0813\"."
+        }
+      ],
+      "date": "2026-08-12T16:04:50.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:f7addb0ed53c0afb",
+          "sourceId": "hacker-news",
+          "title": "DeepSeek V4 Pro 0813",
+          "url": "https://openrouter.ai/deepseek/deepseek-v4-pro-0813",
+          "publishedAt": "2026-08-12T16:04:50.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 4,
+        "microAverage": 0.5
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": null,
+      "repeatsAroundItOf": null,
+      "sentenceCount": 2,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:42cc0713161dc9aa",
+      "hub": "\"glaciers on the climate dashboard\"",
+      "paragraph": "hackernews discuss \"glaciers on the climate dashboard\". Around it: hackernews discuss \"deepseek v4 pro 0813\".",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "Glaciers on the Climate Dashboard",
+          "url": "https://climate.metoffice.cloud/glaciers.html",
+          "name": "Hacker News",
+          "publishedAt": "2026-08-12T16:38:25.000Z",
+          "summary": "Hackernews discusses \"Glaciers on the Climate Dashboard\"."
+        }
+      ],
+      "date": "2026-08-12T16:38:25.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:e8fbd032bb504532",
+          "sourceId": "hacker-news",
+          "title": "Glaciers on the Climate Dashboard",
+          "url": "https://climate.metoffice.cloud/glaciers.html",
+          "publishedAt": "2026-08-12T16:38:25.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 4,
+        "microAverage": 0.5
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": null,
+      "repeatsAroundItOf": null,
+      "sentenceCount": 2,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:af6019fc11a3c934",
+      "hub": "hackernews",
+      "paragraph": "hackernews discuss \"deepseek v4 pro 0813\" and \"glaciers on the climate dashboard\".",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "DeepSeek V4 Pro 0813",
+          "url": "https://openrouter.ai/deepseek/deepseek-v4-pro-0813",
+          "name": "Hacker News",
+          "publishedAt": "2026-08-12T16:04:50.000Z",
+          "summary": "Hackernews discusses \"DeepSeek V4 Pro 0813\"."
+        },
+        {
+          "title": "Glaciers on the Climate Dashboard",
+          "url": "https://climate.metoffice.cloud/glaciers.html",
+          "name": "Hacker News",
+          "publishedAt": "2026-08-12T16:38:25.000Z",
+          "summary": "Hackernews discusses \"Glaciers on the Climate Dashboard\"."
+        }
+      ],
+      "date": "2026-08-12T16:38:25.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:e8fbd032bb504532",
+          "sourceId": "hacker-news",
+          "title": "Glaciers on the Climate Dashboard",
+          "url": "https://climate.metoffice.cloud/glaciers.html",
+          "publishedAt": "2026-08-12T16:38:25.000Z"
+        },
+        {
+          "id": "news-item:f7addb0ed53c0afb",
+          "sourceId": "hacker-news",
+          "title": "DeepSeek V4 Pro 0813",
+          "url": "https://openrouter.ai/deepseek/deepseek-v4-pro-0813",
+          "publishedAt": "2026-08-12T16:04:50.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 2,
+        "grounded": 4,
+        "extracted": 8,
+        "microAverage": 0.5
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": null,
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "cardless-admitted",
+      "id": "news-item:b90cbcc285e0d15b",
+      "sourceId": "nyt-world",
+      "title": "More Than 40 Dead After a Ferry Capsizes on Zimbabwe’s Lake Kariba",
+      "factCount": 1
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:04fc6efc2272dd9e",
+      "sourceId": "nyt-world",
+      "title": "Eclipse chasers stake out their viewing spots in Iceland.",
+      "stage": "no recognizable claim in the text"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:1bd9327b637e265d",
+      "sourceId": "hacker-news",
+      "title": "Reflex (YC W23) Is hiring Growth and GTM Roles",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:1e473fbce5d6c1cd",
+      "sourceId": "hacker-news",
+      "title": "HTML over WebSockets: real-time SPAs with barely any JavaScript",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:5f876b04546662e3",
+      "sourceId": "nyt-world",
+      "title": "Here’s the latest.",
+      "stage": "no recognizable claim in the text"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:89cd0c2ae39a9e5a",
+      "sourceId": "nyt-world",
+      "title": "Live Updates: First Total Eclipse in Decades Turns Day to Night in Europe",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:a7e710b98dbb239c",
+      "sourceId": "nyt-world",
+      "title": "As Europe Faces Heat Waves and Wildfires, Travelers Are Forced to Adapt",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:f77a22f2efefd9e2",
+      "sourceId": "hacker-news",
+      "title": "Zed: Delta",
+      "stage": "parsed; term(s) never grounded"
+    }
+  ]
+}
