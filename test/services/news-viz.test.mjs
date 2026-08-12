@@ -174,6 +174,14 @@ test("renderNewsHtml: a card renders straight from factLines/factCount, never fr
   assert.ok(!html.includes("factRows("), "no client-side call ever asks for a raw fact row");
 });
 
+test("renderNewsHtml: a card's date reads off its sources' own publishedAt, conditional on one actually being present", () => {
+  const html = renderNewsHtml();
+  assert.match(html, /function earliestSourceDate/, "the earliest-dated source is picked, not an arbitrary one");
+  assert.match(html, /s\.publishedAt/, "the date comes from a source's own publishedAt field");
+  assert.match(html, /sourceDate \? [^:]+: ""/, "the date span is conditional on a source actually carrying one");
+  assert.ok(!/new Date\(\)/.test(html), "the card date never falls back to the render clock");
+});
+
 test("renderNewsHtml: the empty feed state names what the feed actually shows and how to fill it", () => {
   const html = renderNewsHtml();
   assert.match(html, /id="feedEmpty"[^>]*>no news yet/, "the feed pane's own empty state carries the entity-anchored design copy");
