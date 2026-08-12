@@ -55,10 +55,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     all five sources, floor-guarded smoke test, baseline
     `reports/newsbench/2026-08-12-xl.md` (admission 57%, grounded-terms 26%,
     "Around it" repeat 79%, date presence 0%, ranked noise 30% pre-noise-gate).
-    Product bug it surfaced, unfixed: `itemCap` 30 is GLOBAL across the five
-    sources, not per-source — most fetched items are evicted before ingestion;
-    the bench pins 200 to measure past it. Next lever gets chosen from the
-    post-N1 bench re-run.
+    The global-item-cap bug it surfaced is fixed and merged (`e491b061` +
+    starvation-fixture test): the cap now bounds each source's own window, so a
+    prolific source can no longer wipe a small source's window presence.
   - N1 de-dupe — merged to local `main` (`5b7907c4`): per-source id + content keys
     (pure over the snapshot's fields), grounded-only seen memory, and the real
     duplicator fixed — item-cap churn no longer re-ingests window-dropped articles
