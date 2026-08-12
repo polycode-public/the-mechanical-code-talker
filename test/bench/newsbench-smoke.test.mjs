@@ -22,7 +22,11 @@ const SECOND_PASS_NEW_CARDS_MAX = 0;
 // line, baseline 0 noisy) — the ceiling stays loose rather than pretend a
 // single-line sample locks a rate tightly.
 const NOISY_HUB_RELATION_RATE_CEILING = 0.5;
-const REPEATED_SENTENCE_RATE_CEILING = 0.50; // baseline 0.4095, a named N0 gap — this stops it getting worse
+const REPEATED_SENTENCE_RATE_CEILING = 0.20; // baseline 0.1714, down from 0.4095 once a card stopped naming a slice of a category as its neighbourhood
+// Two cards share an "Around it" only where their neighbourhoods genuinely
+// overlap, and each names its own — the plan's target for this metric, held at
+// the measured zero rather than a margin-relaxed ceiling.
+const AROUND_IT_REPEAT_RATE_CEILING = 0;
 const HEADLINE_PRESENT_RATE_FLOOR = 0.90; // baseline 1.0
 const LINK_PRESENT_RATE_FLOOR = 0.90; // baseline 1.0
 const DATE_PRESENT_RATE_FLOOR = 0.90; // baseline 1.0
@@ -63,9 +67,10 @@ test("noisy-hub-relation rate stays under its ceiling", async () => {
   assert.ok(report.metrics.noisyHubRelationRate.rate <= NOISY_HUB_RELATION_RATE_CEILING);
 });
 
-test("paragraph shape holds its floors: repeated-sentence rate capped, headline, link and date presence floored", async () => {
+test("paragraph shape holds its floors: repeated-sentence and \"Around it\" repeat rates capped, headline, link and date presence floored", async () => {
   const report = await fastBench();
   assert.ok(report.metrics.paragraphShape.repeatedSentenceRate <= REPEATED_SENTENCE_RATE_CEILING);
+  assert.ok(report.metrics.paragraphShape.aroundItRepeatRate <= AROUND_IT_REPEAT_RATE_CEILING);
   assert.ok(report.metrics.paragraphShape.headlinePresentRate >= HEADLINE_PRESENT_RATE_FLOOR);
   assert.ok(report.metrics.paragraphShape.linkPresentRate >= LINK_PRESENT_RATE_FLOOR);
   assert.ok(report.metrics.paragraphShape.datePresentRate >= DATE_PRESENT_RATE_FLOOR);
