@@ -33,79 +33,51 @@ The method is `PLAN_NEWS_FEED_QUALITY.md`: run
 (`node scripts/news-bench/capture-fixtures.mjs`, then
 `node scripts/news-bench/run-live-cycle.mjs`), show every card whole in the
 four-part form, fix the top item below, merge, repeat — never waiting on
-pipelines. Position: iterations 1–8 run. Iteration 8's russia card is the
-sharpest target-shaped case yet: its description carries three claims and we
-extract one, while its background is anatomy (`orifice ⊑ passage`,
-`duct ⊑ passage`) sitting beside the israel/turkey/australia country facts we
-want — items 1 and 3 failing on the same card. Harness note:
-`run-live-cycle.mjs` starts fresh state each run, so the negative cache resets
-and the same misses re-burn lookup slots per run; the deployed worker persists
-state and does not.
+pipelines. Position: iterations 1–10 run. The russia card carries the
+neighbourhood fix live (anatomy gone, twelve geography rows in its place), and
+the extraction widenings that give it a second and third sentence are built and
+awaiting merge. Harness note: `run-live-cycle.mjs` starts fresh state each run,
+so the negative cache resets and the same misses re-burn lookup slots per run;
+the deployed worker persists state and does not.
 
-The work list, ranked by value against the plan's target card. Items 1–5 are all
-in flight as worktree sub-agents; each names its own branch.
+The work list, ranked by value against the plan's target card.
 
-1. [ ] **Extraction widenings, shape by shape** — in flight on
-   `worktree-agent-ac0d4448f66cb44a5`. The named specimens: the Gilman
-   description's sentences two and three ("released on a humanitarian basis,
-   President Trump said" / "family had said he was in dire physical condition"),
-   the "prime | mgx:minister | …" optimistic mint, agentless passives ("is
-   banned from …"), "ecuadorean fishings" pluralization, the "new gun" fragment,
-   and headline-fragment hubs (iteration 8 mints hub `bright` with
-   `bright | mgx:spot-in | colombia as rescuers free quake victim`, the object
-   swallowing the rest of the headline). Expected: OUR PARAGRAPH grows from one
-   sentence toward the target's three. Effort: one Opus agent, closed-set work,
-   taxonomy already exists in `src/services/extract-facts.mjs`.
-2. [~] **The §3.2 re-grounding proof** — CODE COMPLETE, merged as `2079a4b1`,
-   awaiting the full suite at the next push. Provenance blocked it, not the
-   path: enrichment writes definitions under `research:`, folding to source kind
-   `referenceLive`, while the isa-anchor ladder counted only `corpus` and the
-   taught tiers — so `reprocessAfterGrounding` ran and could never change its
-   own answer. Remainder, still open: `CORPUS_ANCHOR_SOURCE_TYPES` and
-   `isCorpusAnchorRow` are now misnamed, and the matching `corpusAnchored` key
-   on `buildIsaTermIndex`'s exported return is pinned by tests, so the rename is
-   a three-name change with test churn behind it.
-3. [~] **Asserted cross-sense neighbourhood drift** — CODE COMPLETE, merged as
-   `723c918a`, awaiting the full suite at the next push. The cause was an
-   entailed row, not an asserted one: `russia ⊑ passage` stood because
-   `topsOf(russia) = [place]`, `topsOf(passage) = [artifact]`, and
-   artifact/place are a declared overlapping pair (a cathedral is both), so the
-   derivation gate could not refuse it and hop 2 came back down the anatomy
-   side. `src/domain/sense-scope.mjs` now flips the burden of proof at
-   selection: a neighbour's tops must meet the anchor's rather than merely fail
-   to be provably disjoint. "Around it: country buys battery" died from
-   selection alone. Remainder, still open: the `bright` card's filler ("dull is
-   the opposite of bright") has a different cause — `topsOf("bright")` is empty,
-   so the bands never place it and a hub-anchored scope is off for that card.
-   Item 1's headline-fragment work may resolve it by making the hub colombia
-   rather than an adjective; check after item 1 lands before doing more here.
-4. [~] **chat.mjs read-time sense screen** — CODE COMPLETE, merged as `b83d058b`,
-   awaiting the full suite at the next push. Four walks were leaking, not one:
-   the 8-hop subtype BFS, the rendered superclass chain, the cax-sco/scm-sco
-   proof chases, and the deep-chain probe that offers `/syllogise`. A strictly
-   two-hop crossing is not screenable by construction — `topsOf` puts a term at
-   its nearest level, so a subject two hops from `body part` reaches `place` and
-   `body part` at the same level and keeps both, which is the deliberate "a term
-   genuinely under two tops keeps both branches" rule. The leak was always the
-   multi-hop walk.
-5. [ ] **Engine speed remainders** — in flight on
+1. [~] **Extraction widenings, shape by shape** — CODE COMPLETE on
+   `worktree-agent-ac0d4448f66cb44a5`, merge pending. Six shapes widened:
+   clause-shaped terms, Title Case headline reading, passives with and without a
+   named actor, comma crossing plus name trimming, reported speech, and the term
+   ledger. Two remainders, both real:
+   - The Gilman card now grounds two near-synonymous rows ("russia frees robert
+     gilman. russia releases robert gilman.") because headline and description
+     state one event with two verbs. Deduplicating synonymous predicates is a
+     vocabulary question, not a shape one.
+   - An unwrapped claim is not attributed to its speaker on the row. That needs
+     a new name in the memory layer's closed findings vocabulary
+     (`src/adapters/memory/shacl.mjs`, `core.mjs`'s byte-pinned vocabulary note,
+     `docs/adapter-contract.md`). The speaker still reaches the enrichment queue,
+     and every row rides its article's provenance.
+2. [ ] **The `bright` card's filler sentence** — "dull is the opposite of bright"
+   survives the sense scope because `topsOf("bright")` is empty, so the bands
+   never place the hub and a hub-anchored scope is off for that card. Item 1
+   re-heads that card on `rescuers`, so check whether this dies on its own once
+   item 1 merges before doing any more here.
+3. [ ] **Engine speed remainders** — in flight on
    `worktree-agent-a8524b7876375a001`. Seed re-assembly on any removal (~2 s
    each; 15 lines of unwired slot-structure scaffolding preserved on branch
    `worktree-agent-add917bc647f82f46`, unmerged), `migrateStoredMemory`
    re-running per memory-handle load, `buildMemoryIndex` rebuilt per write.
    Expected: more articles ground per 60 s press; faster runs.
-6. [ ] **Thin-source cards crowd the feed** — iteration 9 printed nine cards and
-   seven were Hacker News, each reading "hackernews discuss X" with no
-   background. The synthesised summary itself is right and deliberate
-   (`news-sources.mjs` quotes the headline inside a fixed frame so its words
-   can't be re-read as a claim; the comment there explains it), but a source
-   whose items carry no body can never make a target-shaped card, and at seven
-   of nine those cards dominate both the live page and this loop's own
-   measurement. Wanted: admission or ranking that stops a bodyless source
-   crowding out cards with real content — without silently dropping items,
-   which would hide misses rather than fix them. Lands in
-   `src/domain/news-feed.mjs`, so it waits for item 3 to merge.
-7. [ ] **Fact-listing line order tracks arrival order** — the repo invariant says
+4. [ ] **Thin-source cards crowd the feed** — in flight on
+   `worktree-agent-a5b1b24c0282ad707`. Iteration 9 printed nine cards and seven
+   were Hacker News, each reading "hackernews discuss X" with no background. The
+   synthesised summary itself is right and deliberate (`news-sources.mjs` quotes
+   the headline inside a fixed frame so its words can't be re-read as a claim;
+   the comment there explains it), but a source whose items carry no body can
+   never make a target-shaped card, and at seven of nine those cards dominate
+   both the live page and this loop's own measurement. Wanted: admission or
+   ranking that stops a bodyless source crowding out cards with real content —
+   without silently dropping items, which would hide misses rather than fix them.
+5. [ ] **Fact-listing line order tracks arrival order** — the repo invariant says
    any read-time resolver over the fact store is a pure function of the fact
    set, and the listing reader is not yet one in its ordering.
    `rankByBiasThenTrust` is a stable sort, so equal-trust rows keep ingestion
@@ -113,13 +85,16 @@ in flight as worktree sub-agents; each names its own branch.
    X" gives the same fact SET in a different line order. Measured on both sides
    of the sense-screen change, so it predates it. The fix is a
    content-addressed tiebreak on every fact listing, which redraws pinned
-   outputs across the estate — that width is why it is its own item rather than
-   a remainder of item 4.
-7. [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
-   downloads in the operator's terminal; when the loop's evidence says live
-   lookups are too thin (plan §5.5), build the bulk band with row count and
-   DynamoDB write cost printed before any load. Until then: nothing. The
-   12-QID slice band is a pipeline proof only.
+   outputs across the estate — that width is why it is its own item.
+6. [ ] **Wikidata** — the pinned dated dump
+   (`wikidata-20260810-all.json.gz`, 155,457,882,747 bytes) is downloading in
+   the operator's terminal via `bash scripts/resume-wikidata-dump.sh`, which
+   resumes from wherever a break left it — re-run it after any interruption.
+   At 2026-08-13 00:33 BST it stood at 82.7 GB, 53%, holding ~4.1 MB/s with
+   roughly 4.5 hours left. When the loop's evidence says live lookups are too
+   thin (plan §5.5), build the bulk band with row count and DynamoDB write cost
+   printed before any load. Until then: nothing. The 12-QID slice band is a
+   pipeline proof only.
 
 ## Discipline
 
