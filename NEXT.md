@@ -46,8 +46,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   grounded-term proportion, de-dupe, entity preservation, noisy-hub-relation rate,
   paragraph shape, ranked-term noise, size), and a ratcheting floor per landed
   improvement. Phases N0–N5 there. In flight (dispatched 2026-08-12):
-  - N0 bench harness + fixtures + baseline — worktree
-    `.claude/worktrees/agent-a0ca9e417e6cb8e76`
+  - N0 bench harness + fixtures + baseline — merged to local `main` (4 commits
+    through `f279537e`): `npm run bench:news` / `bench:news:fast`, dated fixtures for
+    all five sources, floor-guarded smoke test, baseline
+    `reports/newsbench/2026-08-12-xl.md` (admission 57%, grounded-terms 26%,
+    "Around it" repeat 79%, date presence 0%, ranked noise 30% pre-noise-gate).
+    Product bug it surfaced, unfixed: `itemCap` 30 is GLOBAL across the five
+    sources, not per-source — most fetched items are evicted before ingestion;
+    the bench pins 200 to measure past it. Next lever gets chosen from the
+    post-N1 bench re-run.
   - N1 de-dupe (one card per newsworthy item) — worktree
     `.claude/worktrees/agent-adf57b832d79a72ca`
   - "scientists reports" agreement fix (N4 wart) — merged to local `main`
