@@ -65,15 +65,20 @@ in flight as worktree sub-agents; each names its own branch.
    `isCorpusAnchorRow` are now misnamed, and the matching `corpusAnchored` key
    on `buildIsaTermIndex`'s exported return is pinned by tests, so the rename is
    a three-name change with test churn behind it.
-3. [ ] **Asserted cross-sense neighbourhood drift** — in flight on
-   `worktree-agent-ae8438ab8504d1e3c`. "orifice ⊑ passage" still wanders near
-   the russia card; the disjointness gate covers derivations only, and
-   `subgraphAround`'s hop-bounded BFS has no sense check at all. Its remainder,
-   same cause: neighbourhood-sourced filler sentences in OUR PARAGRAPH ("dull is
-   the opposite of bright", "Around it: country buys battery"). Expected:
-   RELATED FACTS keeps israel/turkey/australia-are-countries, drops the anatomy
-   strays, and the filler sentences starve. Effort: one Opus agent, same-sense
-   discipline applied to neighbourhood selection.
+3. [~] **Asserted cross-sense neighbourhood drift** — CODE COMPLETE, merged as
+   `723c918a`, awaiting the full suite at the next push. The cause was an
+   entailed row, not an asserted one: `russia ⊑ passage` stood because
+   `topsOf(russia) = [place]`, `topsOf(passage) = [artifact]`, and
+   artifact/place are a declared overlapping pair (a cathedral is both), so the
+   derivation gate could not refuse it and hop 2 came back down the anatomy
+   side. `src/domain/sense-scope.mjs` now flips the burden of proof at
+   selection: a neighbour's tops must meet the anchor's rather than merely fail
+   to be provably disjoint. "Around it: country buys battery" died from
+   selection alone. Remainder, still open: the `bright` card's filler ("dull is
+   the opposite of bright") has a different cause — `topsOf("bright")` is empty,
+   so the bands never place it and a hub-anchored scope is off for that card.
+   Item 1's headline-fragment work may resolve it by making the hub colombia
+   rather than an adjective; check after item 1 lands before doing more here.
 4. [~] **chat.mjs read-time sense screen** — CODE COMPLETE, merged as `b83d058b`,
    awaiting the full suite at the next push. Four walks were leaking, not one:
    the 8-hop subtype BFS, the rendered superclass chain, the cax-sco/scm-sco
