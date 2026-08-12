@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ingestText, optimisticReading, optimisticTriples,
+  ingestText, optimisticReading, optimisticTriples, reportedClauseOf,
   readsAsEntityTerm, readsAsIdentifierToken, identifierTermsIn,
 } from "../../src/services/extract-facts.mjs";
 
@@ -217,4 +217,34 @@ test("a determiner keeps a perfect copula's class complement mintable", async ()
     result.optimistic.map(({ subject, predicate, object }) => ({ subject, predicate, object })),
     [{ subject: "kraken", predicate: "rdfs:subClassOf", object: "legend" }],
   );
+});
+
+const groundedTriples = (result) =>
+  [...result.extracted, ...result.optimistic].map(({ subject, predicate, object }) => ({ subject, predicate, object }));
+
+test("an attributed report grounds the claim it carries, never the saying of it", async () => {
+  const leading = await ingestText("Officials said the quake killed more than 100 people.", { optimistic: true });
+  assert.deepEqual(groundedTriples(leading), [{ subject: "quake", predicate: "mgx:kill", object: "person" }]);
+
+  const trailing = await ingestText("Rescuers freed the quake victim, officials said.", { optimistic: true });
+  assert.deepEqual(groundedTriples(trailing), [{ subject: "rescuers", predicate: "mgx:free", object: "quake victim" }]);
+});
+
+test("an attribution verb that changes what the sentence says about the claim is never unwrapped", () => {
+  for (const sentence of [
+    "The ministry denied the quake killed more than 100 people.",
+    "Campaigners alleged the quake killed more than 100 people.",
+    "Experts claimed the region has a complicated history.",
+  ]) {
+    assert.equal(reportedClauseOf(sentence), sentence, `left whole: ${sentence}`);
+  }
+});
+
+test("a speaker the article named still reaches the enrichment queue after the claim is unwrapped", async () => {
+  const result = await ingestText(
+    'Russia released Robert Gilman on "a humanitarian basis," President Trump said.',
+    { optimistic: true },
+  );
+  const terms = [...result.ungroundedCounts.keys()];
+  assert.ok(terms.includes("president trump"), `the speaker still queues: ${terms.join(", ")}`);
 });

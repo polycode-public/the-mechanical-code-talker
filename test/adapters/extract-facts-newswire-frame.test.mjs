@@ -148,6 +148,19 @@ test("a headline never reads its own first word as the event, so a name the band
   );
 });
 
+test("a count phrase in front of what an event touched is read through to the noun", () => {
+  assert.deepEqual(
+    triplesOf("The quake killed more than 100 people."),
+    ["quake mgx:kill person"],
+  );
+  assert.deepEqual(
+    triplesOf("The blast injured at least 30 workers."),
+    ["blast mgx:injure worker"],
+  );
+  // A bare preposition carries no count, so nothing is read through it.
+  assert.deepEqual(triplesOf("The rebels attacked at dawn."), []);
+});
+
 test("the frame adds nothing to prose that named no event", () => {
   for (const sentence of [
     "The quick brown fox jumps over something vague.",

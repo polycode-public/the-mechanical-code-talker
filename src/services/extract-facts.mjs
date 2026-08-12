@@ -207,6 +207,11 @@ const NEWSWIRE_RELATION_VERBS = new Set([
 // chain names its own head, so "restore the sacred glow of fireflies" restores
 // the glow, not the fireflies.
 const OF_COUNT_HEADS = new Set(["hundred", "hundreds", "thousand", "thousands", "million", "millions", "dozen", "dozens", "score", "scores", "handful"]);
+// The count phrases newswire writes in front of what an event touched. Closed
+// by list, and each has to close on the number itself, so a bare preposition
+// ("attacked at dawn") is never mistaken for one.
+const COUNT_PHRASE_RE = /^(?:more than|at least|at most|as many as|up to|fewer than|less than|nearly|almost|about|around|over|roughly)\s+\d[\d,.]*$/i;
+const COUNT_PHRASE_MAX_TOKENS = 4;
 // A verb whose own auxiliary is a be-form heads a passive or a progressive
 // ("was arrested by ICE", "are disappearing"), and there the noun on the
 // subject side is what the event happened TO, not who did it — an active read
@@ -803,6 +808,18 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     }
     return -1;
   };
+  // Newswire writes the count before the thing counted — "killed more than 100
+  // people", "injured at least 30 workers" — and the preposition inside the
+  // count phrase stops an object scan dead. Each lead below is skipped whole,
+  // and only where the number itself closes the phrase, so "attacked at dawn"
+  // (no number, no count) is untouched.
+  const skipCountPhrase = (idx) => {
+    for (let n = COUNT_PHRASE_MAX_TOKENS; n >= 2; n -= 1) {
+      const span = values.slice(idx + 1, idx + 1 + n);
+      if (span.length === n && COUNT_PHRASE_RE.test(span.join(" "))) return idx + n;
+    }
+    return idx;
+  };
   const readNewswireFrame = () => {
     for (let i = 1; i < values.length - 1; i += 1) {
       if (pos[i] !== "VERB") continue;
@@ -841,7 +858,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
         continue;
       }
       const subject = countChainEntity(verbComplexStart(i), -1);
-      const object = countChainEntity(i, +1);
+      const object = countChainEntity(skipCountPhrase(i), +1);
       if (!subject || !object) continue;
       push(subject, predicate, object);
     }
@@ -1058,6 +1075,47 @@ export function clauseCandidates(sentence, { nlp } = {}) {
     out.push(part);
   }
   return out;
+}
+
+// The verbs a report attributes a claim with. Closed and deliberately short:
+// each of these carries the claim through unchanged, so the clause beside one
+// is what the article states. Hedging and reversing verbs stay out — "denied",
+// "alleged", "claimed" and "suggested" each change what the sentence says
+// about the clause, and a frame that unwrapped them would store the opposite of
+// the report.
+const REPORTED_SPEECH_VERB_SRC = "said|says|told|reported|reports|announced|announces|stated|states|confirmed|confirms|added|wrote|writes";
+// "<claim>, President Trump said." — the attribution rides the tail after a
+// comma and closes the sentence. A closing quote mark may sit between them.
+const TRAILING_ATTRIBUTION_RE = new RegExp(
+  `,\\s*["'“”‘’]?\\s*[\\w.'’-]+(?:\\s+[\\w.'’-]+){0,3}\\s+(?:${REPORTED_SPEECH_VERB_SRC})\\s*[.!?]?\\s*$`,
+  "i",
+);
+// "President Trump said (that) <claim>", "Mr. Gilman's family had said <claim>"
+// — the attribution leads and the claim is everything past it.
+const LEADING_ATTRIBUTION_RE = new RegExp(
+  `^\\s*[\\w.'’-]+(?:\\s+[\\w.'’-]+){0,4}\\s+(?:has\\s+|had\\s+|have\\s+)?(?:${REPORTED_SPEECH_VERB_SRC})\\s+(?:that\\s+)?(\\S.*)$`,
+  "i",
+);
+
+/**
+ * The claim a sentence attributes to a speaker, or the sentence unchanged. A
+ * report states most of what it knows this way, and the recognizer reading the
+ * WHOLE sentence reads the attribution as the claim: "Officials said the quake
+ * killed more than 100 people." came back as `officials mgx:say quake killed
+ * more than 100 people`, a whole clause stored as a term. Stripping the
+ * attribution leaves the claim the article is making, which is the thing worth
+ * grounding.
+ *
+ * The speaker is dropped rather than stored beside the claim: a fact row holds
+ * one triple, and every row this module writes already rides its article's own
+ * provenance.
+ */
+export function reportedClauseOf(sentence) {
+  const text = String(sentence ?? "").trim();
+  const trailingStripped = text.replace(TRAILING_ATTRIBUTION_RE, ".");
+  const leading = LEADING_ATTRIBUTION_RE.exec(trailingStripped);
+  const claim = leading ? leading[1].trim() : trailingStripped;
+  return claim.split(/\s+/).length >= 3 ? claim : text;
 }
 
 // A stored term names a thing. These words open a predicate remainder or a new
@@ -1289,6 +1347,10 @@ function canonicalLines(facts, storeRows) {
  * ingestText — the single ingest seam. Grounds `text` into facts and returns a
  * structured result; the CLI, the browser and the tool layer all drive this.
  *
+ * A sentence that attributes its claim to a speaker is handed to the recognizer
+ * as the claim alone (`reportedClauseOf`); the ungrounded-term scan still reads
+ * the sentence as written, so the speaker keeps reaching the enrichment queue.
+ *
  *   text     the raw string to ground.
  *   options:
  *     memoryDir   write grounded facts here (a real .tmct memory dir). Omit for
@@ -1444,8 +1506,12 @@ export async function ingestText(text, {
         sentenceCount += 1;
         lastDecline = "";
         currentSentence = sentence;
-        const cleaned = stripCitationResidue(sentence);
-        cleanedSentences.push(cleaned);
+        const asWritten = stripCitationResidue(sentence);
+        // The ungrounded-term scan reads the sentence AS WRITTEN, so a speaker
+        // the article named still reaches the enrichment queue; only the
+        // recognizer reads the claim on its own.
+        cleanedSentences.push(asWritten);
+        const cleaned = reportedClauseOf(asWritten);
         // The stored term keys this sentence names with an identifier-shaped
         // token, read off the surface before normFactTerm folds the shape away.
         // Null when this run records no findings.
