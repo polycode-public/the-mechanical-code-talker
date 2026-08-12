@@ -728,9 +728,11 @@ const OBJECTS_PER_SENTENCE = 6;
 // wide for one clause to name in full says nothing — applied to senses instead
 // of edges.
 const IDENTITY_MAX_CLASSES = 2;
-// A class this many of the card's own terms already fall under names a
-// category rather than this thing's own kind, so a line ending in it carries
-// no information about the card.
+// A background line's far side, when this many terms in the sub-graph already
+// fall under it, names a category rather than anything about this card:
+// "france is related to place" is true of most of the graph. The hub's own
+// identity clause is exempt — a crowded class is still this thing's own kind,
+// and "france is a country" is the most useful line a card can carry.
 const CATEGORY_FAN_MAX = 3;
 // How many background rows the "what the graph already knew" disclosure names.
 // The paragraph itself shows the first KNOWN_FACT_SENTENCE_CAP groups of these.
