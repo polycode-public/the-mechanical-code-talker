@@ -223,7 +223,7 @@ test("an isa fact from a web source never anchors its terms", async () => {
   );
 });
 
-test("buildIsaTermIndex produces the same taught/corpus-anchored Sets regardless of row order", () => {
+test("buildIsaTermIndex produces the same taught/anchored Sets regardless of row order", () => {
   const facts = [
     { subject: "p", predicate: "rdfs:subClassOf", object: "letter", sourceTypes: ["corpus"] },
     { subject: "dog", predicate: "rdfs:subClassOf", object: "mammal", sourceTypes: ["operator"] },
@@ -232,9 +232,9 @@ test("buildIsaTermIndex produces the same taught/corpus-anchored Sets regardless
   const forward = buildIsaTermIndex(facts);
   const reversed = buildIsaTermIndex([...facts].reverse());
   assert.deepEqual([...forward.taught].sort(), [...reversed.taught].sort());
-  assert.deepEqual([...forward.corpusAnchored].sort(), [...reversed.corpusAnchored].sort());
+  assert.deepEqual([...forward.anchored].sort(), [...reversed.anchored].sort());
   assert.deepEqual([...forward.taught].sort(), ["dog", "mammal"]);
-  assert.deepEqual([...forward.corpusAnchored].sort(), ["letter", "p"]);
+  assert.deepEqual([...forward.anchored].sort(), ["letter", "p"]);
 });
 
 test("the isa term index rebuilds once a write nulls the shared fact-rows cache — never serves a stale answer", async () => {

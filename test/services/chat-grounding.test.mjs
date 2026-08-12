@@ -64,7 +64,7 @@ test("isGroundedTerm never throws when graph is an empty/malformed stand-in", as
   }
 });
 
-test("isGroundedTerm still reports a corpus-only term as ungrounded — the corpus tier is isCorpusAnchoredTerm/isAnchorableTerm's territory, not this function's", async () => {
+test("isGroundedTerm still reports a corpus-only term as ungrounded — the anchor tier is isAnchoredTerm/isAnchorableTerm's territory, not this function's", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-grounding-"));
   try {
     await appendFacts(dir, [{ subject: "corpusonlyletter", predicate: "rdfs:subClassOf", object: "letter", provenance: "corpus:wordnet-xl /r/IsA" }]);
