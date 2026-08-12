@@ -89,8 +89,13 @@ function storedIndividualForm(ind) {
 /** The ord each row key carries. An existing key keeps the ord it already had
  *  and a new one takes the next free number, matching how a store keeps a row's
  *  sort position across an update. Without prior rows the ords are the payload's
- *  own array order. */
-function ordAssigner(priorRows) {
+ *  own array order.
+ *
+ *  `baseOrds` is a read-only layer's key -> ord map, consulted after the prior
+ *  rows so a key both layers hold keeps the row's own ord. It is read in place:
+ *  a caller holding one for the life of its handle hands it over rather than
+ *  projecting a row per key and parsing each back. */
+function ordAssigner(priorRows, baseOrds) {
   const priorOrds = new Map();
   let next = 0;
   for (const row of priorRows || []) {
@@ -100,8 +105,9 @@ function ordAssigner(priorRows) {
     priorOrds.set(row.rowKey, ord);
     if (ord >= next) next = ord + 1;
   }
+  for (const ord of baseOrds?.values() || []) if (Number.isFinite(ord) && ord >= next) next = ord + 1;
   return (rowKey) => {
-    const prior = priorOrds.get(rowKey);
+    const prior = priorOrds.get(rowKey) ?? baseOrds?.get(rowKey);
     if (prior !== undefined) return prior;
     const ord = next;
     next += 1;
@@ -139,14 +145,16 @@ const OVERSIZED_ROW_POSTURES = new Set(["throw", "drop", "keep"]);
  *
  *  `priorRows` are the rows this payload was last projected as; pass them and
  *  every unchanged row comes back byte-identical, so `diffRows` writes only
- *  what actually moved. `onOversizedRow` is "throw" (default), "drop", or
- *  "keep" (rows that never reach the wire — see `admitRow`), and `log` takes
- *  the drop notices. */
-export function payloadToRows(payload, { priorRows = null, onOversizedRow = "throw", log = warnToConsole } = {}) {
+ *  what actually moved. `priorOrds` is the same information for a read-only
+ *  layer that already holds it as a key -> ord map (a sqlite seed's own key
+ *  columns), read under the prior rows. `onOversizedRow` is "throw" (default),
+ *  "drop", or "keep" (rows that never reach the wire — see `admitRow`), and
+ *  `log` takes the drop notices. */
+export function payloadToRows(payload, { priorRows = null, priorOrds = null, onOversizedRow = "throw", log = warnToConsole } = {}) {
   if (!OVERSIZED_ROW_POSTURES.has(onOversizedRow)) {
     throw new TypeError(`onOversizedRow must be "throw", "drop", or "keep", got ${JSON.stringify(onOversizedRow)}`);
   }
-  const ordFor = ordAssigner(priorRows);
+  const ordFor = ordAssigner(priorRows, priorOrds);
   const posture = { onOversizedRow, log };
   const rows = [];
 
@@ -237,6 +245,87 @@ function carryForward(payload, carried) {
   Object.defineProperty(payload, CARRIED_DERIVATIONS, {
     value: carried, writable: true, configurable: true, enumerable: false,
   });
+}
+
+// The ids of the assembled individuals in ROW order, kept beside the assembled
+// array. `sortFactIndividualsById` lifts the Facts out of the slots row order
+// put them in, so the array itself no longer says which slot each Fact came
+// from — and a removal needs exactly that, because dropping a Fact drops one of
+// those slots, not the position the sort moved it to. Non-enumerable and
+// symbol-keyed for the same reason as the derivations above; the `individuals`
+// reference is the guard, so a copy or a rebuilt array is never reconciled
+// against an order that describes a different one.
+const ASSEMBLED_ROW_ORDER = Symbol("tmct.assembledRowOrder");
+
+function carryRowOrder(payload, ids) {
+  Object.defineProperty(payload, ASSEMBLED_ROW_ORDER, {
+    value: { individuals: payload.individuals, ids },
+    writable: true, configurable: true, enumerable: false,
+  });
+}
+
+/** The row order this payload was assembled in, or null when it carries none
+ *  or the one it carries describes a different individuals array. */
+function carriedRowOrder(payload) {
+  const carried = payload?.[ASSEMBLED_ROW_ORDER];
+  if (!carried || carried.individuals !== payload.individuals) return null;
+  return carried;
+}
+
+/** True when `removedIds` can be dropped from this payload's individuals
+ *  incrementally — every id is one the assembly actually holds, and the payload
+ *  still carries the row order that says which slot each one occupies. Asked
+ *  before anything is mutated, so a caller that gets `false` can rebuild from a
+ *  payload nothing has touched. */
+export function canDropAssembledIndividuals(payload, removedIds) {
+  const carried = carriedRowOrder(payload);
+  if (!carried) return false;
+  const held = new Set(carried.ids);
+  for (const id of removedIds) if (!held.has(String(id))) return false;
+  return true;
+}
+
+/** Drop `removedIds` from an assembled payload's individuals, in place, leaving
+ *  the array a rebuild from the remaining rows would have produced. Reads the
+ *  row order back, filters the dropped ids out of it, and refills the array in
+ *  that order — so the fact slots that survive are the ones the surviving ROWS
+ *  own, which is what `sortFactIndividualsById` then sorts into. Returns false
+ *  when the payload has no usable row order, having changed nothing. */
+export function dropAssembledIndividuals(payload, removedIds) {
+  const carried = carriedRowOrder(payload);
+  if (!carried) return false;
+  const dropped = new Set([...removedIds].map((id) => String(id)));
+  const byId = new Map();
+  for (const ind of payload.individuals || []) if (ind?.id) byId.set(String(ind.id), ind);
+  const keptIds = [];
+  const kept = [];
+  for (const id of carried.ids) {
+    if (dropped.has(id)) continue;
+    const ind = byId.get(id);
+    if (!ind) return false;
+    keptIds.push(id);
+    kept.push(ind);
+  }
+  payload.individuals = kept;
+  carried.individuals = kept;
+  carried.ids = keptIds;
+  return true;
+}
+
+/** Forget the row order this payload carries, for a caller that rewrote the ids
+ *  the order names (the load-time legacy-fact-id heal). The next removal
+ *  rebuilds from rows instead of patching. */
+export function dropAssembledRowOrder(payload) {
+  if (payload && payload[ASSEMBLED_ROW_ORDER]) payload[ASSEMBLED_ROW_ORDER] = null;
+}
+
+/** Record one newly-assembled individual's id at the tail of the row order —
+ *  where a row keyed for the first time lands, since `payloadToRows` gives it an
+ *  ord past every ord already assembled. A payload carrying no row order stays
+ *  that way, and the next removal rebuilds instead of patching. */
+export function appendAssembledRowOrder(payload, id) {
+  const carried = carriedRowOrder(payload);
+  if (carried) carried.ids.push(String(id));
 }
 
 /** What this payload can reconcile against, or null when it must derive
@@ -469,8 +558,16 @@ export function rowsToPayload(rows, { meta = null } = {}) {
   individualEntries.sort(byOrdThenRowKey);
   groupEntries.sort(byOrdThenRowKey);
 
-  payload.individuals = individualEntries.map((e) => e.individual).filter(Boolean);
+  const rowOrderIds = [];
+  const individuals = [];
+  for (const entry of individualEntries) {
+    if (!entry.individual) continue;
+    individuals.push(entry.individual);
+    rowOrderIds.push(String(entry.individual.id ?? ""));
+  }
+  payload.individuals = individuals;
   payload.objectProperties = groupEntries.map((e) => e.group).filter(Boolean);
+  carryRowOrder(payload, rowOrderIds);
   return renormalizeAssembledPayload(payload);
 }
 

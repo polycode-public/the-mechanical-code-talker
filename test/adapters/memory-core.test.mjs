@@ -551,6 +551,72 @@ test("a store written under the old 32-bit fact id keeps resolving after the wid
   }
 });
 
+/** A pre-assertion-model Fact: one record per triple, keyed on the bare id with
+ *  no `@source` suffix, its provenance a cross-source string. */
+function legacyPayload([s, p, o], id) {
+  const payload = emptyMemory();
+  payload.individuals.push({
+    id, label: `${s} ${p} ${o}`, class: FACT_CLASS, derived_from: [], mentions: [],
+    attributes: [
+      { prop: "rdf:type", key: "type", value: "rdf:Statement" },
+      { prop: "rdf:subject", key: "subject", value: s },
+      { prop: "rdf:predicate", key: "predicate", value: p },
+      { prop: "rdf:object", key: "object", value: o },
+      { prop: "mgx:factProvenance", key: "provenance", value: "corpus:conceptnet" },
+    ],
+  });
+  return payload;
+}
+
+test("a handle settles the load-time migrations once, and a later load scans nothing", async () => {
+  const written = createInMemoryStore();
+  await appendFacts(written, [
+    { subject: "widget", predicate: "rdfs:subClassOf", object: "gadget", provenance: "corpus:conceptnet" },
+  ]);
+  const store = createInMemoryStore();
+  applySeedPayload(store, written.payload);
+
+  const payload = store.payload;
+  let held = payload.individuals;
+  let scans = 0;
+  Object.defineProperty(payload, "individuals", {
+    configurable: true,
+    get() { scans += 1; return held; },
+    set(next) { held = next; },
+  });
+
+  await loadMemory(store);
+  assert.equal(scans, 1, "the first load walks the ids once to find nothing to migrate");
+  scans = 0;
+  await loadMemory(store);
+  await loadMemory(store);
+  assert.equal(scans, 0, "and later loads do not walk them at all");
+});
+
+test("a seed assigned over a settled handle is migrated, not waved through", async () => {
+  const store = createInMemoryStore();
+  await loadMemory(store); // settles the empty store
+  const triple = ["widget", "rdfs:subClassOf", "gadget"];
+  applySeedPayload(store, legacyPayload(triple, factIdForTriple(...triple)));
+
+  const rows = readFactRows(await loadMemory(store));
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0].sourceIds, ["src:corpus:conceptnet"], "the seed's pre-assertion-model record was re-keyed on load");
+});
+
+test("a handle holding a pre-widening fact migrates it, however many times it is read", async () => {
+  const triple = ["widget", "rdfs:subClassOf", "gadget"];
+  const store = createInMemoryStore();
+  applySeedPayload(store, legacyPayload(triple, legacyFactIdFor(...triple)));
+
+  const currentId = factIdForTriple(...triple);
+  for (const nth of ["first", "second"]) {
+    const rows = readFactRows(await loadMemory(store));
+    assert.equal(rows.length, 1, `${nth} read: one record, never a duplicate`);
+    assert.equal(rows[0].id, currentId, `${nth} read: on the current id`);
+  }
+});
+
 // ---- justification environments: the ' | '-separated multi-derivation shape ----
 
 test("appendFacts round-trips several justification environments, deduped, order preserved", async () => {
