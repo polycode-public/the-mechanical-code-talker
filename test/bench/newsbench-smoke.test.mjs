@@ -19,7 +19,8 @@ const DEDUPE_RATIO_FLOOR = 0.85; // baseline 0.9565
 const SECOND_PASS_NEW_ITEMS_MAX = 0;
 const SECOND_PASS_NEW_CARDS_MAX = 0;
 // Context lines are sparse under the fast lane's empty prior graph (one
-// line, baseline 0 noisy) — the ceiling stays loose rather than pretend a
+// line, baseline 0 noisy under the same-sense test and its closed-list
+// companion reading alike) — the ceiling stays loose rather than pretend a
 // single-line sample locks a rate tightly.
 const NOISY_HUB_RELATION_RATE_CEILING = 0.5;
 const REPEATED_SENTENCE_RATE_CEILING = 0.20; // baseline 0.1714, down from 0.4095 once a card stopped naming a slice of a category as its neighbourhood
