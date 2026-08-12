@@ -117,6 +117,41 @@ export function gerundVerbSurface(verb) {
   return /[^aeiou]e$/i.test(base) && base.length > 2 ? `${base.slice(0, -1)}ing` : `${base}ing`;
 }
 
+/** Irregular plural nouns whose surface carries no "-s" at all, so the suffix
+ *  check in isSubjectPlural below would read them as singular. A small closed
+ *  table, not this file's own pluralizer — it answers one question only
+ *  ("is this head noun plural"), never generates a form. */
+const IRREGULAR_PLURAL_NOUNS = new Set([
+  "people", "men", "women", "children", "mice", "geese", "feet", "teeth", "oxen",
+]);
+
+/** Nouns that end in "s" but stay grammatically SINGULAR ("the news
+ *  spreads", not "the news spread") — the suffix check below would otherwise
+ *  misread them as plural. */
+const SINGULAR_NOUNS_ENDING_S = new Set([
+  "news", "physics", "species", "series", "means", "measles", "mathematics", "politics", "economics",
+]);
+
+/**
+ * Is a stored fact's SUBJECT text grammatically plural, for the one thing
+ * this file needs it for: choosing a minted verb's surface form. Reads the
+ * HEAD noun only — the word right after any leading article, before a
+ * trailing "of ..." phrase, so "the group of scientists" agrees on "group"
+ * ("the group of scientists reports"), not "scientists". From there: the
+ * closed irregular table above, then the regular "-s" suffix, same
+ * naive-morphology trade thirdPersonSingularSurface already takes above. A
+ * subject this can't read (empty, or a plural-invariant noun like "sheep")
+ * defaults to singular — English's own unmarked form, and also this file's
+ * pre-existing default for every caller that passes no subject at all.
+ */
+export function isSubjectPlural(subject) {
+  const head = String(subject || "").trim().replace(/^(?:the|a|an)\s+/i, "").split(/\s+/)[0]?.toLowerCase() ?? "";
+  if (!head) return false;
+  if (IRREGULAR_PLURAL_NOUNS.has(head)) return true;
+  if (SINGULAR_NOUNS_ENDING_S.has(head)) return false;
+  return /[a-z]s$/.test(head) && !/ss$/.test(head);
+}
+
 /**
  * How a stored predicate reads in English: a curated table hit, else the
  * mechanical surface form of a minted predicate, else the predicate's local
@@ -124,11 +159,21 @@ export function gerundVerbSurface(verb) {
  * none). The local-name tail is what keeps a namespace tmct itself mints —
  * `tmct:needs`, stamped by the lexicon — out of a public-facing sentence.
  *
+ * `subject` is optional and used ONLY by the minted "mgx:<lemma>" verb fold
+ * (and the do-support it derives under negation): a plural subject reads the
+ * lemma's bare form ("scientists report"), anything else reads its
+ * third-person-singular fold ("an earthquake strikes"). A CURATED phrase is
+ * returned exactly as written regardless of subject — the table is fixed
+ * English on purpose, no morphology applied to it here or anywhere else.
+ * Callers with no subject to offer (most of chat.mjs's call sites, which
+ * render a bare predicate with no sentence around it) get today's singular
+ * default, unchanged.
+ *
  * Self-contained on purpose: the news page runs this exact function in the
- * browser (phraseRendererSource below stringifies it and its two helpers), so
- * it reaches for nothing outside this module.
+ * browser (phraseRendererSource below stringifies it and everything it calls
+ * into), so it reaches for nothing outside this module.
  */
-export function predicatePhrase(predicate) {
+export function predicatePhrase(predicate, subject) {
   if (FACT_PREDICATE_PHRASES[predicate]) return FACT_PREDICATE_PHRASES[predicate];
   const p = String(predicate ?? "");
   // NEGATIVE polarity renders as its own positive phrase, negated — ONE branch
@@ -144,12 +189,13 @@ export function predicatePhrase(predicate) {
   // for the same reason: a modal, a copula and a plain verb take different
   // negations, and nothing else does.
   if (p.startsWith("mgxneg:")) {
-    const phrase = predicatePhrase(`mgx:${p.slice("mgxneg:".length)}`);
+    const phrase = predicatePhrase(`mgx:${p.slice("mgxneg:".length)}`, subject);
     if (phrase === "can") return "cannot";
     if (phrase === "can be") return "cannot be";
     if (phrase === "is" || phrase.startsWith("is ")) return `is not${phrase.slice(2)}`;
     const [head, ...tail] = phrase.split(" ");
-    return ["does not", baseVerbSurface(head), ...tail].join(" ");
+    const doSupport = isSubjectPlural(subject) ? "do not" : "does not";
+    return [doSupport, baseVerbSurface(head), ...tail].join(" ");
   }
   // a comparative renders as its copula surface: mgx:smaller-than ->
   // "is smaller than" (never a 3sg fold — "smallers" isn't a word)
@@ -164,15 +210,23 @@ export function predicatePhrase(predicate) {
   const same = /^mgx:same-([a-z]+)-as$/i.exec(p);
   if (same) return `has the same ${same[1].toLowerCase()} as`;
   // a folded preposition renders back naturally: mgx:rest-on -> "rests on"
+  // (subject-verb agreement lives here alone: mgx:<lemma> is minted from the
+  // verb's OWN base form, so a plural subject reads it bare — "scientists
+  // report" — and anything else takes the 3sg fold — "an earthquake strikes")
   const minted = /^mgx:([a-z]+)(?:-([a-z]+))?$/i.exec(p);
-  if (minted) return `${thirdPersonSingularSurface(minted[1])}${minted[2] ? ` ${minted[2]}` : ""}`;
+  if (minted) {
+    const verb = isSubjectPlural(subject) ? minted[1] : thirdPersonSingularSurface(minted[1]);
+    return `${verb}${minted[2] ? ` ${minted[2]}` : ""}`;
+  }
   const colon = p.indexOf(":");
   return colon === -1 ? p : p.slice(colon + 1);
 }
 
-/** "a heart has a valve" from one { subject, predicate, object } fact row. */
+/** "a heart has a valve" from one { subject, predicate, object } fact row —
+ *  "scientists report a finding" for a plural row.subject, off the same
+ *  agreement rule in predicatePhrase above. */
 export function factSentence(row) {
-  return `${row.subject} ${predicatePhrase(row.predicate)} ${row.object}`;
+  return `${row.subject} ${predicatePhrase(row.predicate, row.subject)} ${row.object}`;
 }
 
 /**
@@ -224,6 +278,9 @@ export function phraseRendererSource() {
     `const TEACH_PARTICIPLE_SRC = ${JSON.stringify(TEACH_PARTICIPLE_SRC)};`,
     `const thirdPersonSingularSurface = ${thirdPersonSingularSurface};`,
     `const baseVerbSurface = ${baseVerbSurface};`,
+    `const IRREGULAR_PLURAL_NOUNS = new Set(${JSON.stringify([...IRREGULAR_PLURAL_NOUNS])});`,
+    `const SINGULAR_NOUNS_ENDING_S = new Set(${JSON.stringify([...SINGULAR_NOUNS_ENDING_S])});`,
+    `const isSubjectPlural = ${isSubjectPlural};`,
     `const predicatePhrase = ${predicatePhrase};`,
     `const factSentence = ${factSentence};`,
   ].join("\n  ");
