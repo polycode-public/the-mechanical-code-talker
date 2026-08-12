@@ -68,7 +68,10 @@ export {
 // fine as long as neither side READS an imported binding while the other's
 // body is still running — rows.mjs builds its class map on first use, and
 // every use here is inside a function.
-import { payloadToRows, rowsToPayload, diffRows, renormalizeAssembledPayload, renormalizeProseIndex } from "./rows.mjs";
+import {
+  payloadToRows, rowsToPayload, diffRows, renormalizeAssembledPayload, renormalizeProseIndex,
+  canDropAssembledIndividuals, dropAssembledIndividuals, appendAssembledRowOrder, dropAssembledRowOrder,
+} from "./rows.mjs";
 
 // The rollup vocabulary and its tuning constants live with the compaction
 // layer; re-exported here so store consumers keep one import site.
@@ -813,6 +816,7 @@ export function wrapRowBackend(impl, {
     sqliteSeedOverlayRows: sqliteSeedOverlayRows ? [...sqliteSeedOverlayRows] : null,
     sqliteSeedKeyOrds: null,
     baseRows: null,
+    baseRowKeys: null,
     storedRows: null,
     onOversizedRow,
     copyOnRead,
@@ -937,6 +941,19 @@ function dropAssembledRowPayload(handle) {
   handle.cachedPayload = null;
   handle.storedRows = null;
   handle.baseRows = null;
+  handle.baseRowKeys = null;
+}
+
+/** Every key a READ-ONLY layer under this handle holds — the sqlite seed and
+ *  its overlay, or the base payload's own projection. A session row keyed the
+ *  same as one of these SHADOWS it, so deleting that session row brings the
+ *  read-only row back rather than dropping the individual: a rebuild is the
+ *  only honest answer to that delete, and this is what tells the write path so.
+ *  Held for the handle's life once asked for, like the seed's key ords. */
+function readOnlyLayerKeys(handle) {
+  if (handle.sqliteSeedStore) return sqliteSeedKeyOrds(handle);
+  if (!handle.baseRowKeys) handle.baseRowKeys = new Set((handle.baseRows || []).map((row) => row.rowKey));
+  return handle.baseRowKeys;
 }
 
 /** A record with its audit stamp removed. `mgx:updatedAt` moves on every
@@ -998,18 +1015,14 @@ async function persistRowPayload(handle, payload) {
   for (const row of writes) next.set(row.rowKey, row);
   handle.storedRows = [...next.values()];
   const meta = { memory: payload.memory, prefixes: payload.prefixes };
-  if (handle.sqliteSeedStore && !removals.length) {
-    patchAssembledPayload(handle.cachedPayload, meta, writes);
-  } else if (handle.sqliteSeedStore) {
-    handle.cachedPayload = null;
-    handle.cachedPayload = migrateStoredMemory(assembleSqliteSeededPayload(handle, meta));
-  } else {
-    // Dropped before the rebuild, not after it: the payload this replaces is the
-    // largest object the handle holds, and keeping it reachable while the next
-    // one assembles doubles the peak for no reason.
-    handle.cachedPayload = null;
-    handle.cachedPayload = migrateStoredMemory(rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta }));
-  }
+  if (patchAssembledPayload(handle.cachedPayload, meta, writes, removals, readOnlyLayerKeys(handle))) return;
+  // Dropped before the rebuild, not after it: the payload this replaces is the
+  // largest object the handle holds, and keeping it reachable while the next
+  // one assembles doubles the peak for no reason.
+  handle.cachedPayload = null;
+  handle.cachedPayload = migrateStoredMemory(handle.sqliteSeedStore
+    ? assembleSqliteSeededPayload(handle, meta)
+    : rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta }));
 }
 
 /** The payload minus a set of row keys, for a projection that must not spend
@@ -1118,28 +1131,50 @@ function assembleSqliteSeededPayload(handle, meta) {
   );
 }
 
-/** The assembled payload after a write that only added or rewrote rows, brought
- *  up to date without reading the seed again.
+/** The assembled payload after a write, brought up to date without reading the
+ *  seed again. Returns true when it did, false when this write is not patchable
+ *  and the caller has to rebuild — decided before anything is touched, so a
+ *  `false` leaves the payload exactly as it found it.
  *
- *  Why the positions work out: a write only ever carries session rows, and
- *  `payloadToRows` gives a newly-keyed row an ord past every ord already
- *  assembled, so a new individual belongs at the tail and a rewritten one
- *  belongs exactly where it already sits. Both are where a rebuild from the
- *  same rows would put them, and the fact set is unchanged or grown, so the
- *  fact ordering `renormalizeAssembledPayload` reapplies lands the same way.
- *  Everything the payload derives goes through that one function, the same one
- *  `rowsToPayload` itself ends on, so a patched payload and a rebuilt one
- *  cannot drift apart.
+ *  Why the positions work out for an ADDED or REWRITTEN row: a write only ever
+ *  carries session rows, and `payloadToRows` gives a newly-keyed row an ord past
+ *  every ord already assembled, so a new individual belongs at the tail and a
+ *  rewritten one belongs exactly where it already sits.
  *
- *  A REMOVAL is not patchable this way and does not come here: dropping an
- *  individual from the assembled array drops it from wherever the fact ordering
- *  moved it to, which is a different position from the one it occupied in row
- *  order, and every fact after it shifts. `persistRowPayload` rebuilds for those.
- *  Mutates and returns `payload`. */
-function patchAssembledPayload(payload, meta, writes) {
+ *  Why they work out for a REMOVED one: dropping an individual from the
+ *  assembled array would drop it from wherever the fact ordering moved it to,
+ *  which is a different slot from the one it held in row order — so the drop
+ *  goes through the row order the assembly carries (`dropAssembledIndividuals`)
+ *  and the array is refilled in that order first. The slots that survive are
+ *  then the ones the surviving ROWS own, which is what a rebuild would leave.
+ *
+ *  Either way everything the payload derives goes through
+ *  `renormalizeAssembledPayload`, the same function `rowsToPayload` itself ends
+ *  on, so a patched payload and a rebuilt one cannot drift apart.
+ *
+ *  `readOnlyKeys` are the keys a layer under the session holds: deleting a
+ *  session row that SHADOWS one of them uncovers the read-only row rather than
+ *  dropping the individual, which only a rebuild can work out.
+ *
+ *  On `false` the caller replaces this payload with a fresh assembly, so
+ *  whatever this got part-way through applying is discarded with it. */
+function patchAssembledPayload(payload, meta, writes, removals, readOnlyKeys) {
+  const droppedGroups = new Set();
+  const droppedIndividuals = new Set();
+  for (const key of removals) {
+    const rowKey = String(key);
+    if (readOnlyKeys.has(rowKey)) return false;
+    if (rowKey.startsWith(EDGE_GROUP_KEY_PREFIX)) droppedGroups.add(rowKey.slice(EDGE_GROUP_KEY_PREFIX.length));
+    else droppedIndividuals.add(rowKey);
+  }
+  if (droppedIndividuals.size && !canDropAssembledIndividuals(payload, droppedIndividuals)) return false;
+
   payload.memory = meta.memory;
   payload.prefixes = meta.prefixes;
-  if (!writes.length) return renormalizeAssembledPayload(payload);
+  if (!writes.length && !removals.length) {
+    renormalizeAssembledPayload(payload);
+    return true;
+  }
 
   const individualPositions = new Map();
   for (let i = 0; i < payload.individuals.length; i += 1) individualPositions.set(payload.individuals[i]?.id, i);
@@ -1165,9 +1200,16 @@ function patchAssembledPayload(payload, meta, writes) {
     if (at === undefined) {
       individualPositions.set(individual.id, payload.individuals.length);
       payload.individuals.push(individual);
+      appendAssembledRowOrder(payload, individual.id);
     } else payload.individuals[at] = individual;
   }
-  return renormalizeAssembledPayload(payload);
+
+  if (droppedGroups.size) {
+    payload.objectProperties = payload.objectProperties.filter((group) => !droppedGroups.has(group?.prop));
+  }
+  if (droppedIndividuals.size && !dropAssembledIndividuals(payload, droppedIndividuals)) return false;
+  renormalizeAssembledPayload(payload);
+  return true;
 }
 
 /** Every distinct subject and object a seed store's facts carry, off the
@@ -2054,6 +2096,9 @@ function migrateLegacyFactIds(payload) {
     ind.id = currentId;
   }
   if (!remap.size) return payload;
+  // The row order an assembly carries names the ids the rows arrived under, and
+  // this just moved every legacy Fact off one of them.
+  dropAssembledRowOrder(payload);
   const remapId = (id) => remap.get(id) || id;
   for (const group of payload.objectProperties || []) {
     for (const e of group.examples || []) {

@@ -25,6 +25,7 @@ import {
 } from "../../src/adapters/memory/core.mjs";
 import {
   payloadToRows, rowsToPayload, diffRows, payloadMeta,
+  canDropAssembledIndividuals, dropAssembledIndividuals, renormalizeAssembledPayload,
   bookkeepingRow, bookkeepingEntries, BOOKKEEPING_RESEARCH_QUEUE,
 } from "../../src/adapters/memory/rows.mjs";
 import {
@@ -179,6 +180,68 @@ test("Fact individuals come back in content-addressed id order whatever order th
   const ids = factsOf(rowsToPayload(rows)).map((f) => f.id);
   assert.deepEqual(ids, [...ids].sort());
   assert.deepEqual(factsOf(rowsToPayload([...rows].reverse())).map((f) => f.id), ids);
+});
+
+test("dropping an individual from an assembly leaves what a rebuild from the surviving rows leaves", async () => {
+  const dir = await seededStore();
+  const rows = payloadToRows(await loadMemory(dir));
+  const individualRows = rows.filter((r) => r.rowClass !== "edge-group");
+  assert.ok(individualRows.length > 3, "there is more than one slot to drop from");
+
+  for (const dropped of individualRows) {
+    const assembled = rowsToPayload(rows);
+    assert.equal(canDropAssembledIndividuals(assembled, [dropped.rowKey]), true);
+    assert.equal(dropAssembledIndividuals(assembled, [dropped.rowKey]), true);
+    renormalizeAssembledPayload(assembled);
+    const rebuilt = rowsToPayload(rows.filter((r) => r.rowKey !== dropped.rowKey));
+    assert.deepEqual(assembled.individuals, rebuilt.individuals, `after dropping ${dropped.rowKey}`);
+  }
+});
+
+/** A row set whose Fact rows sit either side of a non-Fact one and whose ids
+ *  sort the opposite way round — the shape that tells a row-slot drop and an
+ *  assembled-position drop apart. */
+function interleavedRows() {
+  const row = (ord, id, cls) => ({
+    rowKey: id,
+    rowClass: cls === FACT_CLASS ? "fact" : "source",
+    term: "",
+    json: JSON.stringify({ ord, individual: { id, label: id, class: cls, derived_from: [], mentions: [], attributes: [] } }),
+  });
+  return [row(0, "fact:zzzz@src:a", FACT_CLASS), row(1, "src:a", "Source"), row(2, "fact:aaaa@src:a", FACT_CLASS)];
+}
+
+test("dropping a Fact by its ASSEMBLED position instead of its row slot moves the individuals that follow it", () => {
+  // Why the assembly carries its row order at all: `sortFactIndividualsById`
+  // fills the Fact slots in id order, so the slot a Fact sits in is rarely the
+  // one its row owns. Splicing it out where it sits takes the wrong slot, and
+  // every individual after that slot shifts.
+  const rows = interleavedRows();
+  const dropped = "fact:zzzz@src:a";
+  const rebuilt = rowsToPayload(rows.filter((r) => r.rowKey !== dropped));
+  assert.deepEqual(rebuilt.individuals.map((i) => i.id), ["src:a", "fact:aaaa@src:a"]);
+
+  const spliced = rowsToPayload(rows);
+  spliced.individuals.splice(spliced.individuals.findIndex((i) => i?.id === dropped), 1);
+  renormalizeAssembledPayload(spliced);
+  assert.notDeepEqual(
+    spliced.individuals.map((i) => i.id), rebuilt.individuals.map((i) => i.id),
+    "an assembled-position drop is a different array — which is the whole reason for the row order",
+  );
+
+  const byRowSlot = rowsToPayload(rows);
+  assert.equal(dropAssembledIndividuals(byRowSlot, [dropped]), true);
+  renormalizeAssembledPayload(byRowSlot);
+  assert.deepEqual(byRowSlot.individuals, rebuilt.individuals, "the row-slot drop lands on the rebuild");
+});
+
+test("an assembly with no row order to read back refuses the incremental drop", () => {
+  const assembled = rowsToPayload(interleavedRows());
+  const cloned = { ...assembled, individuals: [...assembled.individuals] };
+  assert.equal(canDropAssembledIndividuals(cloned, ["fact:aaaa@src:a"]), false, "a copy carries no row order");
+  assert.equal(dropAssembledIndividuals(cloned, ["fact:aaaa@src:a"]), false);
+  assert.equal(cloned.individuals.length, 3, "and nothing was dropped");
+  assert.equal(canDropAssembledIndividuals(assembled, ["fact:nobody@src:a"]), false, "nor an id the assembly never held");
 });
 
 // ---- supersession is additive -----------------------------------------------

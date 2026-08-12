@@ -596,6 +596,149 @@ test("a sqlite seed's fact terms come off its own columns, matching the records 
   }
 });
 
+// ---- a patched assembly and a rebuilt one -----------------------------------
+// The cached assembly is patched in place rather than rebuilt from rows, so
+// every write and every removal has to leave the payload a rebuild would have
+// left — down to the ORDER of the individuals array, because a Fact's slot in
+// that array comes from row order while the Fact sitting in it comes from id
+// order, and the two are different sequences. `sameAssembly` asserts both: the
+// whole payload by value, and the individuals array byte for byte on top, since
+// deep equality alone would pass an array whose order had drifted.
+
+function sameAssembly(patched, rebuilt, why) {
+  assert.deepEqual(patched, rebuilt, why);
+  assert.equal(
+    JSON.stringify(patched.individuals), JSON.stringify(rebuilt.individuals),
+    `${why}: the individuals landed in a different order`,
+  );
+}
+
+/** A store whose individuals interleave Facts with non-Facts in row order, so a
+ *  removed Fact's row slot is nowhere near where the id sort put it. */
+async function seedInterleavedStore(dir) {
+  const utterance = (id, text, at) => ({ role: "visitor", text, ts: at, sessionId: id, sessionStarted: at });
+  await appendFacts(dir, [
+    { subject: "dog", predicate: "IsA", object: "mammal", provenance: teach(T1), createdAt: T1 },
+    { subject: "mammal", predicate: "IsA", object: "animal", provenance: teach(T1), createdAt: T1 },
+  ]);
+  await appendUtterances(dir, [utterance(SESSION, "what is a dog", T1)]);
+  await appendFacts(dir, [
+    { subject: "cat", predicate: "IsA", object: "mammal", provenance: teach(T2), createdAt: T2 },
+    { subject: "hall", predicate: "IsA", object: "room", provenance: teach(T2), createdAt: T2 },
+  ]);
+  await appendUtterances(dir, [utterance(OTHER, "and a cat", T2)]);
+  await appendFacts(dir, [
+    { subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T3), createdAt: T3 },
+    { subject: "rex", predicate: "isIn", object: "yard", provenance: teach(T3), createdAt: T3 },
+  ]);
+}
+
+test("a removal over a sqlite seed leaves the patched assembly byte-identical to a rebuilt one", async () => {
+  const seed = await buildSeedSqlite();
+  const impl = createRowMemoryBackend();
+  try {
+    const dir = wrapRowBackendOverSqliteSeed(impl, seed.store);
+    const rebuiltNow = async () => loadMemory(wrapRowBackendOverSqliteSeed(impl, seed.store));
+    await seedInterleavedStore(dir);
+
+    const factSlots = (payload) => payload.individuals.map((i) => (i.class === FACT_CLASS ? "F" : "."));
+    assert.ok(factSlots(await loadMemory(dir)).join("").includes(".F"), "Facts and non-Facts do interleave");
+
+    // One at a time and from the middle: each removal drops a different row slot,
+    // and every Fact after it moves.
+    for (const subject of ["cat", "kim", "mammal"]) {
+      const doomed = readFactRows(await loadMemory(dir)).filter((r) => r.subject === subject).map((r) => r.id);
+      assert.ok(doomed.length, `${subject} was there to remove`);
+      await removeFacts(dir, doomed, { retractedAt: T4 });
+      sameAssembly(await loadMemory(dir), await rebuiltNow(), `after removing ${subject}`);
+    }
+
+    // A write straight after a removal keeps landing where a rebuild puts it.
+    await appendFact(dir, { subject: "yard", predicate: "IsA", object: "place", provenance: teach(T4), createdAt: T4 });
+    sameAssembly(await loadMemory(dir), await rebuiltNow(), "after a write on top of a removal");
+  } finally {
+    await seed.cleanup();
+  }
+});
+
+test("a removal over a sqlite seed patches the assembly instead of streaming the seed again", async () => {
+  const seed = await buildSeedSqlite();
+  const impl = createRowMemoryBackend();
+  try {
+    const dir = wrapRowBackendOverSqliteSeed(impl, seed.store);
+    await seedInterleavedStore(dir);
+
+    // Counted only once the session's own rows are in place, so the cold
+    // assembly's own read of the seed is not what this is measuring.
+    const realDb = seed.store.db;
+    let seedIndividualScans = 0;
+    seed.store.db = {
+      prepare(sql) {
+        if (sql.includes("FROM individuals")) seedIndividualScans += 1;
+        return realDb.prepare(sql);
+      },
+      close: () => realDb.close(),
+    };
+
+    const doomed = readFactRows(await loadMemory(dir)).filter((r) => r.subject === "kim").map((r) => r.id);
+    await removeFacts(dir, doomed, { retractedAt: T4 });
+    assert.equal(seedIndividualScans, 0, "the seed's individuals were never read again");
+    assert.deepEqual(
+      readFactRows(await loadMemory(dir)).map((r) => r.subject).sort(),
+      ["cat", "dog", "hall", "mammal", "rex"],
+      "and the removal did land",
+    );
+  } finally {
+    await seed.cleanup();
+  }
+});
+
+test("a removal over a parsed-payload seed leaves the patched assembly byte-identical to a rebuilt one", async () => {
+  const seed = await buildSeedSqlite();
+  const impl = createRowMemoryBackend();
+  try {
+    const basePayload = seed.payload;
+    const dir = wrapRowBackend(impl, { basePayload });
+    const rebuiltNow = async () => loadMemory(wrapRowBackend(impl, { basePayload }));
+    await seedInterleavedStore(dir);
+
+    for (const subject of ["hall", "rex"]) {
+      const doomed = readFactRows(await loadMemory(dir)).filter((r) => r.subject === subject).map((r) => r.id);
+      await removeFacts(dir, doomed, { retractedAt: T4 });
+      sameAssembly(await loadMemory(dir), await rebuiltNow(), `after removing ${subject}`);
+    }
+  } finally {
+    await seed.cleanup();
+  }
+});
+
+test("deleting a session row that shadows a seed row rebuilds, so the seed's own row comes back", async () => {
+  const seed = await buildSeedSqlite();
+  const impl = createRowMemoryBackend();
+  try {
+    // A resumed session whose store already holds a row keyed like one of the
+    // seed's: the delete takes the session's copy, not the individual.
+    const seedRows = payloadToRows(seed.payload);
+    const shadowed = seedRows.find((row) => row.rowClass === "fact");
+    await impl.putRows([shadowed]);
+
+    const dir = wrapRowBackendOverSqliteSeed(impl, seed.store);
+    await removeFacts(dir, [shadowed.rowKey], { retractedAt: T4 });
+
+    const patched = await loadMemory(dir);
+    sameAssembly(
+      patched, await loadMemory(wrapRowBackendOverSqliteSeed(impl, seed.store)),
+      "the handle says exactly what a fresh handle assembles",
+    );
+    assert.ok(
+      patched.individuals.some((ind) => ind.id === shadowed.rowKey),
+      "and the seed still asserts the fact the session row was hiding",
+    );
+  } finally {
+    await seed.cleanup();
+  }
+});
+
 // ---- two live handles -------------------------------------------------------
 
 test("two handles racing on one store both land, and neither deletes the other's rows", async () => {
