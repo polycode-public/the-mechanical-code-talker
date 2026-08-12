@@ -8,8 +8,8 @@
 // extension bundles produce) and runTurn's own fact-listing answer, proving:
 //   - a higher-bias bundle's fact renders FIRST;
 //   - the lower-bias fact is STILL PRESENT and cited (never dropped/hidden);
-//   - with no [bias] configured, the order is completely unchanged from
-//     today's behaviour (byte-identical default).
+//   - with no [bias] configured, the order falls to the facts' own content and
+//     not to the order they were seeded in.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -50,26 +50,43 @@ test("biasForRow: the MAX bias across a row's sourceIds; empty/absent -> neutral
   assert.equal(biasForRow(null, bias), 1);
 });
 
-test("rankByBiasThenTrust: bias desc, then trust desc, then original relative order — stable, never drops a row", () => {
+test("rankByBiasThenTrust: bias desc, then trust desc, then content — never drops a row", () => {
   const bias = { high: 2, low: 0.5 };
+  const row = (subject, trust, sourceIds) => ({ subject, predicate: "mgx:hasProperty", object: "x", trust, sourceIds });
   const rows = [
-    { id: "a", trust: 0.9, sourceIds: ["src:corpus:low"] },
-    { id: "b", trust: 0.5, sourceIds: ["src:corpus:high"] },
-    { id: "c", trust: 0.99, sourceIds: ["src:corpus:high"] }, // ties bias with b, wins on trust
-    { id: "d", trust: 0.5, sourceIds: [] },                    // neutral bias 1, tied trust with e
-    { id: "e", trust: 0.5, sourceIds: [] },
+    row("a", 0.9, ["src:corpus:low"]),
+    row("b", 0.5, ["src:corpus:high"]),
+    row("c", 0.99, ["src:corpus:high"]), // ties bias with b, wins on trust
+    row("e", 0.5, []),                   // neutral bias 1, tied trust with d
+    row("d", 0.5, []),
   ];
   const ranked = rankByBiasThenTrust(rows, bias);
-  assert.deepEqual(ranked.map((r) => r.id), ["c", "b", "d", "e", "a"]);
+  assert.deepEqual(ranked.map((r) => r.subject), ["c", "b", "d", "e", "a"],
+    "d before e on content, though e arrived first");
   assert.equal(ranked.length, rows.length, "every row comes back out — nothing dropped");
 });
 
-test("rankByBiasThenTrust: empty/absent biasByBundle degrades to pure trust-desc, stable on ties (no reorder of ties)", () => {
+test("rankByBiasThenTrust: equal-trust rows rank by content, whichever order they arrive in", () => {
   const rows = [
-    { id: "a", trust: 0.5 }, { id: "b", trust: 0.9 }, { id: "c", trust: 0.5 }, { id: "d", trust: 0.7 },
+    { subject: "a", predicate: "p", object: "o", trust: 0.5 },
+    { subject: "b", predicate: "p", object: "o", trust: 0.9 },
+    { subject: "c", predicate: "p", object: "o", trust: 0.5 },
+    { subject: "d", predicate: "p", object: "o", trust: 0.7 },
   ];
-  assert.deepEqual(rankByBiasThenTrust(rows).map((r) => r.id), ["b", "d", "a", "c"]);
-  assert.deepEqual(rankByBiasThenTrust(rows, {}).map((r) => r.id), ["b", "d", "a", "c"]);
+  const expected = ["b", "d", "a", "c"];
+  assert.deepEqual(rankByBiasThenTrust(rows).map((r) => r.subject), expected);
+  assert.deepEqual(rankByBiasThenTrust(rows, {}).map((r) => r.subject), expected);
+  assert.deepEqual(rankByBiasThenTrust([...rows].reverse()).map((r) => r.subject), expected,
+    "the reversed arrival order ranks identically");
+});
+
+test("rankByBiasThenTrust: rows tied on trust and content split on provenance, not on arrival", () => {
+  const rows = [
+    { subject: "a", predicate: "p", object: "o", trust: 0.5, provenance: "corpus:two" },
+    { subject: "a", predicate: "p", object: "o", trust: 0.5, provenance: "corpus:one" },
+  ];
+  assert.deepEqual(rankByBiasThenTrust(rows).map((r) => r.provenance), ["corpus:one", "corpus:two"]);
+  assert.deepEqual(rankByBiasThenTrust([...rows].reverse()).map((r) => r.provenance), ["corpus:one", "corpus:two"]);
 });
 
 test("rankByBiasThenTrust: non-array input degrades to []", () => {
@@ -84,16 +101,18 @@ const tmp = () => mkdtemp(join(tmpdir(), "tmct-bias-e2e-"));
 /** Seed one conflicting-fact pair — "widget x" mgx:hasProperty {red|blue} —
  *  from two DIFFERENT provenancePrefixes, the exact shape two active
  *  corpus-kind extension bundles (src/services/extensions.mjs) produce via seedMemory.
- *  "red" (tier2-aws) is seeded FIRST, "blue" (seon) SECOND — so the no-bias
- *  baseline order is deterministic (insertion order, both facts equally
- *  corpus-trusted and thus tied on trust). */
-async function seedConflictingPair(dir) {
+ *  "red" (tier2-aws) is seeded FIRST, "blue" (seon) SECOND, and both are equally
+ *  corpus-trusted — so with no bias configured the pair ties on everything a
+ *  rank reads and falls to its own content. `seedFirst` flips which one arrives
+ *  first, for the reader that has to prove arrival stopped counting. */
+async function seedConflictingPair(dir, seedFirst = "red") {
   const sliceA = join(dir, "aws.jsonl");
   const sliceB = join(dir, "seon.jsonl");
   await writeFile(sliceA, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/red", weight: 1 }) + "\n");
   await writeFile(sliceB, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/blue", weight: 1 }) + "\n");
-  await seedMemory(dir, { slicePath: sliceA, provenancePrefix: "corpus:tier2-aws" });
-  await seedMemory(dir, { slicePath: sliceB, provenancePrefix: "corpus:seon" });
+  const red = () => seedMemory(dir, { slicePath: sliceA, provenancePrefix: "corpus:tier2-aws" });
+  const blue = () => seedMemory(dir, { slicePath: sliceB, provenancePrefix: "corpus:seon" });
+  if (seedFirst === "red") { await red(); await blue(); } else { await blue(); await red(); }
 }
 
 test("end-to-end: a higher-bias bundle's fact renders FIRST; the lower-bias fact is STILL PRESENT and cited", async () => {
@@ -142,15 +161,36 @@ test("end-to-end: with NO [bias] configured, omitting biasByBundle and passing {
     const withoutOpt = await runTurn("what do you know about widget x", { config, memoryDir: dir }); // biasByBundle omitted entirely
     const withEmpty = await runTurn("what do you know about widget x", { config, memoryDir: dir, biasByBundle: {} });
     assert.equal(withoutOpt.answer, withEmpty.answer, "omitting biasByBundle === passing {} explicitly");
-    // both corpus-single-source facts tie on trust, so the neutral-bias order is
-    // the deterministic SEED order — "red" (tier2-aws, seeded first) before
-    // "blue" (seon, seeded second) — exactly what a pre-bias-feature reader saw.
+    // Both corpus-single-source facts tie on trust, so the neutral-bias order
+    // falls to the objects' own spelling: "blue" before "red".
     const redIdx = withoutOpt.answer.indexOf("widget x is red");
     const blueIdx = withoutOpt.answer.indexOf("widget x is blue");
     assert.ok(redIdx >= 0 && blueIdx >= 0);
-    assert.ok(redIdx < blueIdx, `unconfigured bias preserves the pre-existing (seed/trust) order: ${withoutOpt.answer}`);
+    assert.ok(blueIdx < redIdx, `unconfigured bias falls to content order: ${withoutOpt.answer}`);
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("end-to-end: seeding the same pair in the other order renders byte-identical text", async () => {
+  const redFirst = await tmp();
+  const blueFirst = await tmp();
+  try {
+    clearCache();
+    await seedConflictingPair(redFirst, "red");
+    const a = await runTurn("what do you know about widget x", {
+      config: { graphFile: join(redFirst, ".tmct", "graph.json") }, memoryDir: redFirst,
+    });
+    clearCache();
+    await seedConflictingPair(blueFirst, "blue");
+    const b = await runTurn("what do you know about widget x", {
+      config: { graphFile: join(blueFirst, ".tmct", "graph.json") }, memoryDir: blueFirst,
+    });
+    assert.equal(a.answer, b.answer, "the same facts on the same lines, whichever bundle was seeded first");
+  } finally {
+    clearCache();
+    await rm(redFirst, { recursive: true, force: true });
+    await rm(blueFirst, { recursive: true, force: true });
   }
 });

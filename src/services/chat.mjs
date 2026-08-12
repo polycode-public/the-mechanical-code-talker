@@ -37,6 +37,7 @@ import { uuidv7 } from "../adapters/uuid.mjs";
 import * as defaultSource from "../adapters/source.mjs";
 import { loadTemplates, render as renderTemplate } from "../adapters/corpus/templates.mjs";
 import { rankByBiasThenTrust } from "../domain/memory/bias.mjs";
+import { compareFactsByContent } from "../domain/memory/fact-order.mjs";
 import { HAS_A_PREDICATE, foldedFactRows as foldStoreFactRows, loadMemory as loadMemoryStore, normFactPredicate, normFactTerm as normFactTermStatic, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
 import { BACKEND_REJECTED_CODE, BACKEND_UNAVAILABLE_CODE } from "../adapters/memory/row-backend.mjs";
 import {
@@ -1072,13 +1073,6 @@ async function answerMemoryClassQuery(memoryDir, query) {
 // stealing the phrasing before a member count ever runs.
 const TAUGHT_CLASS_COUNT_RE = /^how\s+many\s+([a-z][\w-]*(?:\s+[a-z][\w-]*)*)\s*(.*)$/i;
 
-/** A fact row's deterministic identity for ordering. */
-const orderKeyOf = (f) => `${f.subject} ${f.predicate} ${f.object} ${f.provenance || ""}`;
-const orderKeyCompare = (a, b) => {
-  const ka = orderKeyOf(a); const kb = orderKeyOf(b);
-  return ka < kb ? -1 : ka > kb ? 1 : 0;
-};
-
 /** The store's subclass graph, both directions, built once per turn.
  *  Keyed on the rows array identity so a rebuilt row cache rebuilds the maps. */
 function classGraphFor(rows, cache) {
@@ -1098,7 +1092,7 @@ function taughtMembersUnder(isa, children, variants, biasByBundle) {
   for (const v of variants) for (const d of descendantSet(v, children)) classes.add(d);
   const isDirect = (f) => variants.has(f.object);
   const candidates = isa.filter((f) => isDirect(f) || classes.has(f.object));
-  const keyed = uniqueFacts(candidates).slice().sort(orderKeyCompare);
+  const keyed = uniqueFacts(candidates);
   const direct = rankByBiasThenTrust(keyed.filter(isDirect), biasByBundle);
   const inherited = rankByBiasThenTrust(keyed.filter((f) => !isDirect(f)), biasByBundle);
   return { direct, inherited, members: [...direct, ...inherited], classes };
@@ -1308,11 +1302,7 @@ async function answerCollectionContents(memoryDir, query, biasByBundle = {}, cac
   const containerRaw = restricted ? restricted[2] : unrestricted[1];
   const rows = await factRows(memoryDir, cache);
   const containerVariants = factTermVariants(normFactTerm, containerRaw);
-  // Sorted by content-addressed key before ranking, same discipline as
-  // taughtMembersUnder: rankByBiasThenTrust's own tiebreak is array index, so
-  // an unsorted filter would render two peers' facts in their own arrival
-  // order instead of one shared order.
-  const members = rows.filter((f) => CONTAINMENT_PREDICATES.includes(f.predicate) && containerVariants.has(f.object)).sort(orderKeyCompare);
+  const members = rows.filter((f) => CONTAINMENT_PREDICATES.includes(f.predicate) && containerVariants.has(f.object));
   if (!members.length) return null; // no containment rows at all — answerMembershipList keeps this noun
   const renderMembers = (list, noun) => {
     const ranked = rankByBiasThenTrust(uniqueFacts(list), biasByBundle);
@@ -9918,7 +9908,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       const containerVariants = factTermVariants(normFactTerm, containerRaw.replace(/^(?:an?|the)\s+/i, "").trim());
       const hits = (await factRows(memoryDir, cache)).filter(
         (f) => predicates.includes(f.predicate) && containerVariants.has(f.object),
-      ).sort(orderKeyCompare); // content-addressed order, not arrival order — see answerCollectionContents' own note
+      );
       if (hits.length) {
         const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
         const lines = ranked.map(renderFactLine);
@@ -11337,7 +11327,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     if (!((fallThroughIsa && !/^there\b/i.test(fallThroughIsa[1].trim())) || CONFIRM_TAG_RE.test(q))) return null;
   }
   const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
-  const byTrust = (a, b) => b.trust - a.trust;
+  const byTrust = (a, b) => (b.trust - a.trust) || compareFactsByContent(a, b);
   const renderMany = (hits) => {
     const lines = hits.map(renderFactLine);
     const shown = lines.slice(0, FACT_ANSWER_CAP);

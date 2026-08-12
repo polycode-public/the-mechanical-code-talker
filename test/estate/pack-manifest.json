@@ -413,6 +413,7 @@
   "src/domain/memory/capability.mjs",
   "src/domain/memory/causal-stability.mjs",
   "src/domain/memory/compaction.mjs",
+  "src/domain/memory/fact-order.mjs",
   "src/domain/memory/fold.mjs",
   "src/domain/memory/resolution.mjs",
   "src/domain/memory/retraction.mjs",
