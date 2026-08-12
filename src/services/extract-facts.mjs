@@ -290,9 +290,25 @@ function candidateTermOccurrencesPos(sentences, nlp, lexicon) {
       let hi = i;
       if (pos[i] === "PROPN") while (hi + 1 < values.length && pos[hi + 1] === "PROPN") hi += 1;
       if (hi > i) {
-        const name = trimNameRun(values.slice(i, hi + 1), lexicon).join(" ");
-        counts.set(name, (counts.get(name) || 0) + 1);
-        i = hi;
+        // A Title Case headline lifts its verbs to PROPN too ("Thailand Halts
+        // New Gun Licenses…"), gluing a clause into one run. A token the verb
+        // tables know splits the run: what stands before it is the name.
+        const verbShaped = (w) => {
+          const word = stripSentenceFinalStop(String(w)).toLowerCase();
+          const lemma = word.endsWith("s") ? word.slice(0, -1) : word;
+          return NEWSWIRE_RELATION_VERBS.has(word) || NEWSWIRE_RELATION_VERBS.has(lemma)
+            || Boolean(lookupVerb(lexicon, word));
+        };
+        let cut = -1;
+        for (let k = i + 1; k <= hi; k += 1) if (verbShaped(values[k])) { cut = k; break; }
+        const runEnd = cut === -1 ? hi : cut - 1;
+        if (runEnd > i) {
+          const name = trimNameRun(values.slice(i, runEnd + 1), lexicon).join(" ");
+          counts.set(name, (counts.get(name) || 0) + 1);
+        } else {
+          counts.set(values[i], (counts.get(values[i]) || 0) + 1);
+        }
+        i = cut === -1 ? hi : cut;
         continue;
       }
       counts.set(values[i], (counts.get(values[i]) || 0) + 1);

@@ -65,6 +65,14 @@ console.log("\n== step 3: enrich (live reference lookups) ==");
 const enrich = await enrichTopTerms(ctx, { limit: 8 });
 console.log(JSON.stringify(enrich, null, 1));
 
+{
+  const rows = readFactRows(await loadMemory(ctx.memoryDir));
+  const research = rows.filter((r) => String(r.provenance || "").includes("research:"));
+  console.log("\n== definitions written by enrichment (research rows) ==");
+  for (const r of research) console.log(`   ${r.subject} | ${r.predicate} | ${r.object}  [${String(r.provenance).split(/\s+/)[0]}]`);
+  if (!research.length) console.log("   (none)");
+}
+
 console.log("\n== the enriched feed ==");
 const feed = await buildFeed(ctx);
 const allRows = readFactRows(await loadMemory(ctx.memoryDir));

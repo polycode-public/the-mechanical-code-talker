@@ -139,3 +139,10 @@ test("a version string in a headline leaves nothing behind in the ledger but its
   bumpTerms(ledger, result.ungroundedCounts, "news-item:qwen", "2026-08-12T09:00:00Z");
   assert.deepEqual(rankedTerms(ledger).map((entry) => entry.term), ["qwen3"]);
 });
+
+test("a Title Case headline's verb splits the run: the name stands, the clause never queues", async () => {
+  const counts = ungroundedTermOccurrences(["Thailand Halts New Gun Licenses After Mass Shooting."], []);
+  const terms = [...counts.keys()].map((t) => t.toLowerCase());
+  assert.ok(terms.includes("thailand"), `thailand queues alone: ${terms.join(", ")}`);
+  assert.ok(!terms.some((t) => t.includes("halts")), `no captured term carries the verb: ${terms.join(", ")}`);
+});
