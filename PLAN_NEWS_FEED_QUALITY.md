@@ -81,11 +81,14 @@ baseline run fixes the starting numbers before any lever is pulled.
 One iteration is:
 
 1. **Poll + measure + share, one command**: `node scripts/news-bench/iterate.mjs
-   --label=<iteration>` captures today's fixtures, runs the xl bench, and prints the
-   score-table delta against the newest committed report. The coordinator pastes the
-   results in chat as they land: sample cards quoted verbatim and complete from the
-   articles log (including the worst-scoring one), plus the full score table against
-   the prior iteration.
+   --label=<iteration>` captures today's fixtures, runs the bench, and prints the
+   score-table delta against the newest committed report. The default measurement is
+   press-equivalent and fast: the 5 most recent hacker-news items plus the 5 most
+   recent nyt-world items, single pass, xl seed — about a minute. The full
+   all-sources sweep runs periodically behind its own flag, not every iteration.
+   The coordinator pastes the results in chat as they land: sample cards quoted
+   verbatim and complete from the articles log (including the worst-scoring one),
+   plus the full score table against the prior iteration.
 2. **Design**: the coordinator reads the worst number and names ONE lever —
    closed-set/template changes preferred, per the project's own bias. The proposal
    names the metric it should move and any metric it might hurt.
