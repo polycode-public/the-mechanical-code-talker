@@ -1,0 +1,661 @@
+{
+  "sourceId": "wikimedia-featured",
+  "capturedAt": "2026-08-12T14:02:18.573Z",
+  "originUrl": "https://api.wikimedia.org/feed/v1/wikipedia/en/featured",
+  "licence": "CC BY-SA 4.0",
+  "calls": [
+    {
+      "url": "https://api.wikimedia.org/feed/v1/wikipedia/en/featured/2026/08/12",
+      "status": 200,
+      "kind": "json",
+      "body": {
+        "news": [
+          {
+            "links": [
+              {
+                "title": "2026_Colombia_earthquake",
+                "normalizedtitle": "2026 Colombia earthquake",
+                "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">2026 Colombia earthquake</span></span>",
+                "wikibase_item": "Q140984463",
+                "extract": "On 10 August 2026, a Mw 7.4 earthquake struck the department of Chocó in Colombia, killing at least 254 people, injuring more than 2,500 others, leaving more than 4,100 reported missing and causing extensive damage across the country. The earthquake was felt across much of western and central Colombia and in parts of neighbouring Ecuador and Panama, and caused extensive damage in Cali, Pereira, Quibdó, Manizales and other areas. The Colombian government declared a national emergency and launched search and rescue operations in affected areas.",
+                "content_urls": {
+                  "desktop": {
+                    "page": "https://en.wikipedia.org/wiki/2026_Colombia_earthquake"
+                  }
+                }
+              },
+              {
+                "title": "Chocó_Department",
+                "normalizedtitle": "Chocó Department",
+                "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Chocó Department</span></span>",
+                "wikibase_item": "Q230584",
+                "extract": "Chocó Department is a department of the Pacific region of Colombia known for hosting the largest Afro-Colombian population in the nation, and a large population of Amerindian and mixed African-Amerindian Colombians. It is in the west of the country, and is the only Colombian department to have coastlines on both the Pacific Ocean and the Atlantic Ocean. It contains all of Colombia's border with Panama. Its capital is Quibdó.",
+                "content_urls": {
+                  "desktop": {
+                    "page": "https://en.wikipedia.org/wiki/Choc%C3%B3_Department"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "links": [
+              {
+                "title": "2026_Tour_de_France_Femmes",
+                "normalizedtitle": "2026 Tour de France Femmes",
+                "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">2026 Tour de France Femmes</span></span>",
+                "wikibase_item": "Q134717284",
+                "extract": "The 2026 Tour de France Femmes was the fifth edition of the Tour de France Femmes. The race took place from 1 August to 9 August 2026, part of the 2026 UCI Women's World Tour. The race was organised by the Amaury Sport Organisation (ASO), which also organises the men's Tour de France. From 2026, more ranking points were awarded at the Tour, the Giro d'Italia Women and the Vuelta Femenina – elevating the races in status compared to other races in the UCI Women's World Tour.",
+                "content_urls": {
+                  "desktop": {
+                    "page": "https://en.wikipedia.org/wiki/2026_Tour_de_France_Femmes"
+                  }
+                }
+              },
+              {
+                "title": "Demi_Vollering",
+                "normalizedtitle": "Demi Vollering",
+                "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Demi Vollering</span></span>",
+                "wikibase_item": "Q54436538",
+                "extract": "Adriana Geertruida \"Demi\" Vollering is a Dutch professional racing cyclist who rides for UCI Women's WorldTeam FDJ United–Suez. Considered one of the greatest riders of her generation, she has achieved major successes in both one-day classics and stage races.",
+                "content_urls": {
+                  "desktop": {
+                    "page": "https://en.wikipedia.org/wiki/Demi_Vollering"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "links": [
+              {
+                "title": "2026_Nonthaburi_shootings",
+                "normalizedtitle": "2026 Nonthaburi shootings",
+                "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">2026 Nonthaburi shootings</span></span>",
+                "wikibase_item": "Q140929444",
+                "extract": "On 7 August 2026, a school shooting occurred at Debsirin Nonthaburi School in Bang Kruai, Nonthaburi, Thailand. Patchata Yimruang, a 14-year-old student, killed six people and injured at least twenty-three before he committed suicide. Patchata had also shot and killed his two grandparents in Bang Bua Thong prior to the shooting.",
+                "content_urls": {
+                  "desktop": {
+                    "page": "https://en.wikipedia.org/wiki/2026_Nonthaburi_shootings"
+                  }
+                }
+              },
+              {
+                "title": "Nonthaburi_province",
+                "normalizedtitle": "Nonthaburi province",
+                "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Nonthaburi province</span></span>",
+                "wikibase_item": "Q242932",
+                "extract": "Nonthaburi is one of the central provinces (changwat) of Thailand, established by the Act Establishing Changwat Samut Prakan, Changwat Nonthaburi, Changwat Samut Sakhon and Changwat Nakhon Nayok, Buddhist Era 2489 (1946), which came into force on 9 May 1946 (Thursday).",
+                "content_urls": {
+                  "desktop": {
+                    "page": "https://en.wikipedia.org/wiki/Nonthaburi_province"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "links": [
+              {
+                "title": "Leveraged_buyout_of_Electronic_Arts",
+                "normalizedtitle": "Leveraged buyout of Electronic Arts",
+                "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Leveraged buyout of Electronic Arts</span></span>",
+                "wikibase_item": "Q136933067",
+                "extract": "On September 29, 2025, a consortium of investors comprising the Public Investment Fund (PIF) of Saudi Arabia, the private equity firm Silver Lake, and the investment firm Affinity Partners announced a leveraged buyout of the American video game company Electronic Arts (EA). The deal, valued at US$55 billion, was completed on August 4, 2026, following regulatory approvals.",
+                "content_urls": {
+                  "desktop": {
+                    "page": "https://en.wikipedia.org/wiki/Leveraged_buyout_of_Electronic_Arts"
+                  }
+                }
+              },
+              {
+                "title": "Public_Investment_Fund",
+                "normalizedtitle": "Public Investment Fund",
+                "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Public Investment Fund</span></span>",
+                "wikibase_item": "Q12220298",
+                "extract": "The Public Investment Fund is the sovereign wealth fund of Saudi Arabia. It is among the largest sovereign wealth funds in the world with total estimated assets of US$900 billion. It was created in 1971 for the purpose of investing funds on behalf of the government of Saudi Arabia. The wealth fund has Crown Prince Mohammed bin Salman, Saudi Arabia's de facto ruler since 2015, as its chairman.",
+                "content_urls": {
+                  "desktop": {
+                    "page": "https://en.wikipedia.org/wiki/Public_Investment_Fund"
+                  }
+                }
+              },
+              {
+                "title": "Electronic_Arts",
+                "normalizedtitle": "Electronic Arts",
+                "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Electronic Arts</span></span>",
+                "wikibase_item": "Q173941",
+                "extract": "Electronic Arts Inc. (EA) is an American video game company headquartered in Redwood City, California. Founded in May 1982 by former Apple employee Trip Hawkins, the company was a pioneer of the early home computer game industry and promoted the designers and programmers responsible for its games as \"software artists\". EA published numerous games and some productivity software for personal computers, all of which were developed by external individuals or groups until 1987's Skate or Die! The company shifted toward internal game studios, often through acquisitions, such as Distinctive Software becoming EA Canada in 1991.",
+                "content_urls": {
+                  "desktop": {
+                    "page": "https://en.wikipedia.org/wiki/Electronic_Arts"
+                  }
+                }
+              },
+              {
+                "title": "Leveraged_buyout",
+                "normalizedtitle": "Leveraged buyout",
+                "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Leveraged buyout</span></span>",
+                "wikibase_item": "Q1058381",
+                "extract": "A leveraged buyout (LBO) is the acquisition of a company using a significant proportion of borrowed money (leverage) to fund the acquisition with the remainder of the purchase price funded with private equity. The assets of the acquired company are often used as collateral for the financing, along with any equity contributed by the acquiror.",
+                "content_urls": {
+                  "desktop": {
+                    "page": "https://en.wikipedia.org/wiki/Leveraged_buyout"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "mostread": {
+          "articles": [
+            {
+              "title": "Spider-Man:_Brand_New_Day",
+              "normalizedtitle": "Spider-Man: Brand New Day",
+              "displaytitle": "<i>Spider-Man: Brand New Day</i>",
+              "wikibase_item": "Q113244935",
+              "extract": "Spider-Man: Brand New Day is a 2026 American superhero film based on the Marvel Comics character Spider-Man. Produced by Columbia Pictures, Marvel Studios, and Pascal Pictures, and distributed by Sony Pictures Releasing, it is the 38th film in the Marvel Cinematic Universe (MCU) and the fourth film in the MCU Spider-Man film series following Spider-Man: No Way Home (2021). The film was directed by Destin Daniel Cretton, written by Chris McKenna and Erik Sommers, and stars Tom Holland as Peter Parker / Spider-Man alongside Zendaya, Sadie Sink, Jacob Batalon, Jon Bernthal, Florence Pugh, Tramell Tillman, Marisa Tomei, and Mark Ruffalo. In the film, Parker is on his own and dedicated to protecting New York City as the hero Spider-Man. His personal struggles and overworking cause his superpowers to evolve while he faces a new telepathic threat.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Spider-Man%3A_Brand_New_Day"
+                }
+              }
+            },
+            {
+              "title": "Lucy_Davis",
+              "normalizedtitle": "Lucy Davis",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Lucy Davis</span></span>",
+              "wikibase_item": "Q436620",
+              "extract": "Lucy Clare Davis is an English actress and comedian known for playing Dawn Tinsley in the BBC mockumentary television sitcom The Office (2001–2003), Hilda Spellman in the Netflix supernatural horror television series Chilling Adventures of Sabrina (2018–2020), Dianne in the zombie comedy film Shaun of the Dead (2004), and Etta Candy in the superhero film Wonder Woman (2017). She played Eva in Disney Channel's comedy television series The Villains of Valley View (2022–2023).",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Lucy_Davis"
+                }
+              }
+            },
+            {
+              "title": "The_Odyssey_(2026_film)",
+              "normalizedtitle": "The Odyssey (2026 film)",
+              "displaytitle": "<i>The Odyssey</i> (2026 film)",
+              "wikibase_item": "Q131547207",
+              "extract": "The Odyssey is a 2026 epic action fantasy film written and directed by Christopher Nolan, who produced it with his wife Emma Thomas. An adaptation of Homer's ancient Greek epic poem the Odyssey, it stars an ensemble cast including Matt Damon, Tom Holland, Anne Hathaway, Robert Pattinson, Lupita Nyong'o, Zendaya, and Charlize Theron. In the film, Odysseus (Damon), the Greek king of Ithaca, undergoes a long and perilous journey home after the Trojan War and encounters mythical beings as he attempts to reunite with his wife Penelope (Hathaway).",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/The_Odyssey_(2026_film)"
+                }
+              }
+            },
+            {
+              "title": "The_Last_House",
+              "normalizedtitle": "The Last House",
+              "displaytitle": "<i>The Last House</i>",
+              "wikibase_item": "Q129165193",
+              "extract": "The Last House is a 2026 American science fiction thriller film directed by Louis Leterrier and written by Matthew Robinson. It stars Greta Lee and Wagner Moura. The film follows a family that finds themselves inexplicably sealed in their home, with the whole world being affected by a mysterious disaster, forcing them to learn to survive. The film was released on Netflix on August 7, 2026.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/The_Last_House"
+                }
+              }
+            },
+            {
+              "title": "Deaths_in_2026",
+              "normalizedtitle": "Deaths in 2026",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Deaths in 2026</span></span>",
+              "wikibase_item": "Q134185145",
+              "extract": "\n\n\nThe following notable deaths occurred in 2026. Names are reported under the date of death, in alphabetical order. A typical entry reports information in the following sequence:Name, age, country of citizenship at birth, subsequent nationality, what subject was noted for, cause of death, and a reference.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Deaths_in_2026"
+                }
+              }
+            },
+            {
+              "title": "Neatsville,_Kentucky",
+              "normalizedtitle": "Neatsville, Kentucky",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Neatsville, Kentucky</span></span>",
+              "wikibase_item": "Q6984524",
+              "extract": "Neatsville is an unincorporated community in Adair County, in the U.S. state of Kentucky. It is located at the junction of Kentucky Route 206 and Kentucky Route 76. Its elevation is 705 feet (215 m). For unknown reasons, the town's name was spelled as Neetsville from 1876 until 1886, when the town's post office closed. In its early history from around the 1810s to 1900, Neatsville progressively grew to become a well-established, incorporated town. It has been relocated twice through the years, once due to flooding c. 1900 – c. 1902, which decimated the town, and once in the 1960s when the Green River was impounded to make way for the Green River Reservoir State Park.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Neatsville%2C_Kentucky"
+                }
+              }
+            },
+            {
+              "title": "Abdul_El-Sayed",
+              "normalizedtitle": "Abdul El-Sayed",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Abdul El-Sayed</span></span>",
+              "wikibase_item": "Q25752879",
+              "extract": "Abdulrahman Mohamed El-Sayed is an American politician and epidemiologist who is the Democratic nominee in the 2026 United States Senate election in Michigan. From 2023 to 2025, he was the director of the Department of Health, Human, and Veterans Services of Wayne County.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Abdul_El-Sayed"
+                }
+              }
+            },
+            {
+              "title": ".xyz",
+              "normalizedtitle": ".xyz",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">.xyz</span></span>",
+              "wikibase_item": "Q16049593",
+              "extract": ".xyz is a top-level domain name that was proposed in ICANN's new generic top-level domain (gTLD) Program for consisting of the last three letters of the Latin-script alphabet. XYZ.com and CentralNic are the registries for the domain, which was created by entrepreneur Daniel Negari. It became available to the general public on June 2, 2014, thereafter becoming widely used by tech startups, creators, and Web3 projects.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/.xyz"
+                }
+              }
+            },
+            {
+              "title": "Anne_Hathaway",
+              "normalizedtitle": "Anne Hathaway",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Anne Hathaway</span></span>",
+              "wikibase_item": "Q36301",
+              "extract": "Anne Jacqueline Hathaway is an American actress. Her accolades include an Academy Award, a British Academy Film Award, a Golden Globe Award, and a Primetime Emmy Award. Her films have grossed over $6.8 billion worldwide. She was among the world's highest-paid actresses in 2015.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Anne_Hathaway"
+                }
+              }
+            },
+            {
+              "title": "DC_(film)",
+              "normalizedtitle": "DC (film)",
+              "displaytitle": "<i>DC</i> (film)",
+              "wikibase_item": "Q140836374",
+              "extract": "DC is a 2026 Indian Tamil-language romantic action thriller film directed by Arun Matheswaran and produced by Kalanithi Maran's Sun Pictures. The film stars Lokesh Kanagaraj, Wamiqa Gabbi and Sanjana Krishnamoorthy. It marks Lokesh's debut as a lead actor, and is loosely adapted from Sarat Chandra Chattopadhyay's novel Devdas (1917). DC follows Das, an outlaw and Chandra, a brutalised sex worker waging a violent war of revenge against corrupt police officers following the death of Parvathy, a bar singer.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/DC_(film)"
+                }
+              }
+            },
+            {
+              "title": "Jasper_Carrott",
+              "normalizedtitle": "Jasper Carrott",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Jasper Carrott</span></span>",
+              "wikibase_item": "Q2597366",
+              "extract": "Robert Norman Davis, known by his stage name, Jasper Carrott, is an English comedian, writer, actor, singer and television presenter. His credits include An Audience with Jasper Carrott (1978), The Secret Policeman's Other Ball (1982), Carrott's Lib (1982–1983), Jane and the Lost City (1987), Carrott's Commercial Breakdown (1989–1996), Canned Carrott (1990–1995), The Detectives (1993–1997), All About Me (2002–2004), and Golden Balls (2007–2009).",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Jasper_Carrott"
+                }
+              }
+            },
+            {
+              "title": "House_of_the_Dragon",
+              "normalizedtitle": "House of the Dragon",
+              "displaytitle": "<i>House of the Dragon</i>",
+              "wikibase_item": "Q72930269",
+              "extract": "House of the Dragon is an American fantasy drama television series created by George R. R. Martin and Ryan Condal for HBO. A prequel to Game of Thrones (2011–2019), it is the second television series in Martin's A Song of Ice and Fire franchise. Based on parts of Martin's 2018 book Fire & Blood, the series begins about 100 years after the Seven Kingdoms are united by the Targaryen conquest, nearly 200 years before the events of Game of Thrones, and 172 years before the birth of Daenerys Targaryen. Featuring an ensemble cast, the show portrays the events leading up to the decline of House Targaryen, a devastating war of succession known as the \"Dance of the Dragons\".",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/House_of_the_Dragon"
+                }
+              }
+            },
+            {
+              "title": "Zendaya",
+              "normalizedtitle": "Zendaya",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Zendaya</span></span>",
+              "wikibase_item": "Q189489",
+              "extract": "Zendaya Maree Stoermer Coleman, known mononymously as Zendaya, is an American actress and singer-songwriter. Her accolades include two Primetime Emmy Awards and a Golden Globe. In 2022, Time named her one of the 100 most influential people in the world.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Zendaya"
+                }
+              }
+            },
+            {
+              "title": "Verity_(novel)",
+              "normalizedtitle": "Verity (novel)",
+              "displaytitle": "<i>Verity</i> (novel)",
+              "wikibase_item": "Q120790558",
+              "extract": "Verity is a 2018 psychological romantic thriller novel by American author Colleen Hoover. The narrative follows Lowen Ashleigh, a writer who is hired to complete a bestselling book series after its original author, Verity Crawford, is left unable to continue due to an accident. While staying at the Crawford family home, Lowen discovers an unfinished manuscript that reveals unsettling details about Verity's past.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Verity_(novel)"
+                }
+              }
+            },
+            {
+              "title": "Tom_Holland",
+              "normalizedtitle": "Tom Holland",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Tom Holland</span></span>",
+              "wikibase_item": "Q2023710",
+              "extract": "Thomas Stanley Holland is a British actor known for his work in a diverse range of genres. His accolades include a BAFTA Award as well as two Critics' Choice Awards nominations. Holland's films as a leading actor have grossed over $13.1 billion worldwide, making him one of the highest-grossing actors of all time. He was featured on the Forbes 30 Under 30 Europe list of 2019.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Tom_Holland"
+                }
+              }
+            },
+            {
+              "title": "Solar_eclipse_of_August_12,_2026",
+              "normalizedtitle": "Solar eclipse of August 12, 2026",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Solar eclipse of August 12, 2026</span></span>",
+              "wikibase_item": "Q2464643",
+              "extract": "A total solar eclipse will occur at the Moon's descending node of orbit on Wednesday, August 12, 2026, with a magnitude of 1.0386. A solar eclipse occurs when the Moon passes between the Earth and the Sun, and totally or partly obscures the view of the Sun for a viewer on Earth. A total solar eclipse occurs when the Moon's apparent diameter is larger than the Sun's, blocking all direct sunlight. Totality occurs in a narrow path across Earth's surface, with the partial solar eclipse visible over a surrounding region thousands of kilometres wide. Because the eclipse will occur about 2.2 days after perigee, the Moon's apparent diameter will be larger.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Solar_eclipse_of_August_12%2C_2026"
+                }
+              }
+            },
+            {
+              "title": "House_of_the_Dragon_season_3",
+              "normalizedtitle": "House of the Dragon season 3",
+              "displaytitle": "<i>House of the Dragon</i> season 3",
+              "wikibase_item": "Q126915768",
+              "extract": "The third season of the American fantasy drama television series House of the Dragon premiered on HBO on June 21, 2026, in the United States and concluded on August 9, 2026. It consists of eight episodes, each of approximately one hour. The season covers the events of the book Fire & Blood, a prequel novel in the A Song of Ice and Fire series by George R. R. Martin. The season was ordered on June 13, 2024, three days before the premiere of the second season. Ryan Condal serves as the sole showrunner for the season. The third season was filmed from March to October 2025.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/House_of_the_Dragon_season_3"
+                }
+              }
+            },
+            {
+              "title": "Francesca_Hong",
+              "normalizedtitle": "Francesca Hong",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Francesca Hong</span></span>",
+              "wikibase_item": "Q102181078",
+              "extract": "Francesca Hong is an American politician, former chef, and business owner who has represented Wisconsin's 76th Assembly district in the Wisconsin State Assembly since 2021. She is a member of the Democratic Party and the Democratic Socialists of America. Hong's district includes the downtown and east side of the state capital, Madison, as well as Maple Bluff. Hong was a candidate in the Democratic primary for governor of Wisconsin in the 2026 election and was endorsed by Wisconsin-based chapters of the Democratic Socialists of America, eventually losing to David Crowley. Hong has been described by media as on the far left of the political spectrum.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Francesca_Hong"
+                }
+              }
+            },
+            {
+              "title": "Watson_Brake",
+              "normalizedtitle": "Watson Brake",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Watson Brake</span></span>",
+              "wikibase_item": "Q2552689",
+              "extract": "Watson Brake is an archaeological site in present-day Ouachita Parish, Louisiana, from the Archaic period. Dated to about 5400 years ago, Watson Brake is considered the oldest earthwork mound complex in North America. It is older than the Ancient Egyptian pyramids or Britain’s Stonehenge. Its discovery and dating in a paper published in 1997 changed the ideas of American archaeologists about ancient cultures in the Southeastern United States and their ability to manage large, complex projects over centuries. The archeologists revised their date of the oldest earthwork construction by nearly 2000 years, as well as having to recognize that it was developed over centuries by a hunter-gatherer society, rather than by what was known to be more common of other, later mound sites: a more sedentary society dependent on maize cultivation and with a hierarchical, centralized polity.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Watson_Brake"
+                }
+              }
+            },
+            {
+              "title": "List_of_highest-grossing_films",
+              "normalizedtitle": "List of highest-grossing films",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">List of highest-grossing films</span></span>",
+              "wikibase_item": "Q392108",
+              "extract": "Films generate income from several revenue streams, including theatrical exhibition, home video, television broadcast rights, and merchandising. However, theatrical box-office earnings are the primary metric for trade publications in assessing the success of a film, mostly because of the availability of the data compared to sales figures for home video and broadcast rights, but also because of historical practice. Included on the list are charts of the top box-office earners, a chart of high-grossing films by calendar year, a timeline showing the transition of the highest-grossing film record, and a chart of the highest-grossing film franchises and series. All charts are ranked by international theatrical box-office performance where possible, excluding income derived from home video, broadcasting rights, and merchandise.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/List_of_highest-grossing_films"
+                }
+              }
+            },
+            {
+              "title": "DiJonai_Carrington",
+              "normalizedtitle": "DiJonai Carrington",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">DiJonai Carrington</span></span>",
+              "wikibase_item": "Q106873495",
+              "extract": "DiJonai Victoria Carrington is an American professional basketball player for the Chicago Sky of the Women's National Basketball Association (WNBA). She played college basketball for Stanford and Baylor before being drafted 20th overall by the Connecticut Sun in the 2021 WNBA draft.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/DiJonai_Carrington"
+                }
+              }
+            },
+            {
+              "title": "Boeing_C-32",
+              "normalizedtitle": "Boeing C-32",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Boeing C-32</span></span>",
+              "wikibase_item": "Q2908500",
+              "extract": "The Boeing C-32 is the United States Air Force designation for variants of the Boeing 757 in military service. Two variants exist, filling different parts of the military passenger transport role. The C-32A serves the Special Air Mission, providing executive transport and broad communications capabilities to senior political officials, while the C-32B Gatekeeper provides clandestine airlift to special operations and global emergency response efforts, a role known as \"covered air.\"",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Boeing_C-32"
+                }
+              }
+            },
+            {
+              "title": "Owain_Yeoman",
+              "normalizedtitle": "Owain Yeoman",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Owain Yeoman</span></span>",
+              "wikibase_item": "Q355049",
+              "extract": "Owain Sebastian Yeoman is a Welsh actor, best known for playing CBI Agent Wayne Rigsby in the CBS series The Mentalist. His additional credits include The Nine, Kitchen Confidential, Turn, Generation Kill, and Emergence.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Owain_Yeoman"
+                }
+              }
+            },
+            {
+              "title": "Bashar_al-Assad",
+              "normalizedtitle": "Bashar al-Assad",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Bashar al-Assad</span></span>",
+              "wikibase_item": "Q44329",
+              "extract": "Bashar Hafez al-Assad is a former Syrian politician, medical doctor, and military officer who served as the president of Syria from 2000 until his overthrow in 2024 after the Syrian civil war. As president, Assad was commander-in-chief of the Syrian Arab Armed Forces and secretary-general of the Central Command of the Arab Socialist Ba'ath Party. He is the son of Hafez al-Assad, who ruled Syria from 1970 to 2000.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Bashar_al-Assad"
+                }
+              }
+            },
+            {
+              "title": "The_End_of_Oak_Street",
+              "normalizedtitle": "The End of Oak Street",
+              "displaytitle": "<i>The End of Oak Street</i>",
+              "wikibase_item": "Q124804916",
+              "extract": "The End of Oak Street is a 2026 American science fiction survival film written, co-produced, and directed by David Robert Mitchell. It stars Anne Hathaway, Ewan McGregor, Maisy Stella and Christian Convery as a family who begins to notice unusual events in their neighborhood that involve the appearance of prehistoric creatures.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/The_End_of_Oak_Street"
+                }
+              }
+            },
+            {
+              "title": "List_of_Marvel_Cinematic_Universe_films",
+              "normalizedtitle": "List of Marvel Cinematic Universe films",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">List of Marvel Cinematic Universe films</span></span>",
+              "wikibase_item": "Q16148930",
+              "extract": "The Marvel Cinematic Universe (MCU) centers on a series of American superhero films produced by Marvel Studios based on characters that appear in publications by Marvel Comics. The MCU is the shared universe in which all of the films are set. The films have been in production since 2007, and in that time, Marvel Studios has produced and released 38 films, with at least nine more in various stages of development. It is the highest-grossing film franchise of all time, having grossed over $34.1 billion at the global box office. This includes Avengers: Endgame, which became the highest-grossing film of all time at the time of its release.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/List_of_Marvel_Cinematic_Universe_films"
+                }
+              }
+            },
+            {
+              "title": "2026_Colombia_earthquake",
+              "normalizedtitle": "2026 Colombia earthquake",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">2026 Colombia earthquake</span></span>",
+              "wikibase_item": "Q140984463",
+              "extract": "On 10 August 2026, a Mw 7.4 earthquake struck the department of Chocó in Colombia, killing at least 254 people, injuring more than 2,500 others, leaving more than 4,100 reported missing and causing extensive damage across the country. The earthquake was felt across much of western and central Colombia and in parts of neighbouring Ecuador and Panama, and caused extensive damage in Cali, Pereira, Quibdó, Manizales and other areas. The Colombian government declared a national emergency and launched search and rescue operations in affected areas.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/2026_Colombia_earthquake"
+                }
+              }
+            },
+            {
+              "title": "2026_in_film",
+              "normalizedtitle": "2026 in film",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">2026 in film</span></span>",
+              "wikibase_item": "Q124350188",
+              "extract": "2026 in film is an overview of events in the film industry scheduled to occur in 2026. Best Picture Academy Award-winners All Quiet on the Western Front and Cimarron entered the public domain this year.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/2026_in_film"
+                }
+              }
+            },
+            {
+              "title": "Sterling_Point",
+              "normalizedtitle": "Sterling Point",
+              "displaytitle": "<i>Sterling Point</i>",
+              "wikibase_item": "Q137917795",
+              "extract": "Sterling Point is an American drama television series created by Megan Park. The series premiered on Amazon Prime Video on August 5, 2026.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Sterling_Point"
+                }
+              }
+            },
+            {
+              "title": "Obsession_(2025_film)",
+              "normalizedtitle": "Obsession (2025 film)",
+              "displaytitle": "<i>Obsession</i> (2025 film)",
+              "wikibase_item": "Q136163067",
+              "extract": "Obsession is a 2025 American supernatural horror film written, directed, and edited by Curry Barker. The film follows Bear, a music store employee who buys a supernatural toy that grants his wish for his friend Nikki to fall in love with him, which makes her become obsessed. Cooper Tomlinson, Megan Lawless, and Andy Richter appear in supporting roles.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Obsession_(2025_film)"
+                }
+              }
+            },
+            {
+              "title": "Romell_Glave",
+              "normalizedtitle": "Romell Glave",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Romell Glave</span></span>",
+              "wikibase_item": "Q126166383",
+              "extract": "Romell Glave is a British sprinter. He is the reigning European champion in the 100 metres having won the title at the 2026 European Athletics Championships.\nHe previously won the bronze medal in the 100 metres at the 2024 European Championships.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Romell_Glave"
+                }
+              }
+            },
+            {
+              "title": "Pan_Am_Flight_103",
+              "normalizedtitle": "Pan Am Flight 103",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Pan Am Flight 103</span></span>",
+              "wikibase_item": "Q211087",
+              "extract": "Pan Am Flight 103 was a regularly scheduled Pan Am transatlantic flight from Frankfurt to Detroit via a stopover in London and another in New York City. Shortly after 19:00 on 21 December 1988, the Boeing 747 Clipper Maid of the Seas was destroyed by a bomb while flying over the Scottish town of Lockerbie, killing all 243 passengers and 16 crew aboard. Large sections of the aircraft crashed in a residential street in Lockerbie, killing 11 residents. With a total of 270 fatalities, the event, which became known as the Lockerbie bombing, is the deadliest terrorist attack in the history of the United Kingdom and one of the deadliest terror attacks in European history.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Pan_Am_Flight_103"
+                }
+              }
+            },
+            {
+              "title": "Göbekli_Tepe",
+              "normalizedtitle": "Göbekli Tepe",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Göbekli Tepe</span></span>",
+              "wikibase_item": "Q214944",
+              "extract": "Göbekli Tepe is a Neolithic archaeological site in Upper Mesopotamia (al-Jazira) in modern-day Turkey. The settlement was inhabited from around 9500 BCE to at least 8000 BCE, during the Pre-Pottery Neolithic. It is known for its large circular structures that contain large stone pillars – among the world's oldest known megaliths. Many of these pillars are decorated with anthropomorphic details, clothing, and sculptural reliefs of wild animals, providing archaeologists insights into prehistoric religion and the iconography of the period. The 15 m (50 ft) high, 8 ha (20-acre) tell is covered with ancient domestic structures and other small buildings, quarries, and stone-cut cisterns from the Neolithic, as well as some traces of activity from later periods.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/G%C3%B6bekli_Tepe"
+                }
+              }
+            },
+            {
+              "title": "Limonene",
+              "normalizedtitle": "Limonene",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Limonene</span></span>",
+              "wikibase_item": "Q278809",
+              "extract": "Limonene is a colorless liquid aliphatic hydrocarbon classified as a cyclic monoterpene, and is the major component in the fragrance and essential oil of citrus fruit peels, taking its name from Italian limone (\"lemon\").",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Limonene"
+                }
+              }
+            },
+            {
+              "title": "United_States",
+              "normalizedtitle": "United States",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">United States</span></span>",
+              "wikibase_item": "Q30",
+              "extract": "The United States of America (USA), also known as the United States (U.S.) or America, is a country primarily located in North America. It is a federal republic consisting of 50 states and a federal capital district, Washington, D.C. The 48 contiguous states border Canada to the north and Mexico to the south, with the semi-exclave of Alaska in the northwest and the archipelago of Hawaii in the Pacific Ocean. The United States also asserts sovereignty over five major island territories and various uninhabited islands in Oceania and the Caribbean. It is a megadiverse country, with the world's fourth-largest land area and third-largest population, exceeding 341 million.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/United_States"
+                }
+              }
+            },
+            {
+              "title": "Anna's_Archive",
+              "normalizedtitle": "Anna's Archive",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Anna&#039;s Archive</span></span>",
+              "wikibase_item": "Q115288326",
+              "extract": "Anna's Archive is an open source search engine for shadow libraries that was launched by the pseudonymous Anna shortly after law enforcement efforts to shut down Z-Library in 2022. The site aggregates records from Z-Library, Sci-Hub, and Library Genesis (LibGen), among other sources. It calls itself \"the largest truly open library in human history\", and has said it aims to \"catalog all the books in existence\" and \"track humanity's progress toward making all these books easily available in digital form\". It claims not to be liable for downloads of copyrighted works since it does not directly host any files, instead linking to third-party downloads. It has nonetheless been targeted for engaging in large-scale copyright infringement, facing government blocks and legal action from rightsholders and publishing trade associations.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Anna's_Archive"
+                }
+              }
+            },
+            {
+              "title": "Jason_Arday",
+              "normalizedtitle": "Jason Arday",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Jason Arday</span></span>",
+              "wikibase_item": "Q107349023",
+              "extract": "Jason Atta Kwei Arday is a British academic and author. He was a professor at the University of Cambridge between 2023 and 2026. He resigned following allegations that he plagiarised and falsified parts of his research and that he misrepresented parts of his biography.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Jason_Arday"
+                }
+              }
+            },
+            {
+              "title": "Trisomy_X",
+              "normalizedtitle": "Trisomy X",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Trisomy X</span></span>",
+              "wikibase_item": "Q510912",
+              "extract": "Trisomy X, also known as triple X syndrome and characterized by the karyotype 47,XXX, is a chromosome disorder in which a female has an extra copy of the X chromosome. It is relatively common and occurs in 1 in 1,000 females, but is rarely diagnosed; fewer than 10% of those with the condition know they have it.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Trisomy_X"
+                }
+              }
+            },
+            {
+              "title": "2026–27_UEFA_Champions_League",
+              "normalizedtitle": "2026–27 UEFA Champions League",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">2026–27 UEFA Champions League</span></span>",
+              "wikibase_item": "Q131460448",
+              "extract": "The 2026–27 UEFA Champions League is the 72nd season of Europe's premier football tournament organised by UEFA and the 35th season since it was rebranded from the European Cup to the UEFA Champions League.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/2026%E2%80%9327_UEFA_Champions_League"
+                }
+              }
+            },
+            {
+              "title": "Odyssey",
+              "normalizedtitle": "Odyssey",
+              "displaytitle": "<i>Odyssey</i>",
+              "wikibase_item": "Q35160",
+              "extract": "The Odyssey is one of two major epics of ancient Greek literature attributed to Homer. It is one of the oldest surviving works of literature and remains popular with modern audiences. Like the Iliad, the Odyssey is divided into 24 books. It follows the heroic king of Ithaca, Odysseus, also known by the Latin variant Ulysses, and his homecoming journey after the ten-year-long Trojan War. His journey from Troy to Ithaca lasts an additional ten years, during which time he encounters many perils and all of his crewmates are killed. In Odysseus's long absence, he is presumed dead, leaving his wife Penelope and son Telemachus to contend with a group of unruly suitors competing for Penelope's hand in marriage.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Odyssey"
+                }
+              }
+            },
+            {
+              "title": "Enes_Kanter_Freedom",
+              "normalizedtitle": "Enes Kanter Freedom",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Enes Kanter Freedom</span></span>",
+              "wikibase_item": "Q715618",
+              "extract": "Enes Kanter Freedom is a Turkish and American former professional basketball player and human rights activist who played 11 seasons in the National Basketball Association (NBA). Born in Switzerland to parents from Turkey, he was raised in Turkey and moved to the United States as a teenager. Freedom was selected as the third overall pick of the 2011 NBA draft by the Utah Jazz, and primarily played the center position. He is known for his \"freedom shoes\" and outspoken criticism of human rights abuses in China, particularly the treatment of Uyghurs and the use of forced labor. He has also spoken about Turkey, Russia, Iran, North Korea, and Venezuela.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Enes_Kanter_Freedom"
+                }
+              }
+            },
+            {
+              "title": "Killing_of_Andrew_Harper",
+              "normalizedtitle": "Killing of Andrew Harper",
+              "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Killing of Andrew Harper</span></span>",
+              "wikibase_item": "Q66716304",
+              "extract": "On 15 August 2019, police constable Andrew Harper was killed near Sulhamstead, Berkshire, England in the line of duty. Harper and a fellow officer were responding to a report of a burglary, after which Harper was dragged behind a car for a mile (1.6 km), causing his death. In July 2020, three teenage males were found guilty of manslaughter and received sentences of 16 and 13 years' imprisonment. They were acquitted on the charge of murder.",
+              "content_urls": {
+                "desktop": {
+                  "page": "https://en.wikipedia.org/wiki/Killing_of_Andrew_Harper"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
