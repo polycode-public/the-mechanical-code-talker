@@ -54,10 +54,14 @@ target:
    tokens — "nigel" and "farage" separately, "saudi" and "arabia" separately — and
    half a name misses. Entity names must survive intact from article to lookup, and
    the card's hub should be the entity, not the clause.
-2. **Definitions must land in the card and re-ground the article.** A successful
-   lookup's facts must appear under "what the graph already knew" and let more of
-   the article's own sentences ground. This path exists (`enrichTopTerms` →
-   `reprocessAfterGrounding`) and is unproven end to end.
+2. **Definitions land in the card and re-ground the article.** Proven end to end:
+   a fetched definition anchors its term, the strict recognizer then accepts the
+   article sentence naming it, and the pronoun carry grounds the sentence after
+   it — the target card's own shape ("His main challenger is Count Binface").
+   What blocked it was provenance, not the path: enrichment writes definitions
+   under `research:`, which folds to source kind `referenceLive`, while the
+   isa-anchor ladder counted only `corpus` and the taught tiers. So the path ran
+   and could never change its own answer.
 3. **Extraction gets one sentence where the description holds three.** More of a
    report's own prose should become facts — closed-set widenings, shape by shape,
    never invented facts. An item with genuinely no claim stays out: the honest miss

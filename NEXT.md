@@ -56,13 +56,15 @@ in flight as worktree sub-agents; each names its own branch.
    swallowing the rest of the headline). Expected: OUR PARAGRAPH grows from one
    sentence toward the target's three. Effort: one Opus agent, closed-set work,
    taxonomy already exists in `src/services/extract-facts.mjs`.
-2. [ ] **The §3.2 re-grounding proof** — in flight on
-   `worktree-agent-a1ccd873fd9a486b4`. A new definition lets more of the
-   article's own sentences ground (`reprocessAfterGrounding` exists, unproven
-   end to end on a card). Iteration 8's tim-king card is the live case:
-   enrichment defines amigados and the definitions reach RELATED FACTS, but
-   FACTS LEARNED never grows. Expected: FACTS LEARNED grows after enrichment
-   defines a term the article names. Effort: one Opus agent, prove-then-fix.
+2. [~] **The §3.2 re-grounding proof** — CODE COMPLETE, merged as `2079a4b1`,
+   awaiting the full suite at the next push. Provenance blocked it, not the
+   path: enrichment writes definitions under `research:`, folding to source kind
+   `referenceLive`, while the isa-anchor ladder counted only `corpus` and the
+   taught tiers — so `reprocessAfterGrounding` ran and could never change its
+   own answer. Remainder, still open: `CORPUS_ANCHOR_SOURCE_TYPES` and
+   `isCorpusAnchorRow` are now misnamed, and the matching `corpusAnchored` key
+   on `buildIsaTermIndex`'s exported return is pinned by tests, so the rename is
+   a three-name change with test churn behind it.
 3. [ ] **Asserted cross-sense neighbourhood drift** — in flight on
    `worktree-agent-ae8438ab8504d1e3c`. "orifice ⊑ passage" still wanders near
    the russia card; the disjointness gate covers derivations only, and
