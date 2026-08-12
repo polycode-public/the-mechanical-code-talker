@@ -206,6 +206,87 @@ function sortFactIndividualsById(individuals) {
   for (let i = 0; i < slots.length; i += 1) individuals[slots[i]] = facts[i];
 }
 
+/** The prose tokens, forward supersession list and backward-pointer presence one
+ *  individual carries, read in a single pass over its attributes. First match
+ *  per field, which is what the `find`-based readers elsewhere in this file
+ *  take. */
+function derivationInputsOf(ind) {
+  let proseTokens = "";
+  let supersedes = "";
+  let carriesSupersededBy = false;
+  let seenProseTokens = false;
+  let seenSupersedes = false;
+  for (const a of ind?.attributes || []) {
+    if (!seenProseTokens && a?.key === "prose_tokens") { proseTokens = a.value || ""; seenProseTokens = true; }
+    if (!seenSupersedes && a?.prop === SUPERSEDES_PROP) { supersedes = a.value || ""; seenSupersedes = true; }
+    if (a?.prop === SUPERSEDED_BY_PROP) carriesSupersededBy = true;
+  }
+  return { proseTokens, supersedes, carriesSupersededBy };
+}
+
+// What a payload carries forward so the next write reconciles its derived
+// structures instead of building them again: what each individual last put into
+// the prose index, what each record last named as superseded, and the reverse of
+// that. Non-enumerable and symbol-keyed, so no copy of the payload inherits
+// state that describes a different array of individuals, and a payload without
+// it (a fresh assembly, a clone, a hand-built fixture) derives from scratch.
+const CARRIED_DERIVATIONS = Symbol("tmct.carriedDerivations");
+
+function carryForward(payload, carried) {
+  carried.index = payload.proseIndex;
+  Object.defineProperty(payload, CARRIED_DERIVATIONS, {
+    value: carried, writable: true, configurable: true, enumerable: false,
+  });
+}
+
+/** What this payload can reconcile against, or null when it must derive
+ *  instead. `index` identity is the guard: state that describes some other
+ *  prose index cannot be applied to this one. `needSupersessions` narrows to
+ *  the callers that maintain the backward pointers too. */
+function carriedDerivationsOf(payload, { needSupersessions } = {}) {
+  const carried = payload[CARRIED_DERIVATIONS];
+  if (!carried || carried.index !== payload.proseIndex || !payload.proseIndex) return null;
+  if (needSupersessions && !carried.successorsById) return null;
+  return carried;
+}
+
+/** Where `id` sits in a sorted posting list, and whether it is there at all. */
+function postingSlot(list, id) {
+  let low = 0;
+  let high = list.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (list[mid] < id) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
+/** Move one individual's contribution to the prose index from `before` to
+ *  `after`, in place.
+ *
+ *  `buildProseIndex` produces, per word, the multiset of ids that named it —
+ *  one entry per (individual, occurrence of the word in its token string) —
+ *  sorted, with a word nobody names absent altogether. Dropping one entry per
+ *  old occurrence and inserting one per new occurrence lands on exactly that
+ *  multiset, and inserting in sorted position keeps exactly that order, so a
+ *  reconciled index and a rebuilt one are the same object graph. */
+function moveProseTokens(index, id, before, after) {
+  if (before === after) return;
+  for (const word of before ? before.split(" ") : []) {
+    const list = index[word];
+    if (!list) continue;
+    const at = postingSlot(list, id);
+    if (list[at] !== id) continue;
+    list.splice(at, 1);
+    if (!list.length) delete index[word];
+  }
+  for (const word of after ? after.split(" ") : []) {
+    const list = index[word] || (index[word] = []);
+    list.splice(postingSlot(list, id), 0, id);
+  }
+}
+
 /** Re-derive each record's backward supersession pointer from the union of the
  *  forward ones. Two turns that superseded the same record concurrently both
  *  land, because each wrote its own row and neither touched the record they
@@ -215,36 +296,143 @@ function sortFactIndividualsById(individuals) {
  *  used to carry. Rows never carry one (`storedIndividualForm` strips it), so
  *  that arm is dead when this runs over a fresh projection and live when it
  *  runs again over individuals it already derived. */
-function applyDerivedSupersessions(individuals) {
+function writeSupersededBy(ind, successors) {
+  const carried = (ind?.attributes || []).some((a) => a?.prop === SUPERSEDED_BY_PROP);
+  if (!successors && !carried) return;
+  const rest = (ind.attributes || []).filter((a) => a?.prop !== SUPERSEDED_BY_PROP);
+  ind.attributes = successors
+    ? [...rest, { prop: SUPERSEDED_BY_PROP, key: "supersededBy", value: [...successors].sort().join(" ") }]
+    : rest;
+}
+
+/** The forward supersession list one individual states, as the derivation reads
+ *  it: a Fact's own `mgx:supersedes` value, and nothing at all from anything
+ *  else, which is the same narrowing the from-scratch pass applies. */
+const supersedesStatedBy = (ind, supersedes) => (ind?.class === FACT_CLASS ? supersedes : "");
+
+/** Both derived structures over one payload, built from nothing and recorded so
+ *  the next write can reconcile rather than repeat this. */
+function deriveProseAndSupersessions(payload, individuals) {
   const successorsById = new Map();
+  const tokensById = new Map();
+  const supersedesById = new Map();
   for (const ind of individuals) {
-    if (ind?.class !== FACT_CLASS) continue;
-    for (const replaced of attrValue(ind, SUPERSEDES_PROP).split(" ").filter(Boolean)) {
+    const { proseTokens, supersedes } = derivationInputsOf(ind);
+    if (proseTokens) tokensById.set(ind.id, proseTokens);
+    const stated = supersedesStatedBy(ind, supersedes);
+    if (!stated) continue;
+    supersedesById.set(ind.id, stated);
+    for (const replaced of stated.split(" ").filter(Boolean)) {
       const successors = successorsById.get(replaced) || new Set();
       successors.add(ind.id);
       successorsById.set(replaced, successors);
     }
   }
+  for (const ind of individuals) writeSupersededBy(ind, successorsById.get(ind?.id));
+  // Released before the replacement is built, not after: over a seed-sized
+  // store the prose index is the largest derived structure here, and holding
+  // the outgoing one while the incoming one grows doubles it for no reason.
+  payload.proseIndex = null;
+  payload.proseIndex = buildProseIndex(individuals);
+  carryForward(payload, { tokensById, supersedesById, successorsById });
+}
+
+/** Both derived structures brought up to date from the ones this payload
+ *  already carries. One pass over the individuals reads what each contributes
+ *  now; only what disagrees with what it contributed last time is applied.
+ *
+ *  A write touches a handful of records out of a seed's worth, so this pays for
+ *  the walk and the handful, where the from-scratch build pays for every token
+ *  in the store and sorts every posting list it produced. */
+function reconcileProseAndSupersessions(payload, individuals, carried) {
+  const { tokensById, supersedesById, successorsById } = carried;
+  const index = payload.proseIndex;
+  const resettled = new Set();
+  const carriesPointer = new Set();
+  let tokenBearers = 0;
+  let supersedingRecords = 0;
+
+  const forgetSupersedes = (id, replaced) => {
+    const successors = successorsById.get(replaced);
+    if (!successors?.delete(id)) return;
+    if (!successors.size) successorsById.delete(replaced);
+    resettled.add(replaced);
+  };
+  const recordSupersedes = (id, replaced) => {
+    const successors = successorsById.get(replaced) || new Set();
+    if (successors.has(id)) return;
+    successors.add(id);
+    successorsById.set(replaced, successors);
+    resettled.add(replaced);
+  };
+
   for (const ind of individuals) {
-    const successors = successorsById.get(ind?.id);
-    const carried = (ind?.attributes || []).some((a) => a?.prop === SUPERSEDED_BY_PROP);
-    if (!successors && !carried) continue;
-    const rest = (ind.attributes || []).filter((a) => a?.prop !== SUPERSEDED_BY_PROP);
-    ind.attributes = successors
-      ? [...rest, { prop: SUPERSEDED_BY_PROP, key: "supersededBy", value: [...successors].sort().join(" ") }]
-      : rest;
+    const id = ind?.id;
+    const { proseTokens, supersedes, carriesSupersededBy } = derivationInputsOf(ind);
+    if (carriesSupersededBy) carriesPointer.add(id);
+
+    if (proseTokens) tokenBearers += 1;
+    const wasTokens = tokensById.get(id) || "";
+    if (proseTokens !== wasTokens) {
+      moveProseTokens(index, id, wasTokens, proseTokens);
+      if (proseTokens) tokensById.set(id, proseTokens);
+      else tokensById.delete(id);
+    }
+
+    const stated = supersedesStatedBy(ind, supersedes);
+    if (stated) supersedingRecords += 1;
+    const wasStated = supersedesById.get(id) || "";
+    if (stated !== wasStated) {
+      for (const replaced of wasStated.split(" ").filter(Boolean)) forgetSupersedes(id, replaced);
+      for (const replaced of stated.split(" ").filter(Boolean)) recordSupersedes(id, replaced);
+      if (stated) supersedesById.set(id, stated);
+      else supersedesById.delete(id);
+    }
+  }
+
+  // A caller that only added or rewrote individuals leaves both maps holding
+  // exactly what the walk above just saw, and the counts say so. They disagree
+  // only when an individual left the payload, which costs one more walk to
+  // find and is the rarer write by far.
+  if (tokensById.size !== tokenBearers || supersedesById.size !== supersedingRecords) {
+    const present = new Set(individuals.map((ind) => ind?.id));
+    for (const [id, tokens] of tokensById) {
+      if (present.has(id)) continue;
+      moveProseTokens(index, id, tokens, "");
+      tokensById.delete(id);
+    }
+    for (const [id, stated] of supersedesById) {
+      if (present.has(id)) continue;
+      for (const replaced of stated.split(" ").filter(Boolean)) forgetSupersedes(id, replaced);
+      supersedesById.delete(id);
+    }
+  }
+
+  // Exactly the records the from-scratch pass rewrites: the ones with
+  // successors and the ones already carrying a pointer. Both sets are bounded
+  // by how many supersessions the store holds, which is a handful beside its
+  // individuals, so this rewrites the same records for the same cost and leaves
+  // the rest of the store alone.
+  for (const id of carriesPointer) resettled.add(id);
+  for (const id of successorsById.keys()) resettled.add(id);
+  if (!resettled.size) return;
+  for (const ind of individuals) {
+    if (resettled.has(ind?.id)) writeSupersededBy(ind, successorsById.get(ind?.id));
   }
 }
 
 /** Recount `classes[]` from the assembled individuals, the same count-and-
  *  sample shape the store keeps. */
 function recountedClasses(individuals) {
-  const classes = [];
-  for (const name of [MEMORY_SESSION_CLASS, UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS, RULE_CLASS]) {
-    const of = individuals.filter((i) => i?.class === name);
-    if (of.length) classes.push({ name, count: of.length, sample: of.slice(0, 3).map((i) => i.label) });
+  const order = [MEMORY_SESSION_CLASS, UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS, RULE_CLASS];
+  const counted = new Map(order.map((name) => [name, { name, count: 0, sample: [] }]));
+  for (const ind of individuals) {
+    const row = counted.get(ind?.class);
+    if (!row) continue;
+    row.count += 1;
+    if (row.sample.length < 3) row.sample.push(ind.label);
   }
-  return classes;
+  return order.map((name) => counted.get(name)).filter((row) => row.count);
 }
 
 /** The store's `generated_at`: the latest utterance timestamp it holds, which
@@ -296,14 +484,58 @@ export function rowsToPayload(rows, { meta = null } = {}) {
 export function renormalizeAssembledPayload(payload) {
   const individuals = payload.individuals || [];
   sortFactIndividualsById(individuals);
-  applyDerivedSupersessions(individuals);
+  const carried = carriedDerivationsOf(payload, { needSupersessions: true });
+  if (carried) reconcileProseAndSupersessions(payload, individuals, carried);
+  else deriveProseAndSupersessions(payload, individuals);
   payload.classes = recountedClasses(individuals);
-  // Released before the replacement is built, not after: over a seed-sized
-  // store the prose index is the largest derived structure here, and holding
-  // the outgoing one while the incoming one grows doubles it for no reason.
-  payload.proseIndex = null;
-  payload.proseIndex = buildProseIndex(individuals);
   payload.generated_at = latestUtteranceTimestamp(individuals);
+  return payload;
+}
+
+/** Only the prose index, reconciled the same way — for a caller that derives
+ *  everything else itself and whose payload is not a row assembly
+ *  (`mutateMemory` over a non-row backend). A payload with nothing to reconcile
+ *  against gets the full build, and carries the state on so the next write
+ *  reconciles. Mutates and returns `payload`. */
+export function renormalizeProseIndex(payload) {
+  const individuals = payload.individuals || [];
+  const carried = carriedDerivationsOf(payload);
+  if (!carried) {
+    const tokensById = new Map();
+    for (const ind of individuals) {
+      const { proseTokens } = derivationInputsOf(ind);
+      if (proseTokens) tokensById.set(ind.id, proseTokens);
+    }
+    payload.proseIndex = null;
+    payload.proseIndex = buildProseIndex(individuals);
+    carryForward(payload, { tokensById, supersedesById: null, successorsById: null });
+    return payload;
+  }
+  const { tokensById } = carried;
+  // This pass maintains the index and nothing else, so any supersession state
+  // beside it stops describing the individuals it claims to and goes now,
+  // rather than being reconciled against later.
+  carried.supersedesById = null;
+  carried.successorsById = null;
+  const index = payload.proseIndex;
+  let tokenBearers = 0;
+  for (const ind of individuals) {
+    const { proseTokens } = derivationInputsOf(ind);
+    if (proseTokens) tokenBearers += 1;
+    const wasTokens = tokensById.get(ind?.id) || "";
+    if (proseTokens === wasTokens) continue;
+    moveProseTokens(index, ind?.id, wasTokens, proseTokens);
+    if (proseTokens) tokensById.set(ind.id, proseTokens);
+    else tokensById.delete(ind?.id);
+  }
+  if (tokensById.size !== tokenBearers) {
+    const present = new Set(individuals.map((ind) => ind?.id));
+    for (const [id, tokens] of tokensById) {
+      if (present.has(id)) continue;
+      moveProseTokens(index, id, tokens, "");
+      tokensById.delete(id);
+    }
+  }
   return payload;
 }
 

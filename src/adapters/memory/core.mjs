@@ -16,7 +16,7 @@
 
 import { access, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { proseTokensFor, buildProseIndex } from "../../domain/prose.mjs";
+import { proseTokensFor } from "../../domain/prose.mjs";
 import { fnv1aHex, normText, normFactTerm, normFactPredicate, factIdFor, factIdForTriple } from "../../domain/hash.mjs";
 
 // Fact identity (normalization + id derivation) lives in hash.mjs — the one
@@ -68,7 +68,7 @@ export {
 // fine as long as neither side READS an imported binding while the other's
 // body is still running — rows.mjs builds its class map on first use, and
 // every use here is inside a function.
-import { payloadToRows, rowsToPayload, diffRows, renormalizeAssembledPayload } from "./rows.mjs";
+import { payloadToRows, rowsToPayload, diffRows, renormalizeAssembledPayload, renormalizeProseIndex } from "./rows.mjs";
 
 // The rollup vocabulary and its tuning constants live with the compaction
 // layer; re-exported here so store consumers keep one import site.
@@ -2398,7 +2398,7 @@ async function mutateMemory(dir, fn) {
     const out = (await fn(payload)) ?? payload;
     migrateLegacyProvenance(out);
     recomputeSourceReliability(out);
-    if (!overRowHandle) out.proseIndex = buildProseIndex(out.individuals);
+    if (!overRowHandle) renormalizeProseIndex(out);
     await persistMemory(dir, out);
     return overRowHandle ? dir.cachedPayload : out;
   } catch (e) {
