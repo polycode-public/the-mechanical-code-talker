@@ -454,6 +454,7 @@
   "src/domain/scene-compose.mjs",
   "src/domain/scene-random.mjs",
   "src/domain/seeded-random.mjs",
+  "src/domain/sense-gate.mjs",
   "src/domain/sense-split.mjs",
   "src/domain/skos-view.mjs",
   "src/domain/source-breaker.mjs",
