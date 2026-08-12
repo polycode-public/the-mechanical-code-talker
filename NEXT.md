@@ -55,12 +55,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     sources, not per-source — most fetched items are evicted before ingestion;
     the bench pins 200 to measure past it. Next lever gets chosen from the
     post-N1 bench re-run.
-  - N1 de-dupe (one card per newsworthy item) — worktree
-    `.claude/worktrees/agent-adf57b832d79a72ca`
-  - "scientists reports" agreement fix (N4 wart) — merged to local `main`
-    (`695490e6`); one line still owed once N1's merge frees the file:
-    `news-feed.mjs` line ~583 passes `hub` as `predicatePhrase`'s subject so the
-    live feed's own call site agrees too (coordinator's edit, on record here)
+  - N1 de-dupe — merged to local `main` (`5b7907c4`): per-source id + content keys
+    (pure over the snapshot's fields), grounded-only seen memory, and the real
+    duplicator fixed — item-cap churn no longer re-ingests window-dropped articles
+    (convergence and order-independence both pinned by test)
+  - "scientists reports" agreement fix (N4 wart) — merged (`695490e6`), and the
+    live feed's own call site now passes its hub as subject (`d6b166f9`)
   - units/compass/particle noise out of ranked terms (N3 leg) — merged to local
     `main` (`84ea852e`); "u.s." kept ranking by design, borderlines ("la", "van",
     "di") recorded in the commit's agent report
