@@ -10,6 +10,7 @@ import { FACT_PREDICATE_PHRASES, predicatePhrase, factSentence } from "./fact-ph
 import { STOP_SET } from "./hub-terms.mjs";
 import { articleFor } from "./digest/words.mjs";
 import { provenanceTagToSource } from "./memory/trust.mjs";
+import { buildSenseScope } from "./sense-scope.mjs";
 
 export const NEWS_HUB_HOPS = 2; // fixed by design, not a knob
 
@@ -531,35 +532,48 @@ export function hubSeedTerms(hub) {
  *
  *  `excludeIds` drops rows before the cap rather than after it, so a card that
  *  gives a report away to another card (storyCoverage) spends the freed budget
- *  on rows it will actually show. */
+ *  on rows it will actually show.
+ *
+ *  `inSense` is the same-sense discipline (sense-scope.mjs): a `(term) =>
+ *  boolean` test the walk applies to every term that is not a seed. A term it
+ *  refuses collects no row and joins no frontier, so the walk stays inside the
+ *  seeds' own sense instead of climbing a shared class node and coming back
+ *  down another meaning of it. What a source actually REPORTED about a seed is
+ *  exempt: a card never drops its own news to keep a sense tidy. */
 export function subgraphAround(rows, hub, {
-  hops = NEWS_HUB_HOPS, cap = 60, adjacency = null, priorityIds = null, seedTerms = null, excludeIds = null,
+  hops = NEWS_HUB_HOPS, cap = 60, adjacency = null, priorityIds = null, seedTerms = null,
+  excludeIds = null, inSense = null,
 } = {}) {
   const adj = adjacency ?? buildTermAdjacency(rows);
   const hubTerm = normFactTerm(hub);
   const seeds = (seedTerms?.length ? seedTerms : [hubTerm]).map((t) => normFactTerm(t)).filter(Boolean);
   const visited = new Set(seeds);
+  const seedSet = new Set(seeds);
   let frontier = [...new Set(seeds)].sort();
   const collected = new Map();
   const hopOf = new Map();
   const isExcluded = excludeIds instanceof Set ? (id) => excludeIds.has(id) : () => false;
+  const isPriority = (id) => (priorityIds instanceof Set ? priorityIds.has(id) : Boolean(priorityIds?.includes?.(id)));
+  const inScope = typeof inSense === "function" ? (term) => seedSet.has(term) || inSense(term) : () => true;
   for (let hop = 0; hop < hops; hop += 1) {
     const nextFrontier = new Set();
     for (const term of [...frontier].sort()) {
       for (const idx of adj.byTerm.get(term) ?? []) {
         const row = rows[idx];
         if (isExcluded(row.id)) continue;
+        const [s, o] = adj.terms[idx];
+        const staysInSense = inScope(s) && inScope(o);
+        const isOwnReport = isPriority(row.id) && (seedSet.has(s) || seedSet.has(o));
+        if (!staysInSense && !isOwnReport) continue;
         collected.set(row.id, row);
         if (!hopOf.has(row.id)) hopOf.set(row.id, hop);
-        const [s, o] = adj.terms[idx];
-        if (!visited.has(s)) nextFrontier.add(s);
-        if (!visited.has(o)) nextFrontier.add(o);
+        if (!visited.has(s) && inScope(s)) nextFrontier.add(s);
+        if (!visited.has(o) && inScope(o)) nextFrontier.add(o);
       }
     }
     for (const term of nextFrontier) visited.add(term);
     frontier = [...nextFrontier].sort();
   }
-  const isPriority = (id) => (priorityIds instanceof Set ? priorityIds.has(id) : Boolean(priorityIds?.includes?.(id)));
   return [...collected.values()]
     .sort((a, b) => (isPriority(b.id) - isPriority(a.id))
       || (hopOf.get(a.id) - hopOf.get(b.id))
@@ -584,12 +598,12 @@ const ARTICLE_ENTITY_ROW_CAP = 24;
  *  card claimed, so this walk returns background and nothing else: what a
  *  source reported is the hub walk's business. */
 export function articleEntityRows(rows, terms, {
-  adjacency = null, excludeIds = null, cap = ARTICLE_ENTITY_ROW_CAP,
+  adjacency = null, excludeIds = null, cap = ARTICLE_ENTITY_ROW_CAP, inSense = null,
 } = {}) {
   const seedTerms = (terms || []).map((term) => normFactTerm(term)).filter(Boolean);
   if (!seedTerms.length) return [];
   return subgraphAround(rows, seedTerms[0], {
-    hops: ARTICLE_ENTITY_HOPS, cap, adjacency, seedTerms, excludeIds,
+    hops: ARTICLE_ENTITY_HOPS, cap, adjacency, seedTerms, excludeIds, inSense,
   });
 }
 
@@ -1374,13 +1388,17 @@ export function buildNewsItems(rows, {
   const coverage = storyCoverage(hubs, rowsByTerm);
   const concepts = conceptTerms(rows);
   const namesEntities = readsAsEntityTerm || looksLikeEntityTerm;
+  const senseScope = buildSenseScope(rows);
   const items = hubs.filter(({ term }) => coverage.get(term).mints).map(({ term, changed }) => {
     const coveredRowIds = coverage.get(term).coveredRowIds;
+    const seeds = hubSeedTerms(term);
+    const inHubSense = senseScope.sameSenseAs(seeds);
     const hubRows = subgraphAround(rows, term, {
       adjacency,
       priorityIds: reportedIds,
-      seedTerms: hubSeedTerms(term),
+      seedTerms: seeds,
       excludeIds: coveredRowIds,
+      inSense: inHubSense,
     });
     const sources = collectSources(hubReportRows(term, hubRows, { reportedIds }), sourcesByFactId);
     const articleTerms = articleEntityNames
@@ -1391,6 +1409,7 @@ export function buildNewsItems(rows, {
       ? articleEntityRows(rows, articleTerms, {
         adjacency,
         excludeIds: new Set([...coveredRowIds, ...reportedIds]),
+        inSense: senseScope.sameSenseAs(articleTerms),
       }).filter((r) => !heldIds.has(r.id))
       : [];
     const subgraphRows = articleRows.length ? [...hubRows, ...articleRows] : hubRows;
