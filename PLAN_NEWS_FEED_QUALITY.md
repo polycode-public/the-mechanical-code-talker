@@ -67,17 +67,18 @@ target:
 
 Run, look, fix. One pass is minutes:
 
-1. **Run**: one command polls the cached articles (5 most recent hacker-news + 5
-   most recent nyt-world), synthesises, enriches through the reference lookups, and
-   builds the cards. `scripts/news-bench/iterate.mjs --label=<x>` (fresh fixture
-   capture included); the articles log (`reports/newsbench/<run>-articles.md`)
-   records every card in full, plus what was admitted without a card and what was
-   rejected where.
-2. **Look**: the cards land in chat verbatim — including the worst one — beside the
-   running scores. The scores that matter, per run: terms defined by enrichment,
-   article facts grounded because of it, cards with real background, admission per
-   source. Reports carry a provenance block (seed digest, fixture dates); matching
-   digests make two runs comparable without re-running anything.
+1. **Run**: `node scripts/news-bench/capture-fixtures.mjs` for fresh articles when
+   wanted, then `node scripts/news-bench/run-live-cycle.mjs` — poll the cached
+   captures, synthesise, enrich through the LIVE reference lookups, build the
+   cards, and print each one in the four-part form. (`iterate.mjs --label=<x>`
+   remains the metrics/report lane; `ensure-bench-inputs.mjs --from <checkout>`
+   builds a fresh worktree's seed and packs in seconds.)
+2. **Look**: every card lands in chat verbatim and complete — no selection, the
+   worst included — in the four-part form: OUR PARAGRAPH, FACTS LEARNED (the
+   triples), RELATED FACTS ALREADY HELD (with each fact's source labeled), and
+   ORIGINAL TEXT (headline, description, source, date). Beside them, the scores
+   that matter: terms defined by enrichment, article facts grounded because of
+   it, cards with real background, admission per source.
 3. **Fix**: the first thing that blocks the target card, at its cause. Small fixes
    happen in the main thread; genuinely big parallel tracks go to sub-agents with
    disjoint files. As many parallel changes as have disjoint ownership.

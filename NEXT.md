@@ -29,91 +29,38 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **wikidata-full — the whole dump as a band, no curation** — the point of the
-  155 GB download: every English-labeled entity a term, every mapped claim between
-  labeled entities a fact row, one band, loaded once, queried per-term like
-  wordnet-complete (206k) and conceptnet-full (2.3M). Builder agent in flight
-  (worktree `.claude/worktrees/agent-a91c8dbb5528f73ed`): streaming, resumable,
-  deterministic, with the row count and DynamoDB write cost printed BEFORE any
-  load so the price gates the decision. When the pinned dated dump finishes
-  (~9 h from 19:26), the operator runs the builder then the credentialed load.
-  The 12-seed slice band (`~/tmct-dumps/wikidata-slice.band.jsonl`, 156 generic
-  class rows) was a pipeline proof only — loading it is optional and does not
-  serve news grounding.
+- [ ] **The news quality loop — run, look, fix, repeat** — plan of record is
+  `PLAN_NEWS_FEED_QUALITY.md`: the target card (§2), the three blockers (§3), the
+  loop and its commands (§4), the working order (§5). Position on 2026-08-12
+  evening: iterations 1–4 run; merged levers so far — whole names reach the
+  lookup queue as single terms with fragments folded and numeric shrapnel gated;
+  one story mints one card with the entity taking the title and publications
+  covering only uncovered stories; enrichment proven live (lookups hit,
+  definitions reach cards — "russia is a country" on the russia card). The run
+  command pair: `node scripts/news-bench/capture-fixtures.mjs` (fresh articles),
+  `node scripts/news-bench/run-live-cycle.mjs` (the enriched cycle, four-part
+  card print). In flight: the sense-disjointness gate on the isa closure
+  (worktree `.claude/worktrees/agent-aecec3feecd621fdd`, Opus) — kills chains
+  like russia → country → geographical area → region → body part [entailed].
+  Next levers, in order: prove a lookup definition re-grounds article facts
+  (§3.2); extraction widenings from named specimens — description sentences two
+  and three of the Gilman article, the "prime | mgx:minister | …" optimistic
+  mint, agentless passives ("is banned from …"), "ecuadorean fishings"
+  pluralization; then bulk knowledge only on §5.5 evidence.
 
-- [ ] **News feed quality — the local bench and its loop** — plan of record is
-  `PLAN_NEWS_FEED_QUALITY.md` (operator-commissioned 2026-08-12): frozen live-feed
-  fixtures, a deterministic offline bench runner with mechanical metrics (admission,
-  grounded-term proportion, de-dupe, entity preservation, noisy-hub-relation rate,
-  paragraph shape, ranked-term noise, size), and a ratcheting floor per landed
-  improvement. Phases N0–N5 there. In flight (dispatched 2026-08-12):
-  - N0 bench harness + fixtures + baseline — merged to local `main` (4 commits
-    through `f279537e`): `npm run bench:news` / `bench:news:fast`, dated fixtures for
-    all five sources, floor-guarded smoke test, baseline
-    `reports/newsbench/2026-08-12-xl.md` (admission 57%, grounded-terms 26%,
-    "Around it" repeat 79%, date presence 0%, ranked noise 30% pre-noise-gate).
-    The global-item-cap bug it surfaced is fixed and merged (`e491b061` +
-    starvation-fixture test): the cap now bounds each source's own window, so a
-    prolific source can no longer wipe a small source's window presence.
-  - N1 de-dupe — merged to local `main` (`5b7907c4`): per-source id + content keys
-    (pure over the snapshot's fields), grounded-only seen memory, and the real
-    duplicator fixed — item-cap churn no longer re-ingests window-dropped articles
-    (convergence and order-independence both pinned by test)
-  - "scientists reports" agreement fix (N4 wart) — merged (`695490e6`), and the
-    live feed's own call site now passes its hub as subject (`d6b166f9`)
-  - units/compass/particle noise out of ranked terms (N3 leg) — merged to local
-    `main` (`84ea852e`); "u.s." kept ranking by design, borderlines ("la", "van",
-    "di") recorded in the commit's agent report
-  First loop iteration measured (`reports/newsbench/2026-08-12-xl-postwave.md`):
-  ranked noise 30% → 5%, grounded terms 26% → 30%. Second lever merged to local
-  `main` (4 commits through `f530db53`): card dates flow fetcher → feed → DOM,
-  presence 0% → 100%, floor ratcheted; a card with no dated source shows none,
-  and Wikimedia items carry the feed's own named UTC day. Article logs landed:
-  every bench run writes `<run>-articles.md`, and both completed iterations have
-  retroactive logs (baseline reproduction matched committed metrics exactly).
-  Iteration 4 (rich-paragraph composition) merged, 7 commits through `71018582`:
-  cards lead with the report as filed (headline + original summary + source +
-  date, 52/53 present, floor 0.90), derived rows never speak (the wrong-sense
-  identity dumps gone), background comes from the card's own subjects with
-  region seeding ("mina, nevada" → nevada), sentences/card 1.11 → 1.36. In
-  flight: the noisy metric's denominator moves to printed-lines-only (worktree
-  `.claude/worktrees/agent-aca0ff54cbcd867bc`) — it currently overstates by
-  counting unprinted entailed rows. Open question for the operator: region facts
-  recur across same-region cards (repeated sentences 6.8% → 6.9%) — cross-card
-  variety would trade a card's self-containedness for it. Bench note: the run
-  label flag must be `--label=x`, the space form is ignored.
-  What the logs exposed, in lever order:
-  - **Attribution conflation — fixed and merged** (3 commits through `383be97e`):
-    a card cites the items behind its own report ("mina, nevada" 44 sources → 1;
-    total citations 1,252 → 55), "Around it" is per-hub with category nodes
-    suppressed (repeat 79% → 0%, repeated sentences 37% → 6.8%), feed document
-    300 KB → 68 KB, floors ratcheted. Remainder handed to the bench agent: the
-    articles log's "backing item(s)" still derives from the two-hop factIds.
-  - **The noisy-context metric is redefined and merged** (8 commits through
-    `fec2b5d1`): a context line needs positive same-sense evidence (the object or
-    its one-hop neighbours sharing a content word with the hub's own company) or
-    it counts as noisy — no evidence means noisy, the honest-miss bias. Corrected
-    reading on the current state: 24.24% of shown context lines are noisy (the
-    blocklist said 3.70%); the old reading rides alongside for one release. New
-    catches include "france is a kind of schema place / social station". That
-    24% is N2's target number.
-  - Identity dumps lead card paragraphs ("france is … a cognition, a condition …"
-    before the news sentence); clause hubs ("boats hit by mystery attackers")
-    still head cards; "ecuadorean fishings boats" pluralization slip (N2/N4).
-  Current change queue, worst first (from the nyt-full and it5-start article logs):
-  the hackernews publication card duplicates its story cards; hub naming picks the
-  clause over the entity ("sacred glow", "election" instead of Bali, Farage);
-  "ecuadorean fishings boats" pluralization; two NYT shapes parse but never ground;
-  the fixture-lane `repeatedSentenceRate` smoke floor is red on `main` (0.2418 vs
-  0.20 ceiling — must be resolved before the next push). Engine speed remainders,
-  measured and named by the perf pass (per-article 10.8 s → 4.3 s live, a 60 s
-  cycle grounds ~14 articles): seed re-assembly on any removal (~2 s each, an
-  ordering-invariant change), `migrateStoredMemory` re-running per memory-handle
-  load, `buildMemoryIndex` rebuilt per write. N5 floors into CI still pending.
-  Bench operational notes: pass a distinct `--label` per run (same-day runs
-  collide on the report filename), and xl metrics drift with freshly regenerated
-  corpus artifacts (chat-seed inputs) — the run that measures a lever must
-  rebuild its seed the same way its baseline did, or the pair lies.
+- [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
+  downloads in the operator's terminal (started 19:26, ~10 h). No bulk band gets
+  built or loaded until the loop's evidence says live lookups are too thin
+  (plan §5.5); when it does, the builder must print row count and DynamoDB
+  write cost before any load. The 12-QID slice band
+  (`~/tmct-dumps/wikidata-slice.band.jsonl`) is a pipeline proof only.
+
+- [ ] **Shipping** — local `main` runs ahead of origin (the loop never waits on
+  deploys). At the next push moment: full suite, roll, push. The last pipeline's
+  `build:image` died on GitLab runner availability
+  (`stuck_pending_no_matching_runners`) — retry the pipeline if it repeats.
+  6.0.18 is the last deployed version; everything since (iterations 3–4 of the
+  loop, engine speed, per-source caps, NYT recognizer) is local-only.
 
 ## Discipline
 
