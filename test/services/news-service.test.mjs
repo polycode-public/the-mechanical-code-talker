@@ -600,6 +600,36 @@ test("/news rank never lists a function word, no matter how far its raw occurren
   }
 });
 
+test("/news rank never lists a bare measurement unit, compass abbreviation or foreign particle, but keeps u.s.", async () => {
+  const state = createNewsState();
+  const ledger = createTermLedger();
+  bumpTerms(
+    ledger,
+    new Map([
+      ["km", 9],
+      ["m", 6],
+      ["ssw", 4],
+      ["de", 4],
+      ["u.s.", 4],
+      ["tariff", 1],
+    ]),
+    "item-1",
+    FIXED_NOW,
+  );
+  state.ledger = ledgerPayload(ledger);
+  const { ctx, close } = await makeCtx({ state });
+  try {
+    const { text } = await newsTurn("/news rank", ctx);
+    assert.match(text, /tariff \(1\)/);
+    assert.match(text, /u\.s\. \(4\)/);
+    for (const word of ["km", "m", "ssw", "de"]) {
+      assert.doesNotMatch(text, new RegExp(`\\b${word} \\(`), `"${word}" must never rank as a news term`);
+    }
+  } finally {
+    await close();
+  }
+});
+
 // ---- the newsworthiness gate (PLAN_NEWS_FEED.md section 17) ---------------
 //
 // The recorded Wikimedia fixture's own text ("A tariff is a tax imposed on
