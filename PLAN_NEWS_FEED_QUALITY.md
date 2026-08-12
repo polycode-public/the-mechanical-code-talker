@@ -91,10 +91,11 @@ One iteration is:
 2. **Design**: the coordinator reads the worst number and names ONE lever —
    closed-set/template changes preferred, per the project's own bias. The proposal
    names the metric it should move and any metric it might hurt.
-3. **Apply**: the lever lands (worktree sub-agent, blast-radius tests), one after-run
-   measures it, and the report pair goes in the commit message's account.
-4. **Ratchet**: a landed improvement raises the smoke test's floor for that metric to
-   just under the new number, so the gain is locked in.
+3. **Apply**: the lever lands (worktree sub-agent, blast-radius tests) and merges.
+   No after-run — ever. The loop measures once per cycle, at the next iteration's
+   start, and that run scores everything merged since the last one.
+4. **Ratchet**: when a start-run shows a metric improved, the smoke test's floor for
+   it rises to just under the new number, so the gain is locked in.
 5. **Repeat immediately.**
 
 The loop never waits. The next iteration's lever dispatches as soon as the previous
@@ -110,10 +111,10 @@ iterations actually spent their time, and what removes each sink:
 
 | sink | cost | removal |
 | --- | --: | --- |
-| a "before" xl re-run per lever agent | 12–15 min | dead: the previous iteration's committed after-report IS the before, verified by seed-digest equality, not by re-running |
+| "before" and "after" bench runs per lever agent | 12–15 min each | dead, both: agents never run the bench. The single start-of-iteration run is the only measurement; reports compare by seed-digest equality |
 | per-worktree artifact rebuild (worlds pack, sprite facts, ask bundle, chat-seed) | 3–6 min | `scripts/news-bench/ensure-bench-inputs.mjs` builds only what is missing or stale, and `--from <path>` links a sibling checkout's already-built artifacts in seconds |
 | coordinator-invented waits between iterations | unbounded | banned above |
-| the one xl bench run | 12–15 min | stays — it drives the full engine over the whole seed; this is the measurement itself |
+| the start-of-iteration run (5 recent hacker-news + 5 recent nyt-world, single pass) | ~1 min | stays — this is the measurement itself |
 | the lever agent's design/code/tests | 15–35 min | stays — this is the work |
 
 ### Report comparability: digests, not re-runs
