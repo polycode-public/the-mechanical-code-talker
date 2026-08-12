@@ -10,7 +10,7 @@
 
 import { normFactTerm } from "../../src/domain/hash.mjs";
 import {
-  isNewsProvenance, buildTermAdjacency, neighbourRows,
+  isNewsProvenance, buildTermAdjacency, knownFactRows, printedParagraphRows,
 } from "../../src/domain/news-feed.mjs";
 import { ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
 import { tokenizeProse } from "../../src/domain/prose.mjs";
@@ -72,14 +72,18 @@ export const DEFINITIONS = Object.freeze({
     + "paragraphSurvival counts one whose literal text appears in a card the item contributed "
     + "facts to. rawCandidateCount (no gazetteer filter) is reported alongside for reference.",
   noisyHubRelationRate:
-    "a context line is an rdf:type/rdfs:subClassOf row among what a card's text actually shows: "
-    + "every row touching the hub as subject (the identity sentence names every class the graph "
-    + "put the hub in, reported or background) plus each paragraph's own 'Around it' neighbours "
-    + "(news-feed.mjs's neighbourRows, read the same way for the main paragraph's reported pass "
-    + "and the backgroundParagraph's background-only pass) — never the wider two-hop subgraph a "
-    + "card merely reaches. A hub that only ever appears as an object (a place a quake struck) "
-    + "carries its class-membership noise on the SUBJECT of a background neighbour instead, which "
-    + "is why the background pass runs too. A line (subject S, object Y) is noisy unless a "
+    "a context line is an rdf:type/rdfs:subClassOf row among what a card's text actually shows, "
+    + "read off news-feed.mjs's own render functions rather than re-derived here: "
+    + "printedParagraphRows for the main paragraph (the report, then the identity clause — only "
+    + "when the hub reads in one sense, IDENTITY_MAX_CLASSES or fewer, otherwise it prints none "
+    + "of them — then the known-facts lead-in, then 'Around it', each block's own cap and the "
+    + "paragraph-wide sentence cap both already applied) plus knownFactRows for the "
+    + "backgroundParagraph disclosure, which shows that same background set in full. A row an "
+    + "entailment closure minted, or one sliced away before render by either cap, is never in "
+    + "this set — never the wider two-hop subgraph a card merely reaches. A hub that only ever "
+    + "appears as an object (a place a quake struck) carries its class-membership noise on the "
+    + "SUBJECT of a background row instead, which knownFactRows already reaches from the anchor "
+    + "side. A line (subject S, object Y) is noisy unless a "
     + "same-sense test finds positive support for Y in S's own company: build a pool from the "
     + "card's own news-sentence text (the backing item(s)' title+summary, tokenized) plus every "
     + "OTHER term S connects to anywhere in the store (S's one-hop neighbourhood, the tested row "
@@ -314,31 +318,26 @@ export function entityPreservation(state, rows, feed) {
 
 const IDENTITY_PREDICATES = new Set(["rdf:type", "rdfs:subClassOf"]);
 
-/** Every row that actually reaches the TEXT of a card — its own two
- *  paragraphs, `renderNewsParagraph`'s own read (news-feed.mjs): the hub's
- *  identity/relation sentence draws from every row touching the hub
- *  (reported or not — the identity sentence names every class the graph
- *  ever put the hub in), and each paragraph's own "Around it" clause draws
- *  from `neighbourRows`, run once over the reported subgraph for the main
- *  paragraph and once over the background-only rows for
- *  `backgroundParagraph`. A hub that only ever appears as an OBJECT (a
- *  place a quake struck) has no subject-side row of its own; its class-
- *  membership noise sits on the SUBJECT of a background neighbour instead
- *  ("earthquake is a kind of X" two hops from a "mina, nevada" hub), which
- *  is exactly why the background pass runs too. */
+/** Every row that actually reaches the TEXT of a card, read off the same
+ *  functions `buildNewsItems` itself renders through (news-feed.mjs) rather
+ *  than re-deriving the selection here: `printedParagraphRows` for the main
+ *  paragraph (report, then the identity clause, then the known-facts lead-in,
+ *  then "Around it" — each block's own cap and the paragraph-wide sentence
+ *  cap both already applied, so a row sliced away before render, an identity
+ *  clause suppressed for reading across too many senses, an entailed row
+ *  never in the running at all, is never counted here either) plus
+ *  `knownFactRows` for the `backgroundParagraph` disclosure, which shows that
+ *  same background set in full. */
 function textShownRowsForCard(card, rows) {
   const factIds = card.factIds || [];
   const rowsById = new Map(rows.map((r) => [r.id, r]));
   const subgraphRows = factIds.map((id) => rowsById.get(id)).filter(Boolean);
   const backgroundIds = new Set(card.background || []);
-  const backgroundRows = subgraphRows.filter((r) => backgroundIds.has(r.id));
   const reportedIds = new Set(factIds.filter((id) => !backgroundIds.has(id)));
-  const hubTerm = normFactTerm(card.hub);
 
   const shown = [
-    ...subgraphRows.filter((r) => normFactTerm(r.subject) === hubTerm),
-    ...neighbourRows(card.hub, subgraphRows, { reportedIds }),
-    ...neighbourRows(card.hub, backgroundRows, { reportedIds: null }),
+    ...printedParagraphRows(card.hub, subgraphRows, { reportedIds }),
+    ...knownFactRows(card.hub, subgraphRows, { reportedIds }),
   ];
 
   const seen = new Set();
