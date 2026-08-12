@@ -683,6 +683,30 @@ test("buildFeed's gate: a research-tagged definition and an identity-only report
   assert.ok(!kumamotoItem.paragraph.includes("tariff"), "an unrelated identity-only report never leaks into another card's background");
 });
 
+test("buildFeed's card carries its source's publication date when the snapshot has one, and none when it doesn't", async () => {
+  const { ctx } = await makeCtx({ now: () => FIXED_NOW });
+
+  const dated = normalizeFeedItems("usgs-quakes", [{
+    guid: "eq1", title: "A quake struck near Wana.", url: "https://example.com/usgs/eq1",
+    summary: "Wana is a place. An earthquake struck near Wana.", publishedAt: "2026-08-07T09:00:00.000Z",
+  }], { now: FIXED_NOW })[0];
+  const undated = snapshotFor("hacker-news", "1", "Hackernews discusses a widget.", "A widget is a gadget for widgeteers.");
+
+  ctx.state.items = [dated, undated];
+  await ingestNewsSnapshot(ctx, dated);
+  await ingestNewsSnapshot(ctx, undated);
+
+  const feed = await buildFeed(ctx);
+  const wanaItem = feed.items.find((it) => it.hub === "wana");
+  assert.ok(wanaItem, `the dated snapshot heads its own card: ${JSON.stringify(feed.items.map((it) => it.hub))}`);
+  assert.equal(wanaItem.sources[0].publishedAt, "2026-08-07T09:00:00.000Z");
+
+  const widgetItem = feed.items.find((it) => it.hub === "widget" || it.hub === "gadget");
+  if (widgetItem) {
+    assert.ok(!Object.hasOwn(widgetItem.sources[0], "publishedAt"), "an undated snapshot's source carries no publishedAt key");
+  }
+});
+
 test("buildFeed's gate: a card the optimistic tier only reached off an identifier-shaped token never heads, while a clean report from the same poll still does", async () => {
   // A live wall clock, not FIXED_NOW: this sentence grounds through the
   // strict recognizer's own assert-lane write for one of its facts, which

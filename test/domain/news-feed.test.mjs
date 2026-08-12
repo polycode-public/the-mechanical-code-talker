@@ -242,6 +242,22 @@ test("buildNewsItems attaches sources from sourcesByFactId, deduped by url", () 
   assert.deepEqual(item.sources, [{ title: "Talks Resume", url: "https://example.com/a", name: "Example News" }]);
 });
 
+test("buildNewsItems carries a source's publishedAt onto the card, and leaves it off when the source never had one", () => {
+  const dated = [row("fact:1", "ceasefire", "mgx:causesDesire", "relief")];
+  const datedSources = new Map([
+    ["fact:1", { title: "Talks Resume", url: "https://example.com/a", name: "Example News", publishedAt: "2026-08-07T09:00:00.000Z" }],
+  ]);
+  const [datedItem] = buildNewsItems(dated, { now: NOW, windowMs: 6 * HOUR, limit: 6, sourcesByFactId: datedSources });
+  assert.equal(datedItem.sources[0].publishedAt, "2026-08-07T09:00:00.000Z");
+
+  const undated = [row("fact:2", "tariff", "mgx:causesDesire", "concern")];
+  const undatedSources = new Map([
+    ["fact:2", { title: "Tariff Talk", url: "https://example.com/b", name: "Example News" }],
+  ]);
+  const [undatedItem] = buildNewsItems(undated, { now: NOW, windowMs: 6 * HOUR, limit: 6, sourcesByFactId: undatedSources });
+  assert.ok(!Object.hasOwn(undatedItem.sources[0], "publishedAt"), "a source with no publication timestamp carries no key for it, never a blank one");
+});
+
 test("NEWS_HUB_HOPS is fixed at 2", () => {
   assert.equal(NEWS_HUB_HOPS, 2);
 });

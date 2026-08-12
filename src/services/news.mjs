@@ -288,6 +288,10 @@ function buildSourcesByFactId(items) {
   for (const snap of items || []) {
     const record = recordsById.get(snap.sourceId);
     const src = { title: snap.title || "", url: snap.url || "", name: record?.name || snap.sourceId || "" };
+    // A snapshot with no publication timestamp (a source whose own feed never
+    // carries one) leaves the key off entirely — never an invented or blank
+    // date, and never the fetch's own clock standing in for it.
+    if (snap.publishedAt) src.publishedAt = snap.publishedAt;
     for (const factId of snap.factIds || []) map.set(factId, src);
   }
   return map;
