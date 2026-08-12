@@ -35,36 +35,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   byte count). File: `~/tmct-dumps/wikidata-latest-all.json.gz` (155.3 GB). When it
   reports done, the next steps are `PLAN_MEMORY_ROLLOUT.md` section 4.
 
-- [ ] **Stopwords rank as news terms / live cycles admit no facts — one root cause** —
-  the ledger leg is fixed and merged (`9b38f212`: a closed function-word set gates
-  `bumpTerms` and `ledgerFromPayload`, purging persisted junk entries too), and the
-  sqlite-path vocabulary was verified identical to the JSON path (no bug, already
-  pinned by test). Remainder, the root cause of both the junk terms and the
-  zero-facts/zero-cards live feed: the container image never installed `wink-nlp` +
-  `wink-eng-lite-web-model` (the engine resolves wink via a runtime require the
-  bundler can't inline), so deployed handlers run with NO POS tagging — fact
-  extraction starves and the leaky lexical fallback admits function words. The zip
-  deploys had the same gap. All layers fixed, deployed (6.0.15, pipeline #785 fully
-  green), and verified live: a fresh-session probe against prod pressed start and got
-  4 facts and a rendered article card ("Public Investments Fund", grounded paragraph,
-  19 seed facts around it) from the first Wikimedia cycle — was 0 facts, 0 cards,
-  ever. Remainder before this item closes: one junk hub in ~30 (an NYT headline
-  over-read with no principled closed-set rule found yet), and "scientists reports"
-  subject-verb agreement in `fact-phrase.mjs`'s `predicatePhrase`.
-
-- [ ] **Group-scoped source-reliability fold + per-feed Sources — operator-commissioned
-  2026-08-11** — `recomputeSourceReliability` folds all 61,724 fact groups on every
-  write to rescore session Sources (~11 s of an article's ~18 s locally). Replace with
-  a group-scoped or incremental fold: exact-equality scores for the same attribution
-  model, order-independent (resolver purity), seed Sources not rescored by session
-  churn. Folded in by operator decision: news ingestion attributes facts to ONE
-  Source per actual feed/reference work (e.g. `NYT World News`), never per sentence
-  or per article — corroboration means independent feeds agreeing; trust-number
-  changes accepted; interactive chat teaching keeps its own minting. Code complete,
-  merged to local `main` (5 commits through `d7596792`): grounded articles per press
-  3 → 5 locally, per-article 25.4 s → 12.8 s, peak heap 1.1 GB → 424 MB; news trust
-  lands at the 0.4 web prior (operator accepted). Closes when the 6.0.14 batch's
-  pipeline is green.
+- [ ] **News feed quality — the local bench and its loop** — plan of record is
+  `PLAN_NEWS_FEED_QUALITY.md` (operator-commissioned 2026-08-12): frozen live-feed
+  fixtures, a deterministic offline bench runner with mechanical metrics (admission,
+  grounded-term proportion, de-dupe, entity preservation, noisy-hub-relation rate,
+  paragraph shape, ranked-term noise, size), and a ratcheting floor per landed
+  improvement. Phases N0–N5 there; N0 (harness + fixtures + baseline) is in build.
+  The two phrasing warts from the empty-feed item fold into this plan's N2/N4
+  (junk-hub over-read, "scientists reports" agreement).
 
 ## Discipline
 
