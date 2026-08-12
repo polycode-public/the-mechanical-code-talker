@@ -64,8 +64,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   - units/compass/particle noise out of ranked terms (N3 leg) — merged to local
     `main` (`84ea852e`); "u.s." kept ranking by design, borderlines ("la", "van",
     "di") recorded in the commit's agent report
-  Remaining after these: N2 context quality (incl. the junk-hub over-read), the rest
-  of N3/N4, N5 floors into CI.
+  First loop iteration measured (`reports/newsbench/2026-08-12-xl-postwave.md`):
+  ranked noise 30% → 5%, grounded terms 26% → 30%; dates still 0%, "Around it"
+  repeat still 79%, NYT admission still 26%. Current lever in flight: card dates
+  from source items (worktree `.claude/worktrees/agent-a40219e65a3d12deb`).
+  Remaining after that: N2 context quality (incl. the junk-hub over-read and the
+  79% repeat), NYT admission, the global item cap, N5 floors into CI. Bench runs
+  should pass a distinct `--label` per run — two same-day runs otherwise collide
+  on the report filename (hit once, recovered from git).
 
 ## Discipline
 
