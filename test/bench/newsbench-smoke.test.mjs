@@ -30,6 +30,10 @@ const AROUND_IT_REPEAT_RATE_CEILING = 0;
 const HEADLINE_PRESENT_RATE_FLOOR = 0.90; // baseline 1.0
 const LINK_PRESENT_RATE_FLOOR = 0.90; // baseline 1.0
 const DATE_PRESENT_RATE_FLOOR = 0.90; // baseline 1.0
+// A card carries the report it was built from, description and all, so a
+// reader can check the graph's own sentences against it. 0.9697 measured; the
+// two cards without one come from a source whose feed carries no description.
+const RAW_SUMMARY_PRESENT_RATE_FLOOR = 0.90;
 const RANKED_TERM_NOISE_CEILING = 0.30; // baseline 0.2
 
 let cached = null;
@@ -74,6 +78,13 @@ test("paragraph shape holds its floors: repeated-sentence and \"Around it\" repe
   assert.ok(report.metrics.paragraphShape.headlinePresentRate >= HEADLINE_PRESENT_RATE_FLOOR);
   assert.ok(report.metrics.paragraphShape.linkPresentRate >= LINK_PRESENT_RATE_FLOOR);
   assert.ok(report.metrics.paragraphShape.datePresentRate >= DATE_PRESENT_RATE_FLOOR);
+});
+
+test("nearly every card quotes the report it was built from, description included", async () => {
+  const report = await fastBench();
+  const cards = report.articles.filter((a) => a.kind === "card");
+  const withSummary = cards.filter((a) => a.summaryPresent).length;
+  assert.ok(withSummary / cards.length >= RAW_SUMMARY_PRESENT_RATE_FLOOR, `${withSummary}/${cards.length}`);
 });
 
 test("ranked-term noise stays under its ceiling", async () => {
