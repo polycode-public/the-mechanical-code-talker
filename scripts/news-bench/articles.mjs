@@ -6,11 +6,8 @@
 // for byte. Card date/backing-item data the feed document itself does not
 // expose (PLAN_NEWS_FEED_QUALITY.md section 1's own named gap) is computed
 // here from the poll state rather than touching src.
-import { normFactTerm } from "../../src/domain/hash.mjs";
 import { ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
-import { NOISY_HUB_CLASS_TERMS, groundedTermPerItem } from "./metrics.mjs";
-
-const IDENTITY_PREDICATES = new Set(["rdf:type", "rdfs:subClassOf"]);
+import { groundedTermPerItem, noisyHubIndex, cardIdentityLineClassifications } from "./metrics.mjs";
 
 function splitSentences(paragraph) {
   const trimmed = String(paragraph || "").trim().replace(/\.$/, "");
@@ -43,18 +40,14 @@ function cardDate(backingItems) {
   return dates.length ? dates[dates.length - 1] : null;
 }
 
-/** A card's own identity-sentence objects (its hub's rdf:type/subClassOf
- *  rows) that fall in the noisy-hub-relation rate's closed class list —
- *  metric 5, read out per card instead of pooled across the feed. */
-function cardNoisyContextLines(card, rowsById) {
-  const objects = [];
-  for (const factId of card.factIds || []) {
-    const row = rowsById.get(factId);
-    if (!row || !IDENTITY_PREDICATES.has(row.predicate)) continue;
-    if (normFactTerm(row.subject) !== card.hub) continue;
-    if (NOISY_HUB_CLASS_TERMS.has(normFactTerm(row.object))) objects.push(row.object);
-  }
-  return objects;
+/** A card's own noisy identity-sentence objects, metric 5's same-sense test
+ *  read out per card instead of pooled across the feed — the same
+ *  classification `noisyHubRelationRate` counts, so a card's own display
+ *  can never drift from the feed-wide rate. */
+function cardNoisyContextLines(card, rowsById, index) {
+  return cardIdentityLineClassifications(card, rowsById, index)
+    .filter((c) => c.noisy)
+    .map((c) => c.row.object);
 }
 
 /** Whether this card's paragraph repeats another card's sentence, or its
@@ -93,9 +86,9 @@ function rejectionStage(item, ledgerEntries) {
   return touched ? "parsed; term(s) never grounded" : "no recognizable claim in the text";
 }
 
-function cardArticle(card, allCards, items, rowsById, perItemGrounded) {
+function cardArticle(card, allCards, items, rowsById, perItemGrounded, index) {
   const backingItems = backingItemsFor(card, items);
-  const noisy = cardNoisyContextLines(card, rowsById);
+  const noisy = cardNoisyContextLines(card, rowsById, index);
   const repeat = cardRepeat(card, allCards);
   const date = cardDate(backingItems);
   const backingGrounded = backingItems.map((item) => perItemGrounded.get(item.id)).filter(Boolean);
@@ -140,11 +133,12 @@ export function buildArticlesReport({ feed, state, rows }) {
   const cards = feed.items;
   const perItemGrounded = new Map(groundedTermPerItem(state, rows).map((r) => [r.itemId, r]));
   const ledgerEntries = [...ledgerFromPayload(state.ledger).terms.values()];
+  const index = noisyHubIndex(rows, state);
 
   const cardFactIdUnion = new Set();
   for (const card of cards) for (const id of card.factIds || []) cardFactIdUnion.add(id);
 
-  const cardEntries = cards.map((card) => cardArticle(card, cards, items, rowsById, perItemGrounded));
+  const cardEntries = cards.map((card) => cardArticle(card, cards, items, rowsById, perItemGrounded, index));
 
   const cardlessEntries = items
     .filter((item) => (item.factIds || []).length > 0 && !(item.factIds || []).some((id) => cardFactIdUnion.has(id)))

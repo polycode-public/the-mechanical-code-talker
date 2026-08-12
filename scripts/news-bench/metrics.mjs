@@ -9,8 +9,10 @@
 // wording a later run is compared against.
 
 import { normFactTerm } from "../../src/domain/hash.mjs";
-import { isNewsProvenance } from "../../src/domain/news-feed.mjs";
+import { isNewsProvenance, buildTermAdjacency } from "../../src/domain/news-feed.mjs";
 import { ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
+import { tokenizeProse } from "../../src/domain/prose.mjs";
+import { STOP_SET as ABSTRACT_ROOT_TERMS } from "../../src/domain/hub-terms.mjs";
 
 // ---------------------------------------------------------------------------
 // closed sets — every one of these IS the judgment call for its metric; the
@@ -68,9 +70,21 @@ export const DEFINITIONS = Object.freeze({
     + "paragraphSurvival counts one whose literal text appears in a card the item contributed "
     + "facts to. rawCandidateCount (no gazetteer filter) is reported alongside for reference.",
   noisyHubRelationRate:
-    "identity-sentence objects (rdf:type/rdfs:subClassOf rows whose subject is the card's own "
-    + "hub, drawn from the card's full factIds set) that fall in NOISY_HUB_CLASS_TERMS, "
-    + "divided by all such identity objects shown across the feed.",
+    "every rdf:type/rdfs:subClassOf row in a card's full factIds set is a context line — the "
+    + "hub's own identity sentence plus the identity rows riding along in its two-hop "
+    + "'Around it' background, since a hub that only ever appears as an object (a place a quake "
+    + "struck) carries its class-membership noise on the SUBJECT of those background rows, not "
+    + "the hub itself. A line (subject S, object Y) is noisy unless a same-sense test finds "
+    + "positive support for Y in S's own company: build a pool from the card's own news-sentence "
+    + "text (the backing item(s)' title+summary, tokenized) plus every OTHER term S connects to "
+    + "anywhere in the store (S's one-hop neighbourhood, the tested row excluded); a line is NOT "
+    + "noisy when Y itself, or any of Y's own one-hop neighbours, shares a content word (ABSTRACT_"
+    + "ROOT_TERMS-filtered) with that pool. Two disjoint WordNet senses of the same lemma share no "
+    + "such neighbour by construction, which is what catches 'earthquake is a kind of electrical "
+    + "device' with no closed list; a line that fits the hub's own topic almost always shares one "
+    + "(a hub's OTHER identity objects are each other's neighbours; a news article's own words "
+    + "usually name a real hypernym). noisyHubRateClosedList carries the prior closed-abstract-"
+    + "class-list reading of the same denominator, kept alongside for one release.",
   paragraphShape:
     "sentencesPerCard: each card's paragraph split on \". \", min/max/mean across the feed. "
     + "repeatedSentenceRate: (sentence occurrences beyond each string's first) / (total "
@@ -294,20 +308,148 @@ export function entityPreservation(state, rows, feed) {
 
 const IDENTITY_PREDICATES = new Set(["rdf:type", "rdfs:subClassOf"]);
 
-export function noisyHubRelationRate(feed, rows) {
-  const rowsById = new Map(rows.map((r) => [r.id, r]));
-  let total = 0;
-  let noisy = 0;
-  for (const item of feed.items) {
+/** Every identity-predicate row in a card's own factIds set — the hub's own
+ *  identity sentence AND the identity rows riding along in its two-hop
+ *  "Around it" background. A hub that only ever appears as an OBJECT (a
+ *  place a quake struck, per news-feed.mjs's own aboutHub fallback) carries
+ *  no subject-side identity row of its own; its class-membership noise sits
+ *  on the SUBJECT of a background row instead ("earthquake is a kind of
+ *  electrical device" two hops from a "mina, nevada" hub), so this counts
+ *  every identity row the card's subgraph reaches, not only the ones whose
+ *  subject is literally the hub. */
+function identityLinesForCard(card, rowsById) {
+  const out = [];
+  for (const factId of card.factIds || []) {
+    const row = rowsById.get(factId);
+    if (row && IDENTITY_PREDICATES.has(row.predicate)) out.push(row);
+  }
+  return out;
+}
+
+/** A term's own one-hop content-word cloud: every OTHER term touching it
+ *  anywhere in `rows` (any predicate, not just identity — a synonym or a
+ *  reported relation counts too), tokenized and stripped of the abstract
+ *  WordNet-root terms that would otherwise let almost any two class labels
+ *  falsely "agree" on a word like "state" or "group". `excludeRowId` drops
+ *  the row under test itself, so a line can never cite its own existence as
+ *  its own supporting evidence. */
+function neighbourContentTokens(adjacency, rows, term, excludeRowId) {
+  const tokens = new Set();
+  for (const idx of adjacency.byTerm.get(term) ?? []) {
+    const row = rows[idx];
+    if (row.id === excludeRowId) continue;
+    const [s, o] = adjacency.terms[idx];
+    const other = s === term ? o : s;
+    for (const t of tokenizeProse(other)) if (!ABSTRACT_ROOT_TERMS.has(t)) tokens.add(t);
+  }
+  return tokens;
+}
+
+function contentTokensOf(term) {
+  return tokenizeProse(term).filter((t) => !ABSTRACT_ROOT_TERMS.has(t));
+}
+
+function hasOverlap(a, b) {
+  for (const t of a) if (b.has(t)) return true;
+  return false;
+}
+
+/** One identity line's own support pool: the card's news-sentence text
+ *  (its backing item(s)' title+summary, tokenized) plus every OTHER term
+ *  the row's own SUBJECT connects to anywhere in the store — its one-hop
+ *  neighbourhood, the tested row itself excluded so a hub's OTHER identity
+ *  objects can corroborate this one without the row corroborating itself. */
+function supportPoolFor(row, { newsSentenceTokens, rows, adjacency }) {
+  const pool = new Set(newsSentenceTokens);
+  for (const t of contentTokensOf(row.subject)) pool.add(t);
+  for (const t of neighbourContentTokens(adjacency, rows, normFactTerm(row.subject), row.id)) pool.add(t);
+  return pool;
+}
+
+/** The mechanical same-sense test: a line is noisy unless the object Y
+ *  itself, or one of Y's own one-hop neighbours, shares a content word with
+ *  the row's support pool. Two disjoint WordNet senses of the same lemma
+ *  share no such neighbour by construction; a line that fits the hub's own
+ *  topic almost always does (a hub's other identity objects are each
+ *  other's neighbours; a news article's own words usually name a real
+ *  hypernym). `noisyClosedList` carries the prior closed-list reading of
+ *  the same line, alongside for one release. */
+export function classifyIdentityLine(row, { newsSentenceTokens, rows, adjacency }) {
+  const object = normFactTerm(row.object);
+  const noisyClosedList = NOISY_HUB_CLASS_TERMS.has(object);
+  const pool = supportPoolFor(row, { newsSentenceTokens, rows, adjacency });
+
+  const candidateTokens = new Set(contentTokensOf(object));
+  for (const t of neighbourContentTokens(adjacency, rows, object, row.id)) candidateTokens.add(t);
+
+  const noisy = !hasOverlap(candidateTokens, pool);
+  return { noisy, noisyClosedList };
+}
+
+function itemsByFactIdIndex(state) {
+  const byFactId = new Map();
+  for (const item of state?.items || []) {
     for (const factId of item.factIds || []) {
-      const row = rowsById.get(factId);
-      if (!row || !IDENTITY_PREDICATES.has(row.predicate)) continue;
-      if (normFactTerm(row.subject) !== item.hub) continue;
-      total += 1;
-      if (NOISY_HUB_CLASS_TERMS.has(normFactTerm(row.object))) noisy += 1;
+      if (!byFactId.has(factId)) byFactId.set(factId, []);
+      byFactId.get(factId).push(item);
     }
   }
-  return { contextLines: total, noisy, rate: total ? noisy / total : null };
+  return byFactId;
+}
+
+function newsSentenceTokensForCard(card, itemsByFactId) {
+  const tokens = new Set();
+  const seenItemIds = new Set();
+  for (const factId of card.factIds || []) {
+    for (const item of itemsByFactId.get(factId) || []) {
+      if (seenItemIds.has(item.id)) continue;
+      seenItemIds.add(item.id);
+      for (const t of tokenizeProse(`${item.title || ""} ${item.summary || ""}`)) tokens.add(t);
+    }
+  }
+  return tokens;
+}
+
+/** The shared, once-per-report scaffolding metric 5's per-card classifier
+ *  needs: the term adjacency (built once over the whole `rows` array) and
+ *  the fact-id -> backing-item index — exported so the articles log's own
+ *  per-card noisy-line display classifies exactly the same way the
+ *  aggregate rate does, without either recomputing the other's index. */
+export function noisyHubIndex(rows, state) {
+  return { rows, adjacency: buildTermAdjacency(rows), itemsByFactId: itemsByFactIdIndex(state) };
+}
+
+/** One card's own identity lines, each classified — the articles log's
+ *  per-card "noisy context lines" and the aggregate rate below both read
+ *  off this same list, so a card's own display can never drift from what
+ *  the feed-wide rate counted it as. */
+export function cardIdentityLineClassifications(card, rowsById, index) {
+  const newsSentenceTokens = newsSentenceTokensForCard(card, index.itemsByFactId);
+  return identityLinesForCard(card, rowsById).map((row) => ({
+    row,
+    ...classifyIdentityLine(row, { newsSentenceTokens, rows: index.rows, adjacency: index.adjacency }),
+  }));
+}
+
+export function noisyHubRelationRate(feed, rows, state) {
+  const rowsById = new Map(rows.map((r) => [r.id, r]));
+  const index = noisyHubIndex(rows, state);
+  let total = 0;
+  let noisy = 0;
+  let noisyClosedListTotal = 0;
+  for (const card of feed.items) {
+    for (const c of cardIdentityLineClassifications(card, rowsById, index)) {
+      total += 1;
+      if (c.noisy) noisy += 1;
+      if (c.noisyClosedList) noisyClosedListTotal += 1;
+    }
+  }
+  return {
+    contextLines: total,
+    noisy,
+    rate: total ? noisy / total : null,
+    noisyHubRateClosedList: total ? noisyClosedListTotal / total : null,
+  };
 }
 
 // ---------------------------------------------------------------------------

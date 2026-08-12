@@ -167,7 +167,7 @@ export async function runBench({ seed = "xl", date = null, sourceIds = FIXTURE_S
     const groundedTerm = metrics.groundedTermProportion(state, rows);
     const dedupe = { ...metrics.dedupeRatio(feed, admission), secondPassNewItems, secondPassNewCards };
     const entity = metrics.entityPreservation(state, rows, feed);
-    const noisyHub = metrics.noisyHubRelationRate(feed, rows);
+    const noisyHub = metrics.noisyHubRelationRate(feed, rows, state);
     const paragraph = metrics.paragraphShape(feed);
     const rankedNoise = metrics.rankedTermNoise(rankedEntries);
     const size = metrics.sizeMetrics(rows, admission.aggregate.admitted, feedDocBytes, MAX_FEED_DOCUMENT_BYTES);
@@ -245,7 +245,7 @@ ${m.entityPreservation.anchoredCandidateCount} gazetteer-anchored candidate(s) o
 
 ## 5. Noisy-hub-relation rate
 
-${m.noisyHubRelationRate.noisy}/${m.noisyHubRelationRate.contextLines} context line(s) noisy (${pct(m.noisyHubRelationRate.rate)}).
+${m.noisyHubRelationRate.noisy}/${m.noisyHubRelationRate.contextLines} context line(s) noisy (${pct(m.noisyHubRelationRate.rate)}), same-sense test. Closed-list reading: ${pct(m.noisyHubRelationRate.noisyHubRateClosedList)}.
 
 ## 6. Paragraph shape
 
