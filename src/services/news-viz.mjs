@@ -151,6 +151,7 @@ ${THEME_TOKENS_CSS}
   .item .newtag { font-family: ${MONO_STACK}; font-size: .64rem; color: var(--taught); margin-left: .5rem; }
   .item .paragraph { margin: .4rem 0; }
   .item .sources-links { font-size: .74rem; color: var(--muted); }
+  .item .sourcedate { font-family: ${MONO_STACK}; }
   .item details.facts summary { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--corpus); cursor: pointer; }
   .item details.background summary { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); cursor: pointer; }
   .item details.background p { margin: .35rem 0 0; color: var(--muted); }
@@ -482,12 +483,29 @@ ${NEWS_STYLE}
     });
   }
 
+  // The earliest publication date among a card's sources — a lexicographic
+  // min over ISO-8601 UTC strings sorts chronologically without parsing, and
+  // "earliest" reads as when the reported event actually happened rather
+  // than whichever source snapshot the subgraph walk reached last. A source
+  // with no publishedAt (its feed never carries one) never contributes here,
+  // so a card built entirely from undated sources shows no date at all.
+  function earliestSourceDate(sources) {
+    let earliest = null;
+    for (const s of sources || []) {
+      if (!s.publishedAt) continue;
+      if (earliest === null || s.publishedAt < earliest) earliest = s.publishedAt;
+    }
+    return earliest;
+  }
+
   function cardHtml(item) {
     const factLines = item.factLines || [];
     const factsHtml = factLines.map(function (line) { return '<div class="factrow">' + esc(line) + '</div>'; }).join("");
     const moreCount = (item.factCount || 0) - factLines.length;
     const moreHtml = moreCount > 0 ? '<div class="factrow factmore">&hellip;and ' + moreCount + ' more</div>' : "";
     const sourcesText = (item.sources || []).map(function (s) { return esc(s.title || s.url || ""); }).filter(Boolean).join(", ");
+    const sourceDate = earliestSourceDate(item.sources);
+    const dateText = sourceDate ? ' <span class="sourcedate">(' + esc(sourceDate.slice(0, 10)) + ')</span>' : "";
     const background = item.backgroundParagraph
       ? '<details class="background"><summary>what the graph already knew</summary><p>' + esc(item.backgroundParagraph) + '</p></details>'
       : "";
@@ -496,7 +514,7 @@ ${NEWS_STYLE}
       + '<span class="hub">' + esc(item.hub) + '</span><span class="tier">' + esc(item.tier || "unranked") + '</span>' + newTag
       + '<p class="paragraph">' + esc(item.paragraph) + '</p>'
       + background
-      + (sourcesText ? '<p class="sources-links">sources: ' + sourcesText + '</p>' : "")
+      + (sourcesText ? '<p class="sources-links">sources: ' + sourcesText + dateText + '</p>' : "")
       + '<details class="facts"><summary>' + (item.factCount || 0) + ' fact' + (item.factCount === 1 ? "" : "s") + '</summary>' + factsHtml + moreHtml + '</details>'
       + '</div>';
   }

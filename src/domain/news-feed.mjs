@@ -548,7 +548,11 @@ function collectSources(subgraphRows, sourcesByFactId) {
     const key = src.url || src.title || "";
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    sources.push({ title: src.title || "", url: src.url || "", name: src.name || "" });
+    const entry = { title: src.title || "", url: src.url || "", name: src.name || "" };
+    // Carried through only when the source snapshot actually has one — a
+    // card for an undated snapshot shows no date rather than a blank field.
+    if (src.publishedAt) entry.publishedAt = src.publishedAt;
+    sources.push(entry);
   }
   return sources;
 }
@@ -657,8 +661,9 @@ export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = 
 
 /** newsworthyHubs -> one item per hub (PLAN_NEWS_FEED.md section 6.6),
  *  paragraph included, sorted builtAt desc then id asc. `sourcesByFactId`
- *  maps fact ids to snapshot source links ({ title, url, name }). The gate
- *  (PLAN_NEWS_FEED.md section 17): `reportedRows` replaces `newsWindowRows`
+ *  maps fact ids to snapshot source links ({ title, url, name, publishedAt?
+ *  }); publishedAt is present only when the source snapshot carried one.
+ *  The gate (PLAN_NEWS_FEED.md section 17): `reportedRows` replaces `newsWindowRows`
  *  and `newsworthyHubs` replaces `scoreHubs` as this function's own inputs —
  *  both keep their prior behaviour for every other caller. Each item's
  *  two-hop sub-graph then splits into its own `reported`/`background` rows,

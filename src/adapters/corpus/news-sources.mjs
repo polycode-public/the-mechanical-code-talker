@@ -260,16 +260,24 @@ async function fetchFeedFormat(record, gate, { format, now }) {
  *  carries `wikibaseItem` when the article names one, past normalizeFeedItems
  *  (which only knows the snapshot's own fixed fields) so the news
  *  enrichment loop can short-circuit straight to the Wikidata KB source with
- *  the Q-id already in hand, no lookup needed. */
+ *  the Q-id already in hand, no lookup needed.
+ *
+ *  Neither `news` nor `mostread` carries a per-article timestamp in the raw
+ *  payload — the only date this feed exposes is the UTC calendar day the
+ *  request itself names (the `/YYYY/MM/DD/` path Wikimedia selected these
+ *  articles for), so `publishedAt` is stamped from whichever day's page
+ *  actually answered (the primary day, or the prior day on a 404 retry),
+ *  never from the fetch's own clock. */
 async function fetchWikimediaFeed(record, gate, { now }) {
-  const primaryUrl = wikimediaFeedUrl(record.url, now);
-  let body = await pacedFetchJson(gate, primaryUrl);
+  let feedDay = now;
+  let body = await pacedFetchJson(gate, wikimediaFeedUrl(record.url, feedDay));
   if (body === null) {
     // A 404 means the day's page is not yet published; retry once against
     // the previous UTC day before giving up.
     const prevDay = new Date(now);
     prevDay.setUTCDate(prevDay.getUTCDate() - 1);
-    body = await pacedFetchJson(gate, wikimediaFeedUrl(record.url, prevDay.toISOString()));
+    feedDay = prevDay.toISOString();
+    body = await pacedFetchJson(gate, wikimediaFeedUrl(record.url, feedDay));
     if (body === null) return null;
   }
   if (isNotModified(body)) return { items: [], bytes: 0, notModified: true };
@@ -280,12 +288,14 @@ async function fetchWikimediaFeed(record, gate, { now }) {
       ? body.mostread.articles
       : [];
 
+  const { yyyy, mm, dd } = utcDateParts(feedDay);
+  const feedDayIso = `${yyyy}-${mm}-${dd}T00:00:00.000Z`;
   const raw = articles.map((a) => ({
     guid: a?.wikibase_item || a?.normalizedtitle || a?.title || "",
     title: stripMarkup(a?.normalizedtitle || a?.displaytitle || a?.title || ""),
     url: a?.content_urls?.desktop?.page || "",
     summary: stripMarkup(a?.extract || ""),
-    publishedAt: "",
+    publishedAt: feedDayIso,
     wikibaseItem: a?.wikibase_item || "",
   }));
 
