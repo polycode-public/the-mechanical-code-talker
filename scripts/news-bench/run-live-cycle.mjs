@@ -8,18 +8,21 @@
 // Network is used ONLY for the enrichment lookups — the news sources are
 // always the committed captures.
 import { readFileSync } from "node:fs";
-import { createNewsFetcher, NEWS_SOURCE_RECORDS } from "./src/adapters/corpus/news-sources.mjs";
-import { clampNewsConfig, createNewsState, pollNewsSources, enrichTopTerms, buildFeed } from "./src/services/news.mjs";
-import { createInMemoryStore, applySeedPayload, loadMemory, readFactRows, appendFacts, removeFacts } from "./src/adapters/memory/core.mjs";
-import { loadLexicon } from "./src/domain/grammar/lexicon.mjs";
-import { getResearchProvider } from "./src/adapters/corpus/wikipedia-live.mjs";
-import { rankedTerms, ledgerFromPayload } from "./src/domain/term-ledger.mjs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+import { createNewsFetcher, NEWS_SOURCE_RECORDS } from "../../src/adapters/corpus/news-sources.mjs";
+import { clampNewsConfig, createNewsState, pollNewsSources, enrichTopTerms, buildFeed } from "../../src/services/news.mjs";
+import { createInMemoryStore, applySeedPayload, loadMemory, readFactRows, appendFacts, removeFacts } from "../../src/adapters/memory/core.mjs";
+import { loadLexicon } from "../../src/domain/grammar/lexicon.mjs";
+import { getResearchProvider } from "../../src/adapters/corpus/wikipedia-live.mjs";
+import { rankedTerms, ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
 
 const NOW = new Date().toISOString();
 const SOURCES = ["hacker-news", "nyt-world"];
 
 function fixtureTransport(sourceId) {
-  const capture = JSON.parse(readFileSync(`test/fixtures/news-feeds/${sourceId}/2026-08-12.json`, "utf8"));
+  const capture = JSON.parse(readFileSync(join(ROOT, "test", "fixtures", "news-feeds", sourceId, "2026-08-12.json"), "utf8"));
   const calls = capture.calls;
   return async (url) => {
     const u = String(url);
@@ -33,7 +36,7 @@ function fixtureTransport(sourceId) {
 }
 
 const handle = createInMemoryStore();
-applySeedPayload(handle, JSON.parse(readFileSync("public/chat-seed.json", "utf8")));
+applySeedPayload(handle, JSON.parse(readFileSync(join(ROOT, "public", "chat-seed.json"), "utf8")));
 const ctx = {
   memoryDir: handle,
   store: { loadMemory, readFactRows, appendFacts, removeFacts },
