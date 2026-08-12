@@ -118,6 +118,8 @@
     "gen:screenshots": "node scripts/gen-screenshots.mjs",
     "gen:og-images": "node scripts/gen-og-images.mjs",
     "probe:news-sources": "node scripts/probe-news-sources.mjs",
+    "bench:news": "node scripts/news-bench/run.mjs --seed=xl",
+    "bench:news:fast": "node scripts/news-bench/run.mjs --seed=fixture",
     "check:links": "node scripts/check-links.mjs",
     "check:pii": "node scripts/pii-lint.mjs",
     "check:pack": "node scripts/check-pack-manifest.mjs",
