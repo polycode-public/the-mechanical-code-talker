@@ -72,10 +72,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   every bench run writes `<run>-articles.md`, and both completed iterations have
   retroactive logs (baseline reproduction matched committed metrics exactly).
   What the logs exposed, in lever order:
-  - **Attribution conflation** — every quake card lists all 44 quake items as its
-    sources (card-to-item mapping keys on the shared subject "earthquake"); the
-    same root plausibly drives the 79% "Around it" repeat. Lever agent in flight:
-    worktree `.claude/worktrees/agent-ac52d44f5656952c4` (Opus).
+  - **Attribution conflation — fixed and merged** (3 commits through `383be97e`):
+    a card cites the items behind its own report ("mina, nevada" 44 sources → 1;
+    total citations 1,252 → 55), "Around it" is per-hub with category nodes
+    suppressed (repeat 79% → 0%, repeated sentences 37% → 6.8%), feed document
+    300 KB → 68 KB, floors ratcheted. Remainder handed to the bench agent: the
+    articles log's "backing item(s)" still derives from the two-hop factIds.
   - **The noisy-context metric under-counts** — "earthquake is a kind of
     electrical device / good health / flesh" scores zero because the closed
     abstract-class list can't enumerate sense pollution; a same-sense definition
