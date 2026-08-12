@@ -89,7 +89,18 @@ in flight as worktree sub-agents; each names its own branch.
    `worktree-agent-add917bc647f82f46`, unmerged), `migrateStoredMemory`
    re-running per memory-handle load, `buildMemoryIndex` rebuilt per write.
    Expected: more articles ground per 60 s press; faster runs.
-6. [ ] **Fact-listing line order tracks arrival order** — the repo invariant says
+6. [ ] **Thin-source cards crowd the feed** — iteration 9 printed nine cards and
+   seven were Hacker News, each reading "hackernews discuss X" with no
+   background. The synthesised summary itself is right and deliberate
+   (`news-sources.mjs` quotes the headline inside a fixed frame so its words
+   can't be re-read as a claim; the comment there explains it), but a source
+   whose items carry no body can never make a target-shaped card, and at seven
+   of nine those cards dominate both the live page and this loop's own
+   measurement. Wanted: admission or ranking that stops a bodyless source
+   crowding out cards with real content — without silently dropping items,
+   which would hide misses rather than fix them. Lands in
+   `src/domain/news-feed.mjs`, so it waits for item 3 to merge.
+7. [ ] **Fact-listing line order tracks arrival order** — the repo invariant says
    any read-time resolver over the fact store is a pure function of the fact
    set, and the listing reader is not yet one in its ordering.
    `rankByBiasThenTrust` is a stable sort, so equal-trust rows keep ingestion
