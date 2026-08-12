@@ -178,13 +178,12 @@ export async function runBench({
   return withNetworkDisabled(async () => {
     const { dates, runNow } = resolveFixtureDates(sourceIds, date);
     const { handle: memoryDir, seedDigest, seedRowCount } = await seededMemoryHandle(seed);
-    // itemCap is a GLOBAL cap across every source's own snapshots
-    // (mergeSnapshotsById evicts the oldest once the combined total crosses
-    // it), not a per-source one — a one-shot measurement over five sources'
-    // worth of fixtures needs every genuinely fetched item to survive long
-    // enough to be measured, so this pins the knob at its own product
-    // ceiling (clampNewsConfig's own [1, 200] range) rather than the
-    // rolling-poll default of 30.
+    // itemCap bounds each source's own window (mergeSnapshots runs it
+    // per-source, then the results fold back together) — a one-shot
+    // measurement over a whole fixture set needs every genuinely fetched
+    // item to survive long enough to be measured, so this pins the knob at
+    // its own product ceiling (clampNewsConfig's own [1, 200] range) rather
+    // than the rolling-poll default of 30.
     const config = clampNewsConfig({ sources: sourceIds, itemCap: 200 });
     const state = createNewsState();
     const ctx = {

@@ -120,6 +120,8 @@
     "probe:news-sources": "node scripts/probe-news-sources.mjs",
     "bench:news": "node scripts/news-bench/run.mjs --seed=xl",
     "bench:news:fast": "node scripts/news-bench/run.mjs --seed=fixture",
+    "bench:news:iterate": "node scripts/news-bench/iterate.mjs",
+    "bench:inputs": "node scripts/news-bench/ensure-bench-inputs.mjs",
     "check:links": "node scripts/check-links.mjs",
     "check:pii": "node scripts/pii-lint.mjs",
     "check:pack": "node scripts/check-pack-manifest.mjs",

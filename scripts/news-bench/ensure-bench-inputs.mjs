@@ -56,14 +56,21 @@ function copyPath(from, to) {
   copyFileSync(from, to);
 }
 
+// A few seconds ahead of "now", not exactly "now" — utimesSync round-trips
+// the timestamp through a lower-precision on-disk format, and an exact
+// "now" stamp can read back a hair earlier than a source file's own
+// just-written mtime, misreading a copy that just landed as already stale
+// again on the very next check.
+const FRESHNESS_STAMP_LEAD_MS = 5000;
+
 function stampFreshNow(path) {
-  const now = new Date();
+  const stampedAt = new Date(Date.now() + FRESHNESS_STAMP_LEAD_MS);
   const stat = statSync(path);
   if (stat.isDirectory()) {
     for (const entry of readdirSync(path)) stampFreshNow(join(path, entry));
     return;
   }
-  utimesSync(path, now, now);
+  utimesSync(path, stampedAt, stampedAt);
 }
 
 /** One artifact: `targets` are the absolute paths that must all exist for it
@@ -81,14 +88,21 @@ const ARTIFACTS = [
     ],
     freshnessTarget: join(ROOT, "corpus", "worlds", "manifest.json"),
     sources: [join(ROOT, "corpus", "worlds", "src")],
-    build: () => execFileSync("node", ["scripts/ensure-worlds-pack.mjs"], { cwd: ROOT, stdio: "inherit" }),
+    // The real generator, not scripts/ensure-worlds-pack.mjs's own wrapper —
+    // we've already made the staleness call above, and the wrapper's own
+    // (existence-only-adjacent) check would otherwise sometimes skip a
+    // rebuild we just decided to do, leaving the target's mtime stuck in the
+    // past and this artifact reads "stale" again on every following run.
+    build: () => execFileSync("node", ["scripts/build-worlds-pack.mjs"], { cwd: ROOT, stdio: "inherit" }),
   },
   {
     name: "sprite facts",
     targets: [join(ROOT, "corpus", "sprites", "src", "sprite-facts.jsonl")],
     freshnessTarget: join(ROOT, "corpus", "sprites", "src", "sprite-facts.jsonl"),
     sources: [join(ROOT, "data", "sprites"), join(ROOT, "data", "sprites-large")],
-    build: () => execFileSync("node", ["scripts/ensure-sprite-facts.mjs"], { cwd: ROOT, stdio: "inherit" }),
+    // The real generator (see the worlds-pack artifact above for why not
+    // scripts/ensure-sprite-facts.mjs's own existence-only wrapper).
+    build: () => execFileSync("node", ["scripts/gen-sprite-facts.mjs"], { cwd: ROOT, stdio: "inherit" }),
   },
   {
     name: "ask bundle",
@@ -139,7 +153,12 @@ function collectSourceFiles(root, { extensions = null, exclude = [] } = {}) {
   return out;
 }
 
-function isStale(artifact) {
+/** Whether `artifact` needs a rebuild: any target missing, or its
+ *  freshness target is strictly older than the newest of its own sources.
+ *  A pure function of the filesystem state — no ROOT, no side effects — so
+ *  a test can hand it a synthetic artifact built entirely from temp-dir
+ *  paths. */
+export function isStaleArtifact(artifact) {
   if (!artifact.targets.every(existsSync)) return true;
   const sourceFiles = artifact.sources.flatMap((root) => collectSourceFiles(root, {
     extensions: artifact.sourceExtensions ?? null,
@@ -148,8 +167,8 @@ function isStale(artifact) {
   return newestMtimeMs(sourceFiles) > statSync(artifact.freshnessTarget).mtimeMs;
 }
 
-function copyFromRoot(artifact, fromRoot) {
-  const fromPaths = artifact.targets.map((target) => join(fromRoot, relative(ROOT, target)));
+function copyFromRoot(artifact, fromRoot, relativeToRoot) {
+  const fromPaths = artifact.targets.map((target) => join(fromRoot, relative(relativeToRoot, target)));
   if (!fromPaths.every(existsSync)) return false;
   for (let i = 0; i < artifact.targets.length; i += 1) {
     copyPath(fromPaths[i], artifact.targets[i]);
@@ -158,21 +177,21 @@ function copyFromRoot(artifact, fromRoot) {
   return true;
 }
 
+/** Builds one artifact only if `isStaleArtifact` says so: up to date is a
+ *  no-op, `from` copies (and freshness-stamps) it from another checkout's
+ *  matching path when that path actually has it, and anything else falls
+ *  back to `artifact.build()`. `relativeToRoot` is the root `artifact`'s own
+ *  target paths are absolute under — ROOT for every real artifact, a test's
+ *  own temp root for a synthetic one. Returns the action taken. */
+export function ensureArtifact(artifact, { from = null, relativeToRoot = ROOT } = {}) {
+  if (!isStaleArtifact(artifact)) return "up to date";
+  if (from && copyFromRoot(artifact, from, relativeToRoot)) return `copied from ${from}`;
+  artifact.build();
+  return "built";
+}
+
 export async function ensureBenchInputs({ from = null } = {}) {
-  const results = [];
-  for (const artifact of ARTIFACTS) {
-    if (!isStale(artifact)) {
-      results.push({ name: artifact.name, action: "up to date" });
-      continue;
-    }
-    if (from && copyFromRoot(artifact, from)) {
-      results.push({ name: artifact.name, action: `copied from ${from}` });
-      continue;
-    }
-    artifact.build();
-    results.push({ name: artifact.name, action: "built" });
-  }
-  return results;
+  return ARTIFACTS.map((artifact) => ({ name: artifact.name, action: ensureArtifact(artifact, { from }) }));
 }
 
 function parseArgs(argv) {
