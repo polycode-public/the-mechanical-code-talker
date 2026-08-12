@@ -77,6 +77,9 @@ export const NEWS_DEFAULTS = Object.freeze({
   enrichTermsPerCycle: 3,
   negativeCacheTtlHours: 24,
   syllogismsPerIngest: 12,
+  // Per source, not across the whole poll: each enabled source keeps its own
+  // window of up to this many snapshots, so one prolific source can never
+  // crowd another out of the window before either has been read.
   itemCap: 30,
   newsFactCap: 4000,
   feedTop: 3,
@@ -639,10 +642,15 @@ export async function pollNewsSources(ctx) {
       recordSuccess(health, nowVal, "not-modified");
     } else {
       recordSuccess(health, nowVal, "ok");
-      const merged = mergeSnapshots(state.items, result.items, {
+      // itemCap bounds THIS source's own window: mergeSnapshots sees only
+      // sourceId's existing snapshots, so one prolific source's window
+      // never crowds out another's before either has been read.
+      const ownItems = (state.items || []).filter((snap) => snap?.sourceId === sourceId);
+      const otherItems = (state.items || []).filter((snap) => snap?.sourceId !== sourceId);
+      const merged = mergeSnapshots(ownItems, result.items, {
         cap: config.itemCap, seen: state.seenItemKeys,
       });
-      state.items = merged.items;
+      state.items = [...otherItems, ...merged.items].sort(byFetchedAtThenId);
       added = merged.added;
       newItemsTotal += added.length;
     }
