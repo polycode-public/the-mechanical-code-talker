@@ -29,8 +29,8 @@
 // itself is unplaced: with no sense to keep to, there is nothing to drift from.
 //
 // Pure over the fact set. The gate underneath sorts every frontier and memoizes
-// per term, and the anchor tops are a sorted union, so two ingestion orders of
-// the same facts admit the same terms.
+// per term, and an anchor set is a membership test over the tops it pools, so
+// two ingestion orders of the same facts admit the same terms.
 
 import { normFactTerm } from "./hash.mjs";
 import { buildSenseGate } from "./sense-gate.mjs";
@@ -51,15 +51,15 @@ function statesItsIsaEdge(row) {
   return true;
 }
 
-/** Builds the scope over one fact set. Only ASSERTED isa rows feed it: an
- *  entailed row is the closure's own output, and handing the closure back to
- *  the gate that constrains it is what lets a bad shortcut vouch for itself.
+/** Builds the scope over one fact set, reading only the asserted isa rows.
  *
  *  Returns `{ topsOf, sameSenseAs }`. `topsOf(term)` is the gate's own
  *  placement, exposed so a caller can explain a refusal. `sameSenseAs(anchors)`
  *  takes one term or an iterable of them and answers a `(term) => boolean`
- *  predicate: true when the term may stay in the anchors' neighbourhood. */
-export function buildSenseScope(rows, { gateOptions = null } = {}) {
+ *  predicate: true when the term may stay in the anchors' neighbourhood.
+ *  Several anchors pool their tops, so a walk seeded from more than one term
+ *  keeps to the senses of all of them. */
+export function buildSenseScope(rows) {
   const subClassEdges = [];
   const typeEdges = [];
   for (const row of rows || []) {
@@ -70,7 +70,7 @@ export function buildSenseScope(rows, { gateOptions = null } = {}) {
     if (row.predicate === SUBCLASS_PREDICATE) subClassEdges.push([child, parent]);
     else if (row.predicate === TYPE_PREDICATE) typeEdges.push([child, parent]);
   }
-  const gate = buildSenseGate({ subClassEdges, typeEdges, ...(gateOptions || {}) });
+  const gate = buildSenseGate({ subClassEdges, typeEdges });
 
   const topsOf = (term) => gate.topsOf(normFactTerm(term));
 
