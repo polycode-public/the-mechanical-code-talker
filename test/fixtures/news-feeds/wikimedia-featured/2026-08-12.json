@@ -1,6 +1,6 @@
 {
   "sourceId": "wikimedia-featured",
-  "capturedAt": "2026-08-12T14:02:18.573Z",
+  "capturedAt": "2026-08-12T22:51:39.681Z",
   "originUrl": "https://api.wikimedia.org/feed/v1/wikipedia/en/featured",
   "licence": "CC BY-SA 4.0",
   "calls": [
@@ -262,7 +262,7 @@
               "normalizedtitle": "DC (film)",
               "displaytitle": "<i>DC</i> (film)",
               "wikibase_item": "Q140836374",
-              "extract": "DC is a 2026 Indian Tamil-language romantic action thriller film directed by Arun Matheswaran and produced by Kalanithi Maran's Sun Pictures. The film stars Lokesh Kanagaraj, Wamiqa Gabbi and Sanjana Krishnamoorthy. It marks Lokesh's debut as a lead actor, and is loosely adapted from Sarat Chandra Chattopadhyay's novel Devdas (1917). DC follows Das, an outlaw and Chandra, a brutalised sex worker waging a violent war of revenge against corrupt police officers following the death of Parvathy, a bar singer.",
+              "extract": "DC is a 2026 Indian Tamil-language romantic action thriller film directed by Arun Matheswaran and produced by Kalanithi Maran's Sun Pictures. The film stars Lokesh Kanagaraj, Wamiqa Gabbi and Sanjana Krishnamoorthy. It follows Das, an outlaw and Chandra, a brutalised sex worker waging a violent war of revenge against corrupt police officers following the death of Parvathy, a bar singer.",
               "content_urls": {
                 "desktop": {
                   "page": "https://en.wikipedia.org/wiki/DC_(film)"
@@ -274,7 +274,7 @@
               "normalizedtitle": "Jasper Carrott",
               "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Jasper Carrott</span></span>",
               "wikibase_item": "Q2597366",
-              "extract": "Robert Norman Davis, known by his stage name, Jasper Carrott, is an English comedian, writer, actor, singer and television presenter. His credits include An Audience with Jasper Carrott (1978), The Secret Policeman's Other Ball (1982), Carrott's Lib (1982–1983), Jane and the Lost City (1987), Carrott's Commercial Breakdown (1989–1996), Canned Carrott (1990–1995), The Detectives (1993–1997), All About Me (2002–2004), and Golden Balls (2007–2009).",
+              "extract": "Robert Norman Davis, known by his stage name Jasper Carrott, is an English comedian, writer, actor, singer and television presenter. His credits include An Audience with Jasper Carrott (1978), The Secret Policeman's Other Ball (1982), Carrott's Lib (1982–1983), Jane and the Lost City (1987), Carrott's Commercial Breakdown (1989–1996), Canned Carrott (1990–1995), The Detectives (1993–1997), All About Me (2002–2004), and Golden Balls (2007–2009).",
               "content_urls": {
                 "desktop": {
                   "page": "https://en.wikipedia.org/wiki/Jasper_Carrott"
@@ -334,7 +334,7 @@
               "normalizedtitle": "Solar eclipse of August 12, 2026",
               "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Solar eclipse of August 12, 2026</span></span>",
               "wikibase_item": "Q2464643",
-              "extract": "A total solar eclipse will occur at the Moon's descending node of orbit on Wednesday, August 12, 2026, with a magnitude of 1.0386. A solar eclipse occurs when the Moon passes between the Earth and the Sun, and totally or partly obscures the view of the Sun for a viewer on Earth. A total solar eclipse occurs when the Moon's apparent diameter is larger than the Sun's, blocking all direct sunlight. Totality occurs in a narrow path across Earth's surface, with the partial solar eclipse visible over a surrounding region thousands of kilometres wide. Because the eclipse will occur about 2.2 days after perigee, the Moon's apparent diameter will be larger.",
+              "extract": "A total solar eclipse occurred at the Moon's descending node of orbit on Wednesday, August 12, 2026, with a magnitude of 1.0386. A solar eclipse occurs when the Moon passes between the Earth and the Sun, and totally or partly obscures the view of the Sun for a viewer on Earth. A total solar eclipse occurs when the Moon's apparent diameter is larger than the Sun's, blocking all direct sunlight. Totality occurs in a narrow path across Earth's surface, with the partial solar eclipse visible over a surrounding region thousands of kilometres wide. Because the eclipse occurred about 2.2 days after perigee, the Moon's apparent diameter was larger.",
               "content_urls": {
                 "desktop": {
                   "page": "https://en.wikipedia.org/wiki/Solar_eclipse_of_August_12%2C_2026"
@@ -358,7 +358,7 @@
               "normalizedtitle": "Francesca Hong",
               "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Francesca Hong</span></span>",
               "wikibase_item": "Q102181078",
-              "extract": "Francesca Hong is an American politician, former chef, and business owner who has represented Wisconsin's 76th Assembly district in the Wisconsin State Assembly since 2021. She is a member of the Democratic Party and the Democratic Socialists of America. Hong's district includes the downtown and east side of the state capital, Madison, as well as Maple Bluff. Hong was a candidate in the Democratic primary for governor of Wisconsin in the 2026 election and was endorsed by Wisconsin-based chapters of the Democratic Socialists of America, eventually losing to David Crowley. Hong has been described by media as on the far left of the political spectrum.",
+              "extract": "Francesca Hong is an American politician, former chef, and business owner who has represented Wisconsin's 76th Assembly district in the Wisconsin State Assembly since 2021. She is a member of the Democratic Party and the Democratic Socialists of America (DSA). Hong's district includes the downtown and east side of the state capital, Madison, as well as Maple Bluff. She was an unsuccessful candidate for Governor of Wisconsin in 2026, narrowly losing the Democratic primary to David Crowley in an upset. Her campaign was endorsed by Wisconsin-based chapters of the DSA. Hong has been described as far-left on the political spectrum.",
               "content_urls": {
                 "desktop": {
                   "page": "https://en.wikipedia.org/wiki/Francesca_Hong"
@@ -550,7 +550,7 @@
               "normalizedtitle": "Limonene",
               "displaytitle": "<span lang=\"en\" dir=\"ltr\"><span class=\"mw-page-title-main\">Limonene</span></span>",
               "wikibase_item": "Q278809",
-              "extract": "Limonene is a colorless liquid aliphatic hydrocarbon classified as a cyclic monoterpene, and is the major component in the fragrance and essential oil of citrus fruit peels, taking its name from Italian limone (\"lemon\").",
+              "extract": "Limonene is a slightly yellow-green liquid aliphatic hydrocarbon classified as a cyclic monoterpene, and is the major component in the fragrance and essential oil of citrus fruit peels, taking its name from Italian limone (\"lemon\").",
               "content_urls": {
                 "desktop": {
                   "page": "https://en.wikipedia.org/wiki/Limonene"

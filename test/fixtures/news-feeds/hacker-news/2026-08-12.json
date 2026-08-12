@@ -1,6 +1,6 @@
 {
   "sourceId": "hacker-news",
-  "capturedAt": "2026-08-12T19:30:19.692Z",
+  "capturedAt": "2026-08-12T22:51:39.681Z",
   "originUrl": "https://hacker-news.firebaseio.com/v0",
   "licence": "user-submitted, discussion linked",
   "calls": [
@@ -13,12 +13,12 @@
         49276574,
         49272832,
         49273478,
+        49279013,
         49270953,
         49272655,
-        49272569,
-        49276534,
         49275335,
-        49275132
+        49272569,
+        49274027
       ]
     },
     {
@@ -38,7 +38,7 @@
       "kind": "json",
       "body": {
         "id": 49276574,
-        "title": "Zed: Delta",
+        "title": "Delta",
         "url": "https://zed.dev/blog/introducing-delta",
         "time": 1786558799
       }
@@ -66,6 +66,17 @@
       }
     },
     {
+      "url": "https://hacker-news.firebaseio.com/v0/item/49279013.json",
+      "status": 200,
+      "kind": "json",
+      "body": {
+        "id": 49279013,
+        "title": "Thanks to social media, canned sardines are a scarcity on the supermarket shelf",
+        "url": "https://corneroffifth.studio/why-cant-you-find-canned-sardines-right-now/",
+        "time": 1786571129
+      }
+    },
+    {
       "url": "https://hacker-news.firebaseio.com/v0/item/49270953.json",
       "status": 200,
       "kind": "json",
@@ -88,28 +99,6 @@
       }
     },
     {
-      "url": "https://hacker-news.firebaseio.com/v0/item/49272569.json",
-      "status": 200,
-      "kind": "json",
-      "body": {
-        "id": 49272569,
-        "title": "Someone is running mass vulnerability scans, spoofing AI bots like ClaudeBot",
-        "url": "https://knownagents.com/insights",
-        "time": 1786543366
-      }
-    },
-    {
-      "url": "https://hacker-news.firebaseio.com/v0/item/49276534.json",
-      "status": 200,
-      "kind": "json",
-      "body": {
-        "id": 49276534,
-        "title": "Your Key to Success Isn't More Luck or Hard Work",
-        "url": "https://julienreszka.com/blog/your-key-to-success-isn-t-more-luck-or-hard-work/",
-        "time": 1786558623
-      }
-    },
-    {
       "url": "https://hacker-news.firebaseio.com/v0/item/49275335.json",
       "status": 200,
       "kind": "json",
@@ -121,14 +110,25 @@
       }
     },
     {
-      "url": "https://hacker-news.firebaseio.com/v0/item/49275132.json",
+      "url": "https://hacker-news.firebaseio.com/v0/item/49272569.json",
       "status": 200,
       "kind": "json",
       "body": {
-        "id": 49275132,
-        "title": "Glaciers on the Climate Dashboard",
-        "url": "https://climate.metoffice.cloud/glaciers.html",
-        "time": 1786552705
+        "id": 49272569,
+        "title": "Someone is running mass vulnerability scans, spoofing AI bots like ClaudeBot",
+        "url": "https://knownagents.com/insights",
+        "time": 1786543366
+      }
+    },
+    {
+      "url": "https://hacker-news.firebaseio.com/v0/item/49274027.json",
+      "status": 200,
+      "kind": "json",
+      "body": {
+        "id": 49274027,
+        "title": "Grok 4.6",
+        "url": "https://x.ai/news/grok-4-6",
+        "time": 1786548770
       }
     }
   ]

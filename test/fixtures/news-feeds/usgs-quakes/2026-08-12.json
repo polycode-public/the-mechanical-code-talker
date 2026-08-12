@@ -1,6 +1,6 @@
 {
   "sourceId": "usgs-quakes",
-  "capturedAt": "2026-08-12T14:02:18.573Z",
+  "capturedAt": "2026-08-12T22:51:39.681Z",
   "originUrl": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson",
   "licence": "US public domain",
   "calls": [
@@ -11,6 +11,138 @@
       "body": {
         "type": "FeatureCollection",
         "features": [
+          {
+            "type": "Feature",
+            "id": "us6000tkba",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tkba.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tkba",
+              "title": "M 5.3 - 227 km E of Levuka, Fiji",
+              "place": "227 km E of Levuka, Fiji",
+              "time": 1786572813924
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "aka2026pxocue",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026pxocue.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026pxocue",
+              "title": "M 2.6 - 16 km WNW of Ivanof Bay, Alaska",
+              "place": "16 km WNW of Ivanof Bay, Alaska",
+              "time": 1786570581093
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "us6000tkax",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tkax.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tkax",
+              "title": "M 4.7 - 21 km NE of Basco, Philippines",
+              "place": "21 km NE of Basco, Philippines",
+              "time": 1786569922603
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "tx2026puzaqq",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/tx2026puzaqq.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/tx2026puzaqq",
+              "title": "M 2.6 - 7 km SE of Pearsall, Texas",
+              "place": "7 km SE of Pearsall, Texas",
+              "time": 1786568999258
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "ci40671466",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ci40671466.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/ci40671466",
+              "title": "M 2.7 - 9 km SW of Valencia, CA",
+              "place": "9 km SW of Valencia, CA",
+              "time": 1786568189440
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "us6000tkam",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tkam.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tkam",
+              "title": "M 2.8 - 75 km SE of Atka, Alaska",
+              "place": "75 km SE of Atka, Alaska",
+              "time": 1786559647074
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "us6000tk9l",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk9l.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk9l",
+              "title": "M 4.2 - 27 km E of Chuquitira, Peru",
+              "place": "27 km E of Chuquitira, Peru",
+              "time": 1786559310735
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "us6000tkak",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tkak.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tkak",
+              "title": "M 3.1 - 118 km S of Sand Point, Alaska",
+              "place": "118 km S of Sand Point, Alaska",
+              "time": 1786555655797
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "aka2026pxbkla",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026pxbkla.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026pxbkla",
+              "title": "M 2.8 - 107 km S of Unalaska, Alaska",
+              "place": "107 km S of Unalaska, Alaska",
+              "time": 1786547731570
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "pr71528298",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/pr71528298.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/pr71528298",
+              "title": "M 3.0 - 52 km N of Hatillo, Puerto Rico",
+              "place": "52 km N of Hatillo, Puerto Rico",
+              "time": 1786547497860
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "aka2026pxbhdx",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026pxbhdx.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026pxbhdx",
+              "title": "M 3.0 - 8 km NNE of Kodiak Station, Alaska",
+              "place": "8 km NNE of Kodiak Station, Alaska",
+              "time": 1786547496546
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "hv75018581",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/hv75018581.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/hv75018581",
+              "title": "M 3.2 - 48 km SE of Pāhala, Hawaii",
+              "place": "48 km SE of Pāhala, Hawaii",
+              "time": 1786545916750
+            }
+          },
           {
             "type": "Feature",
             "id": "pr71528278",
@@ -42,6 +174,17 @@
               "title": "M 4.3 - south of the Fiji Islands",
               "place": "south of the Fiji Islands",
               "time": 1786538546674
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "us6000tk75",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk75.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk75",
+              "title": "M 4.6 - 55 km SW of Champerico, Guatemala",
+              "place": "55 km SW of Champerico, Guatemala",
+              "time": 1786535789774
             }
           },
           {
@@ -145,24 +288,13 @@
           },
           {
             "type": "Feature",
-            "id": "ci40670930",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ci40670930.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/ci40670930",
-              "title": "M 2.7 - 10 km WSW of Corona, CA",
-              "place": "10 km WSW of Corona, CA",
-              "time": 1786515453170
-            }
-          },
-          {
-            "type": "Feature",
             "id": "ci40670922",
             "properties": {
               "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ci40670922.geojson",
               "url": "https://earthquake.usgs.gov/earthquakes/eventpage/ci40670922",
-              "title": "M 3.1 - 9 km WSW of Corona, CA",
-              "place": "9 km WSW of Corona, CA",
-              "time": 1786515426410
+              "title": "M 3.0 - 10 km WSW of Corona, CA",
+              "place": "10 km WSW of Corona, CA",
+              "time": 1786515426400
             }
           },
           {
@@ -204,9 +336,9 @@
             "properties": {
               "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nn00923208.geojson",
               "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nn00923208",
-              "title": "M 2.6 - 29 km SSE of Mina, Nevada",
-              "place": "29 km SSE of Mina, Nevada",
-              "time": 1786507830329
+              "title": "M 2.6 - 30 km SSE of Mina, Nevada",
+              "place": "30 km SSE of Mina, Nevada",
+              "time": 1786507831556
             }
           },
           {
@@ -266,13 +398,24 @@
           },
           {
             "type": "Feature",
-            "id": "aka2026pwazcq",
+            "id": "us6000tk9v",
             "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026pwazcq.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026pwazcq",
-              "title": "M 2.7 - 55 km ESE of Atka, Alaska",
-              "place": "55 km ESE of Atka, Alaska",
-              "time": 1786500147485
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk9v.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk9v",
+              "title": "M 3.2 - 233 km ESE of Attu Station, Alaska",
+              "place": "233 km ESE of Attu Station, Alaska",
+              "time": 1786503783528
+            }
+          },
+          {
+            "type": "Feature",
+            "id": "us6000tk6r",
+            "properties": {
+              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk6r.geojson",
+              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk6r",
+              "title": "M 2.9 - 51 km ESE of Atka, Alaska",
+              "place": "51 km ESE of Atka, Alaska",
+              "time": 1786500147922
             }
           },
           {
@@ -339,237 +482,6 @@
               "title": "M 4.7 - 167 km SSW of Abepura, Indonesia",
               "place": "167 km SSW of Abepura, Indonesia",
               "time": 1786491194884
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "aka2026pvtuaw",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026pvtuaw.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026pvtuaw",
-              "title": "M 3.9 - 59 km NE of Pedro Bay, Alaska",
-              "place": "59 km NE of Pedro Bay, Alaska",
-              "time": 1786487215321
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "us6000tk3b",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk3b.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk3b",
-              "title": "M 4.8 - 81 km ENE of Mutsu, Japan",
-              "place": "81 km ENE of Mutsu, Japan",
-              "time": 1786484753951
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "us6000tk33",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk33.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk33",
-              "title": "M 4.6 - 14 km NE of Wana, Pakistan",
-              "place": "14 km NE of Wana, Pakistan",
-              "time": 1786484224529
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "nc75416222",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nc75416222.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75416222",
-              "title": "M 2.8 - 7 km NW of The Geysers, CA",
-              "place": "7 km NW of The Geysers, CA",
-              "time": 1786484114730
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "nc75416217",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nc75416217.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75416217",
-              "title": "M 3.0 - 7 km NW of The Geysers, CA",
-              "place": "7 km NW of The Geysers, CA",
-              "time": 1786484097190
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "us6000tk3r",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk3r.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk3r",
-              "title": "M 3.0 - 155 km SW of Nikolski, Alaska",
-              "place": "155 km SW of Nikolski, Alaska",
-              "time": 1786483381183
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "aka2026pvqutl",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026pvqutl.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026pvqutl",
-              "title": "M 3.3 - 157 km SW of Nikolski, Alaska",
-              "place": "157 km SW of Nikolski, Alaska",
-              "time": 1786481854974
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "aka2026pvqhwi",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026pvqhwi.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026pvqhwi",
-              "title": "M 4.1 - 163 km SW of Nikolski, Alaska",
-              "place": "163 km SW of Nikolski, Alaska",
-              "time": 1786480978984
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "ci40670714",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ci40670714.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/ci40670714",
-              "title": "M 2.9 - 11 km SW of Niland, CA",
-              "place": "11 km SW of Niland, CA",
-              "time": 1786480442480
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "us6000tk29",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk29.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk29",
-              "title": "M 5.0 - 89 km ESE of Kokopo, Papua New Guinea",
-              "place": "89 km ESE of Kokopo, Papua New Guinea",
-              "time": 1786480288580
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "us6000tk1y",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk1y.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk1y",
-              "title": "M 5.1 - 51 km E of Tobelo, Indonesia",
-              "place": "51 km E of Tobelo, Indonesia",
-              "time": 1786479258452
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "us6000tk1m",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk1m.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk1m",
-              "title": "M 4.9 - 149 km SSE of Port Blair, India",
-              "place": "149 km SSE of Port Blair, India",
-              "time": 1786478141269
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "us6000tk14",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk14.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk14",
-              "title": "M 4.6 - 118 km ESE of Neiafu, Tonga",
-              "place": "118 km ESE of Neiafu, Tonga",
-              "time": 1786473919680
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "us6000tk0u",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk0u.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk0u",
-              "title": "M 4.6 - Western Australia",
-              "place": "Western Australia",
-              "time": 1786471825542
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "us6000tk0c",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk0c.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk0c",
-              "title": "M 4.6 - 7 km W of Lunca Jariștei, Romania",
-              "place": "7 km W of Lunca Jariștei, Romania",
-              "time": 1786468875884
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "aka2026pvjken",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026pvjken.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026pvjken",
-              "title": "M 2.6 - 96 km SE of Akutan, Alaska",
-              "place": "96 km SE of Akutan, Alaska",
-              "time": 1786468541586
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "us6000tk0a",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000tk0a.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tk0a",
-              "title": "M 5.0 - 107 km WNW of Kerema, Papua New Guinea",
-              "place": "107 km WNW of Kerema, Papua New Guinea",
-              "time": 1786467978902
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "uw714075502",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/uw714075502.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/uw714075502",
-              "title": "M 3.1 - 5 km WSW of Harrah, Washington",
-              "place": "5 km WSW of Harrah, Washington",
-              "time": 1786465432580
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "aka2026pvgipq",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026pvgipq.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026pvgipq",
-              "title": "M 2.5 - 30 km SW of Trapper Creek, Alaska",
-              "place": "30 km SW of Trapper Creek, Alaska",
-              "time": 1786463037428
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "aka2026pvduzh",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/aka2026pvduzh.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026pvduzh",
-              "title": "M 3.2 - 39 km SSW of Karluk, Alaska",
-              "place": "39 km SSW of Karluk, Alaska",
-              "time": 1786458494360
-            }
-          },
-          {
-            "type": "Feature",
-            "id": "hv75017881",
-            "properties": {
-              "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/hv75017881.geojson",
-              "url": "https://earthquake.usgs.gov/earthquakes/eventpage/hv75017881",
-              "title": "M 2.9 - 47 km ESE of Naalehu, Hawaii",
-              "place": "47 km ESE of Naalehu, Hawaii",
-              "time": 1786457721660
             }
           }
         ]
