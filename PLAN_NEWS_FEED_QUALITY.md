@@ -82,10 +82,9 @@ One iteration is:
 
 1. **Poll + measure + share, one command**: `node scripts/news-bench/iterate.mjs
    --label=<iteration>` captures today's fixtures, runs the bench, and prints the
-   score-table delta against the newest committed report. The default measurement is
-   press-equivalent and fast: the 5 most recent hacker-news items plus the 5 most
-   recent nyt-world items, single pass, xl seed — about a minute. The full
-   all-sources sweep runs periodically behind its own flag, not every iteration.
+   score-table delta against the newest committed report. The measurement is the 5
+   most recent hacker-news articles plus the 5 most recent nyt-world articles,
+   single pass, xl seed — about a minute, the same shape as a news.html press.
    The coordinator pastes the results in chat as they land: sample cards quoted
    verbatim and complete from the articles log (including the worst-scoring one),
    plus the full score table against the prior iteration.
