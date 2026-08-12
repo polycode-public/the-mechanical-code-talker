@@ -961,6 +961,43 @@ const COMPASS_LEAD_WORDS = new Set([
   "northeast", "northwest", "southeast", "southwest",
   "northern", "southern", "eastern", "western",
 ]);
+// A name is one noun phrase. These words open a new phrase or a new clause, so
+// a term carrying one BETWEEN its first and last word is a headline a frame
+// tore into subject + predicate + remainder: "colombia as rescuers free quake
+// victim", "keir starmer faces a vote", "new gun licenses after mass shooting",
+// "boats hit by mystery attackers" — all four reach the graph as a card's own
+// hub or object otherwise.
+//
+// "of" is deliberately absent: it is the one preposition real names are built
+// with ("house of representatives", "united states of america", "isle of man").
+// The rule reads STRICTLY interior positions for the same reason the lead and
+// trailing rules read the edges separately — "may" and "will" end real surnames
+// ("theresa may", "brian may") and open nothing there.
+const INTERIOR_CLAUSE_WORDS = new Set([
+  "a", "an", "the",
+  "and", "or", "but", "because", "since", "although", "though", "whereas", "while", "so",
+  "if", "when", "then", "however", "as", "that", "which", "who", "whom", "whose",
+  "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had",
+  "do", "does", "did", "can", "could", "will", "would", "should", "may", "might", "must",
+  "in", "on", "at", "for", "to", "with", "from", "by", "into", "onto",
+  "over", "under", "after", "before", "between", "during", "about", "near", "through",
+  "against", "among", "within", "without", "per",
+]);
+
+// Past participles that open a real name. Read on the lowercased stored key,
+// wink tags each of these VERB, so the POS rule below turns down "united
+// states" — the name world news reports most often — and every sibling built
+// the same way.
+const PARTICIPIAL_NAME_LEAD_WORDS = new Set(["united", "allied", "combined", "armed", "organized", "associated"]);
+
+/** Does `term` carry a clause- or phrase-opening word strictly between its
+ *  first and last word? */
+export function carriesInteriorClauseWord(words) {
+  for (let i = 1; i < words.length - 1; i += 1) {
+    if (INTERIOR_CLAUSE_WORDS.has(String(words[i]).toLowerCase())) return true;
+  }
+  return false;
+}
 
 /** Does `term` read as a thing's name rather than a clause fragment? Bounds
  *  the word count and rejects a leading conjunction, auxiliary, preposition,
@@ -979,7 +1016,9 @@ export function readsAsEntityTerm(term, nlp) {
   if (PARTICLE_LEAD_WORDS.has(first)) return false;
   if (PRONOUN_LEAD_WORDS.has(first.replace(CLITIC_SUFFIX_RE, ""))) return false;
   if (TRAILING_AUXILIARY_WORDS.has(words[words.length - 1].toLowerCase())) return false;
+  if (carriesInteriorClauseWord(words)) return false;
   if (COMPASS_LEAD_WORDS.has(first) && words[1].toLowerCase() !== "of") return true;
+  if (PARTICIPIAL_NAME_LEAD_WORDS.has(first)) return true;
   const engine = nlp === undefined ? winkInstance() : nlp;
   if (!engine) return true;
   try {

@@ -117,6 +117,30 @@ test("a place named after a compass direction still reads as a term, while a rea
   assert.equal(readsAsEntityTerm("south of anchorage"), false);
 });
 
+test("a headline torn into subject, predicate and remainder leaves a term with a clause word inside it, and that never reads as a name", () => {
+  assert.equal(readsAsEntityTerm("colombia as rescuers free quake victim"), false);
+  assert.equal(readsAsEntityTerm("keir starmer faces a vote"), false);
+  assert.equal(readsAsEntityTerm("new gun permits after mass shooting"), false);
+  assert.equal(readsAsEntityTerm("boats hit by mystery attackers"), false);
+  assert.equal(readsAsEntityTerm("glaciers on the climate dashboard"), false);
+});
+
+test("a name built with \"of\" still reads as a name, and so does a surname the clause-word list also spells", () => {
+  assert.equal(readsAsEntityTerm("house of representatives"), true);
+  assert.equal(readsAsEntityTerm("isle of man"), true);
+  // A participle opens plenty of real names, and the lowercased stored key
+  // gives a tagger nothing but the verb reading.
+  assert.equal(readsAsEntityTerm("united states"), true);
+  assert.equal(readsAsEntityTerm("united states of america"), true);
+  assert.equal(readsAsEntityTerm("united nations"), true);
+  // The interior rule reads strictly interior positions, so a surname at the
+  // end of a name is untouched.
+  assert.equal(readsAsEntityTerm("theresa may"), true);
+  assert.equal(readsAsEntityTerm("brian may"), true);
+  assert.equal(readsAsEntityTerm("ecuadorean fishing boat"), true);
+  assert.equal(readsAsEntityTerm("quake victim"), true);
+});
+
 test("an identifier-shaped surface is detected before it folds to a stored term", () => {
   for (const token of ["normalizeFeedItems", "parseXML", "feed_items", "news.feed", "src/domain/prose.mjs"]) {
     assert.equal(readsAsIdentifierToken(token), true, `${token} reads as an identifier`);

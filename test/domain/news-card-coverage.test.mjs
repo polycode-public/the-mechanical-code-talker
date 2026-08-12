@@ -95,12 +95,12 @@ test("a hub the report puts on the object side gives its card up to the subject 
   assert.deepEqual(hubsOf(rows), ["ecuadorean fleet"]);
 });
 
-test("a publication never takes a card's title from the story it discussed, however that story's own name reads", () => {
+test("a story name that reads as a clause heads no card of its own, so the publication carries that story", () => {
   const rows = [
     reportRow("fact:g", "hackernews", "mgx:discuss", "glaciers on the climate dashboard", "hacker-news@item-g"),
     reportRow("fact:d", "hackernews", "mgx:discuss", "deepseek pro", "hacker-news@item-d"),
   ];
-  assert.deepEqual(hubsOf(rows), ["deepseek pro", "glaciers on the climate dashboard"]);
+  assert.deepEqual(hubsOf(rows), ["deepseek pro", "hackernews"]);
 });
 
 test("a place the source spelled as settlement and region takes the card from the class of event that struck it", () => {

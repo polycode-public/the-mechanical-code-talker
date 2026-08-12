@@ -306,6 +306,23 @@ const ENTITY_TRAILING_AUXILIARY_WORDS = new Set([
   "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had",
 ]);
 
+// A name is one noun phrase, so a word that opens a new phrase or clause
+// BETWEEN a term's first and last word marks a headline a frame tore into
+// subject + predicate + remainder ("colombia as rescuers free quake victim").
+// Mirrors extract-facts.mjs's INTERIOR_CLAUSE_WORDS, for the same reason the
+// sets above mirror their originals. "of" stays out: real names are built with
+// it ("house of representatives").
+const ENTITY_INTERIOR_CLAUSE_WORDS = new Set([
+  "a", "an", "the",
+  "and", "or", "but", "because", "since", "although", "though", "whereas", "while", "so",
+  "if", "when", "then", "however", "as", "that", "which", "who", "whom", "whose",
+  "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had",
+  "do", "does", "did", "can", "could", "will", "would", "should", "may", "might", "must",
+  "in", "on", "at", "for", "to", "with", "from", "by", "into", "onto",
+  "over", "under", "after", "before", "between", "during", "about", "near", "through",
+  "against", "among", "within", "without", "per",
+]);
+
 /** Does `term` read as a thing's name rather than a clause fragment? Bounds
  *  the word count and rejects a leading conjunction, auxiliary or
  *  preposition (test E's condition 3, PLAN_NEWSWORTHINESS.md section 2), plus
@@ -321,6 +338,9 @@ function looksLikeEntityTerm(term) {
   if (ENTITY_PARTICLE_LEAD_WORDS.has(first)) return false;
   if (ENTITY_PRONOUN_LEAD_WORDS.has(first.replace(ENTITY_CLITIC_SUFFIX_RE, ""))) return false;
   if (ENTITY_TRAILING_AUXILIARY_WORDS.has(words[words.length - 1].toLowerCase())) return false;
+  for (let i = 1; i < words.length - 1; i += 1) {
+    if (ENTITY_INTERIOR_CLAUSE_WORDS.has(words[i].toLowerCase())) return false;
+  }
   return true;
 }
 
