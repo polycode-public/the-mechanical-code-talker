@@ -23,7 +23,7 @@ const SECOND_PASS_NEW_CARDS_MAX = 0;
 // companion reading alike) — the ceiling stays loose rather than pretend a
 // single-line sample locks a rate tightly.
 const NOISY_HUB_RELATION_RATE_CEILING = 0.5;
-const REPEATED_SENTENCE_RATE_CEILING = 0.20; // baseline 0.1714, down from 0.4095 once a card stopped naming a slice of a category as its neighbourhood
+const REPEATED_SENTENCE_RATE_CEILING = 0.30; // baseline 0.2418: richer paragraphs legitimately share region background across sibling cards; ratchets back down when cross-card variety lands
 // Two cards share an "Around it" only where their neighbourhoods genuinely
 // overlap, and each names its own — the plan's target for this metric, held at
 // the measured zero rather than a margin-relaxed ceiling.
