@@ -3626,19 +3626,30 @@ const MINT_ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
  *  zorp is a thing"), then chain the other new term off the now-grounded one. */
 const GENERIC_ANCHOR_NOUNS = new Set(["thing", "concept", "object", "entity"]);
 
-/** Corpus source types treated as a real anchor for the isa-tier below.
- *  `corpus` is the band provenanceTagToSource (trust.mjs) assigns to
- *  corpus:<bundle>/child:<pack>:<term>/world:<name>/mud:<character> — a
- *  shipped isa row from one of those, not the operator's own words. Named
- *  explicitly, rather than "everything except corpusWeak/reference/web/...",
- *  so a new corpus band added later has to be added here on purpose before it
- *  can anchor anything: corpusWeak only ever carries mgx:relatedTo (already
- *  excluded by the predicate filter, named here too so a future corpus-weak
- *  isa row can't anchor silently); reference/referenceLive/extracted/
- *  optimisticExtract/web isa rows can be extraction artifacts, a wider band a
- *  benchmark would need to earn separately; provider-sourced code symbols
- *  already ground via isGroundedTerm's own resolveSymbol branch. */
-const CORPUS_ANCHOR_SOURCE_TYPES = new Set(["corpus"]);
+/** Source types treated as a real anchor for the isa-tier below — a reference
+ *  work's own claim that a term denotes a class, as against the operator's own
+ *  words. provenanceTagToSource (trust.mjs) assigns them:
+ *    corpus         corpus:<bundle>/child:<pack>:<term>/world:<name>/mud:<character>
+ *    reference      reference:<pack>:<article>@<revid>, the shipped
+ *                   revision-pinned pack (reference-pack.mjs), and where a
+ *                   preloaded bulk knowledge band would land too
+ *    referenceLive  a live lookup: research:<source>:<term> from a KB adapter,
+ *                   and the live-Wikipedia supplement
+ *  A definition the news enrichment cycle just fetched arrives under the last
+ *  of those. Without it in this set the cycle could define a term and still
+ *  leave every sentence naming that term unreadable, so re-processing an
+ *  article after a lookup could never change its answer.
+ *
+ *  Named explicitly, rather than "everything except corpusWeak/web/...", so a
+ *  band added later has to be added here on purpose before it can anchor
+ *  anything. What stays out and why: corpusWeak only ever carries
+ *  mgx:relatedTo (already excluded by the predicate filter, named here so a
+ *  future corpus-weak isa row can't anchor silently); extracted /
+ *  optimisticExtract / web are readings of running prose rather than a
+ *  reference work's own statement, which is the line this set draws;
+ *  provider-sourced code symbols already ground via isGroundedTerm's own
+ *  resolveSymbol branch. */
+const CORPUS_ANCHOR_SOURCE_TYPES = new Set(["corpus", "reference", "referenceLive"]);
 const isCorpusAnchorRow = (f) => !!f.sourceTypes?.some((t) => CORPUS_ANCHOR_SOURCE_TYPES.has(t));
 
 /** Every term that appears as the subject or object of an isa-family fact

@@ -41,7 +41,7 @@
 // section 3). Network lives in the adapters this module is handed, never
 // inside it.
 
-import { normFactTerm, normFactPredicate, factIdFor } from "../domain/hash.mjs";
+import { normFactTerm, normFactPredicate, normText, factIdFor } from "../domain/hash.mjs";
 import {
   newsWindowRows, renderNewsParagraph, buildNewsItems, evictNewsFacts,
   conceptTerms, isQuantityTerm, newsItemKeys,
@@ -741,6 +741,35 @@ const KB_SOURCE_TO_RESEARCH_CHOICE = Object.freeze({
   "dbpedia-lookup": "dbpedia",
 });
 
+const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
+
+const WORD_CHARACTER_RE = /[a-z0-9]/;
+
+/** True when `prose` names `term` as a whole word — the test for whether a
+ *  looked-up body is a STATEMENT about the term or merely a LABEL for it.
+ *
+ *  A reference article's summary opens on the word it defines ("AmigaDOS is
+ *  the disk operating system of the AmigaOS"). An entity description field
+ *  does not: it is a bare noun phrase naming the class instead ("disk
+ *  operating system of the AmigaOS"), and a sentence recognizer reading one
+ *  finds a subject, a verb and an object inside the phrase itself — "disk
+ *  operates a system of the amigaos", a claim about a word the lookup was
+ *  never about. The class such a phrase names is what the structured tier
+ *  already carries, so there is nothing to lose by leaving it unread. */
+function proseNamesTerm(prose, term) {
+  const haystack = normText(prose).toLowerCase();
+  const needle = normFactTerm(term);
+  if (!haystack || !needle) return false;
+  for (let from = 0; ; from += 1) {
+    const at = haystack.indexOf(needle, from);
+    if (at < 0) return false;
+    const before = at === 0 ? "" : haystack[at - 1];
+    const after = haystack[at + needle.length] ?? "";
+    if (!WORD_CHARACTER_RE.test(before) && !WORD_CHARACTER_RE.test(after)) return true;
+    from = at;
+  }
+}
+
 /** Grounds `article` under `provider`'s own provenance tag, through the SAME
  *  ingest seam a polled article takes: the structured or isa facts the
  *  research-source seam licenses (researchFacts), then the article's own
@@ -748,7 +777,18 @@ const KB_SOURCE_TO_RESEARCH_CHOICE = Object.freeze({
  *  looked-up article therefore reaches the graph with the density of
  *  relations a polled one does, and the feed's paraphrase templates have the
  *  same kind of material to write a card from — a bare isa edge left the
- *  reader with one bald sentence where a polled item got a paragraph. */
+ *  reader with one bald sentence where a polled item got a paragraph.
+ *
+ *  Two things a definition body is not allowed to do, both of them ways of
+ *  restating the lookup's own class claim worse than the lookup already
+ *  stated it. It is not read at all unless it names the term (proseNamesTerm,
+ *  above). And where the lookup already licensed a class for the term, the
+ *  body is read by the strict recognizer only: the optimistic tier's guess at
+ *  a class can then only agree with what the structured rows say or truncate
+ *  it — "AmigaDOS is the disk operating system" mints "amigados is a disk"
+ *  beside the structured "amigados is a disk operating system" — while the
+ *  relations the body states ("Rottnest has a lighthouse") are the strict
+ *  tier's own work and survive either way. */
 async function ingestResearchArticle(ctx, term, provider, article) {
   const { memoryDir, store, config, lexicon, now } = ctx;
   const provenance = provider.provenanceTag(term);
@@ -757,12 +797,15 @@ async function ingestResearchArticle(ctx, term, provider, article) {
     await store.appendFacts(memoryDir, structured);
     invalidateCache(ctx.cache);
   }
+  const lookupStatedClass = structured.some(
+    (f) => ISA_PREDICATES.has(f.predicate) && normFactTerm(f.subject) === normFactTerm(term),
+  );
 
   const prose = String(article.summary || article.text || "").trim();
   let ingested = { extracted: [], optimistic: [] };
-  if (prose) {
+  if (prose && proseNamesTerm(prose, term)) {
     ingested = await ingestText(prose, {
-      memoryDir, sourceTag: provenance, optimistic: true,
+      memoryDir, sourceTag: provenance, optimistic: !lookupStatedClass,
       lexicon: lexicon || loadLexicon(), observedAt: resolveNow(now), findings: true,
       attributeToSource: true,
     });
