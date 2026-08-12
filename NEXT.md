@@ -29,15 +29,17 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **Wikidata slice — band built from the live API; the load is the operator's** —
-  the live-entity fetch found 12/12 seeds and 148/148 derived objects, and the
-  band is built and durable: `~/tmct-dumps/wikidata-slice.band.jsonl` (156 rows,
-  sha256 `b5675036…4cdfe7b4bf`, CC0). The operator's load (credentialed,
-  digest-checked no-op on re-run):
-  `AWS_PROFILE=tmct-prod node bin/tmct.mjs corpus load wikidata-slice --table tmct-prod-prod-website-RowServiceTable2B650E09-1AG9XEDHMG359 --source ~/tmct-dumps/wikidata-slice.band.jsonl`
-  Then the `bandStatus` + `queryBandTerm` read-back closes the load leg. The
-  pinned dated-dump redownload continues in the operator's terminal for future
-  larger slices (growing `SEED_QIDS` re-runs the same extract/build path).
+- [ ] **wikidata-full — the whole dump as a band, no curation** — the point of the
+  155 GB download: every English-labeled entity a term, every mapped claim between
+  labeled entities a fact row, one band, loaded once, queried per-term like
+  wordnet-complete (206k) and conceptnet-full (2.3M). Builder agent in flight
+  (worktree `.claude/worktrees/agent-a91c8dbb5528f73ed`): streaming, resumable,
+  deterministic, with the row count and DynamoDB write cost printed BEFORE any
+  load so the price gates the decision. When the pinned dated dump finishes
+  (~9 h from 19:26), the operator runs the builder then the credentialed load.
+  The 12-seed slice band (`~/tmct-dumps/wikidata-slice.band.jsonl`, 156 generic
+  class rows) was a pipeline proof only — loading it is optional and does not
+  serve news grounding.
 
 - [ ] **News feed quality — the local bench and its loop** — plan of record is
   `PLAN_NEWS_FEED_QUALITY.md` (operator-commissioned 2026-08-12): frozen live-feed
