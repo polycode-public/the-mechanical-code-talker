@@ -10,7 +10,7 @@
 
 import { normFactTerm } from "../../src/domain/hash.mjs";
 import {
-  isNewsProvenance, buildTermAdjacency, hubReportRows, neighbourRows,
+  isNewsProvenance, buildTermAdjacency, neighbourRows,
 } from "../../src/domain/news-feed.mjs";
 import { ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
 import { tokenizeProse } from "../../src/domain/prose.mjs";
@@ -310,43 +310,36 @@ export function entityPreservation(state, rows, feed) {
 
 const IDENTITY_PREDICATES = new Set(["rdf:type", "rdfs:subClassOf"]);
 
-/** Every identity-predicate row in a card's own factIds set — the hub's own
- *  identity sentence AND the identity rows riding along in its two-hop
- *  "Around it" background. A hub that only ever appears as an OBJECT (a
- *  place a quake struck, per news-feed.mjs's own aboutHub fallback) carries
- *  no subject-side identity row of its own; its class-membership noise sits
- *  on the SUBJECT of a background row instead ("earthquake is a kind of
- *  electrical device" two hops from a "mina, nevada" hub), so this counts
- *  every identity row the card's subgraph reaches, not only the ones whose
- *  subject is literally the hub. */
-/** Every row a card actually CITES — what it reports about its own hub plus
- *  the neighbours its "Around it" clause names (news-feed.mjs's own
- *  `hubReportRows`/`neighbourRows`, read out the same way `buildNewsItems`
- *  builds `card.sources`), run twice the same way the card's own two
- *  paragraphs are: once over the reported subgraph for the main paragraph,
- *  once over the background-only rows for `backgroundParagraph`. A hub that
- *  only ever appears as an OBJECT (a place a quake struck) has no report row
- *  of its own; its class-membership noise sits on the SUBJECT of a
- *  background neighbour instead ("earthquake is a kind of X" two hops from a
- *  place hub), which is exactly why the background pass runs too. */
-export function citedRowsForCard(card, rows) {
+/** Every row that actually reaches the TEXT of a card — its own two
+ *  paragraphs, `renderNewsParagraph`'s own read (news-feed.mjs): the hub's
+ *  identity/relation sentence draws from every row touching the hub
+ *  (reported or not — the identity sentence names every class the graph
+ *  ever put the hub in), and each paragraph's own "Around it" clause draws
+ *  from `neighbourRows`, run once over the reported subgraph for the main
+ *  paragraph and once over the background-only rows for
+ *  `backgroundParagraph`. A hub that only ever appears as an OBJECT (a
+ *  place a quake struck) has no subject-side row of its own; its class-
+ *  membership noise sits on the SUBJECT of a background neighbour instead
+ *  ("earthquake is a kind of X" two hops from a "mina, nevada" hub), which
+ *  is exactly why the background pass runs too. */
+function textShownRowsForCard(card, rows) {
   const factIds = card.factIds || [];
   const rowsById = new Map(rows.map((r) => [r.id, r]));
   const subgraphRows = factIds.map((id) => rowsById.get(id)).filter(Boolean);
   const backgroundIds = new Set(card.background || []);
   const backgroundRows = subgraphRows.filter((r) => backgroundIds.has(r.id));
   const reportedIds = new Set(factIds.filter((id) => !backgroundIds.has(id)));
+  const hubTerm = normFactTerm(card.hub);
 
-  const cited = [
-    ...hubReportRows(card.hub, subgraphRows, { reportedIds }),
+  const shown = [
+    ...subgraphRows.filter((r) => normFactTerm(r.subject) === hubTerm),
     ...neighbourRows(card.hub, subgraphRows, { reportedIds }),
-    ...hubReportRows(card.hub, backgroundRows, { reportedIds: null }),
     ...neighbourRows(card.hub, backgroundRows, { reportedIds: null }),
   ];
 
   const seen = new Set();
   const out = [];
-  for (const row of cited) {
+  for (const row of shown) {
     if (seen.has(row.id)) continue;
     seen.add(row.id);
     out.push(row);
@@ -354,11 +347,11 @@ export function citedRowsForCard(card, rows) {
   return out;
 }
 
-/** The identity-predicate rows among what a card actually cites (see
- *  `citedRowsForCard`) — every context line a reader can genuinely see,
+/** The identity-predicate rows among what a card's text actually shows (see
+ *  `textShownRowsForCard`) — every context line a reader can genuinely see,
  *  never the wider two-hop subgraph a card merely reaches. */
 function identityLinesForCard(card, rows) {
-  return citedRowsForCard(card, rows).filter((row) => IDENTITY_PREDICATES.has(row.predicate));
+  return textShownRowsForCard(card, rows).filter((row) => IDENTITY_PREDICATES.has(row.predicate));
 }
 
 /** A term's own one-hop content-word cloud: every OTHER term touching it

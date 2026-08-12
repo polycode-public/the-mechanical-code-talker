@@ -7,9 +7,7 @@
 // expose (PLAN_NEWS_FEED_QUALITY.md section 1's own named gap) is computed
 // here from the poll state rather than touching src.
 import { ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
-import {
-  groundedTermPerItem, noisyHubIndex, cardIdentityLineClassifications, citedRowsForCard,
-} from "./metrics.mjs";
+import { groundedTermPerItem, noisyHubIndex, cardIdentityLineClassifications } from "./metrics.mjs";
 
 function splitSentences(paragraph) {
   const trimmed = String(paragraph || "").trim().replace(/\.$/, "");
@@ -25,17 +23,17 @@ function byFetchedAtThenId(a, b) {
   return String(a.fetchedAt).localeCompare(String(b.fetchedAt)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
-/** Items whose own extracted facts intersect what the card actually CITES
- *  (`citedRowsForCard` — its own reported rows plus the neighbours its
- *  "Around it" clause names), never its whole two-hop subgraph: a quake
- *  card's two-hop walk reaches all 44 of the day's quakes through the
- *  shared "earthquake" node, but only the quakes it actually reports and
- *  names are its own article. Sorted by fetchedAt then id so the same run
- *  always lists them in the same order. */
-function backingItemsFor(card, items, rows) {
-  const citedIds = new Set(citedRowsForCard(card, rows).map((row) => row.id));
+/** Items keyed to what the card's own `sources` array names (url, falling
+ *  back to title) — the same rows-behind-the-card boundary `collectSources`
+ *  drew when it built `card.sources` from the hub's own reported rows,
+ *  never the card's whole two-hop subgraph: a quake card's two-hop walk
+ *  reaches all 44 of the day's quakes through the shared "earthquake" node,
+ *  but only the quake it actually reported is its own article. Sorted by
+ *  fetchedAt then id so the same run always lists them in the same order. */
+function backingItemsFor(card, items) {
+  const sourceKeys = new Set((card.sources || []).map((s) => s.url || s.title).filter(Boolean));
   return items
-    .filter((item) => (item.factIds || []).some((id) => citedIds.has(id)))
+    .filter((item) => sourceKeys.has(item.url || item.title))
     .sort(byFetchedAtThenId);
 }
 
@@ -91,8 +89,8 @@ function rejectionStage(item, ledgerEntries) {
   return touched ? "parsed; term(s) never grounded" : "no recognizable claim in the text";
 }
 
-function cardArticle(card, allCards, items, rows, perItemGrounded, index) {
-  const backingItems = backingItemsFor(card, items, rows);
+function cardArticle(card, allCards, items, perItemGrounded, index) {
+  const backingItems = backingItemsFor(card, items);
   const noisy = cardNoisyContextLines(card, index);
   const repeat = cardRepeat(card, allCards);
   const date = cardDate(backingItems);
@@ -139,13 +137,13 @@ export function buildArticlesReport({ feed, state, rows }) {
   const ledgerEntries = [...ledgerFromPayload(state.ledger).terms.values()];
   const index = noisyHubIndex(rows, state);
 
-  const citedIdUnion = new Set();
-  for (const card of cards) for (const row of citedRowsForCard(card, rows)) citedIdUnion.add(row.id);
+  const citedSourceKeyUnion = new Set();
+  for (const card of cards) for (const s of card.sources || []) if (s.url || s.title) citedSourceKeyUnion.add(s.url || s.title);
 
-  const cardEntries = cards.map((card) => cardArticle(card, cards, items, rows, perItemGrounded, index));
+  const cardEntries = cards.map((card) => cardArticle(card, cards, items, perItemGrounded, index));
 
   const cardlessEntries = items
-    .filter((item) => (item.factIds || []).length > 0 && !(item.factIds || []).some((id) => citedIdUnion.has(id)))
+    .filter((item) => (item.factIds || []).length > 0 && !citedSourceKeyUnion.has(item.url || item.title))
     .map((item) => ({
       kind: "cardless-admitted", id: item.id, sourceId: item.sourceId, title: item.title, factCount: item.factIds.length,
     }));
