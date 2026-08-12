@@ -37,7 +37,7 @@ import { uuidv7 } from "../adapters/uuid.mjs";
 import * as defaultSource from "../adapters/source.mjs";
 import { loadTemplates, render as renderTemplate } from "../adapters/corpus/templates.mjs";
 import { rankByBiasThenTrust } from "../domain/memory/bias.mjs";
-import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, normFactPredicate, normFactTerm as normFactTermStatic, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
+import { HAS_A_PREDICATE, foldedFactRows as foldStoreFactRows, loadMemory as loadMemoryStore, normFactPredicate, normFactTerm as normFactTermStatic, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
 import { BACKEND_REJECTED_CODE, BACKEND_UNAVAILABLE_CODE } from "../adapters/memory/row-backend.mjs";
 import {
   CAPABILITY_REPORT_CAP, NEG_CAPABLE_OF_PREDICATE, NEG_SUBCLASS_PREDICATE, capabilityBaseRate,
@@ -8461,8 +8461,9 @@ async function memoryFacts(memoryDir) {
  *
  *  `cache`: an optional, caller-owned plain object (`{ rows: null }`, e.g. one
  *  runTurn call's own `factRowsCache`) — when `cache.rows` is already
- *  populated, it's returned directly, skipping loadMemory/readFactRows
- *  entirely; otherwise the result is computed as before and stashed onto
+ *  populated, it's returned directly, skipping the store read entirely;
+ *  otherwise the fold is taken (from the store's own held one when it has a
+ *  current one — see core's `foldedFactRows`) and stashed onto
  *  `cache.rows` for the next caller sharing the same cache this turn.
  *  Absent/null (the default) reproduces a fresh, uncached reload every call,
  *  so every caller that doesn't pass one is byte-for-byte unaffected. Never
@@ -8473,8 +8474,8 @@ async function memoryFacts(memoryDir) {
 async function factRows(memoryDir, cache = null) {
   if (cache?.rows) return cache.rows;
   try {
-    const { loadMemory, readFactRows } = await import("../adapters/memory/core.mjs");
-    const rows = readFactRows(await loadMemory(memoryDir));
+    const { foldedFactRows } = await import("../adapters/memory/core.mjs");
+    const rows = await foldedFactRows(memoryDir);
     if (cache) { cache.rows = rows; cache.reloads = (cache.reloads || 0) + 1; }
     return rows;
   } catch {
@@ -18476,15 +18477,19 @@ function finishTurn(result, ctx) {
   return finish(result, ctx);
 }
 
-/** An uncached readFactRows() snapshot of the memory store — one half of the
- *  before/after pair a turn's `factsTouched` diff is taken over. Deliberately
- *  bypasses the turn's factRowsCache: the cache is invalidated by only some
- *  write paths, and a diff read through it would miss the very writes it exists
- *  to report. Null (rather than []) when there is no store or it won't load, so
- *  the caller can tell "nothing to diff" from "diffed, nothing moved". */
+/** A readFactRows() snapshot of the memory store — one half of the before/after
+ *  pair a turn's `factsTouched` diff is taken over. Deliberately bypasses the
+ *  turn's factRowsCache: the cache is invalidated by only some write paths, and
+ *  a diff read through it would miss the very writes it exists to report. The
+ *  store's own held fold is a different thing and safe to read: every write
+ *  moves the stamp it is keyed to, so a snapshot taken after a write is that
+ *  write's own fold, and a turn that wrote nothing gets back the array it
+ *  started from — which diffs to nothing, correctly. Null (rather than []) when
+ *  there is no store or it won't load, so the caller can tell "nothing to diff"
+ *  from "diffed, nothing moved". */
 async function factRowSnapshot(memoryDir) {
   if (!memoryDir) return null;
-  try { return readStoredFactRows(await loadMemoryStore(memoryDir)); } catch { return null; }
+  try { return await foldStoreFactRows(memoryDir); } catch { return null; }
 }
 
 /** The Fact rows this turn wrote, diffed against the snapshot taken before it,
