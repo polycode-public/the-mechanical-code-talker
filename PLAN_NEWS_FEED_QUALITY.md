@@ -88,20 +88,20 @@ One iteration is:
    The coordinator pastes the results in chat as they land: sample cards quoted
    verbatim and complete from the articles log (including the worst-scoring one),
    plus the full score table against the prior iteration.
-2. **Design**: the coordinator reads the worst number and names ONE lever —
-   closed-set/template changes preferred, per the project's own bias. The proposal
-   names the metric it should move and any metric it might hurt.
-3. **Apply**: the lever lands (worktree sub-agent, blast-radius tests) and merges.
-   No after-run — ever. The loop measures once per cycle, at the next iteration's
-   start, and that run scores everything merged since the last one.
+2. **Design**: the coordinator reads the report and dispatches as many changes as
+   have disjoint file ownership, worst numbers first — closed-set/template changes
+   preferred, per the project's own bias. Each dispatch names the metric it should
+   move and any metric it might hurt.
+3. **Apply**: the changes land (worktree sub-agents, blast-radius tests) and merge
+   as they finish. No after-run — ever. The loop measures once per cycle, at the
+   next iteration's start, and that run scores everything merged since the last one.
 4. **Ratchet**: when a start-run shows a metric improved, the smoke test's floor for
    it rises to just under the new number, so the gain is locked in.
 5. **Repeat immediately.**
 
-The loop never waits. The next iteration's lever dispatches as soon as the previous
-lever is merged and its report pair is committed — CI pipelines and deploys are
-shipping, not gates, and a measurement correction runs beside the loop, not in
-front of it. The live page stays the human check after each deploy batch, never the
+The loop never waits. The next iteration's changes dispatch as soon as the previous
+ones merge — CI pipelines and deploys are shipping, not gates, and a measurement
+correction runs beside the loop, not in front of it. The live page stays the human check after each deploy batch, never the
 measurement.
 
 ### Cycle-time budget
@@ -111,11 +111,11 @@ iterations actually spent their time, and what removes each sink:
 
 | sink | cost | removal |
 | --- | --: | --- |
-| "before" and "after" bench runs per lever agent | 12–15 min each | dead, both: agents never run the bench. The single start-of-iteration run is the only measurement; reports compare by seed-digest equality |
+| "before" and "after" bench runs per change agent | 12–15 min each | dead, both: agents never run the bench. The single start-of-iteration run is the only measurement; reports compare by seed-digest equality |
 | per-worktree artifact rebuild (worlds pack, sprite facts, ask bundle, chat-seed) | 3–6 min | `scripts/news-bench/ensure-bench-inputs.mjs` builds only what is missing or stale, and `--from <path>` links a sibling checkout's already-built artifacts in seconds |
 | coordinator-invented waits between iterations | unbounded | banned above |
 | the start-of-iteration run (5 recent hacker-news + 5 recent nyt-world, single pass) | ~1 min | stays — this is the measurement itself |
-| the lever agent's design/code/tests | 15–35 min | stays — this is the work |
+| a change agent's design/code/tests | 15–35 min | stays — this is the work, and agents run in parallel |
 
 ### Report comparability: digests, not re-runs
 
@@ -124,9 +124,8 @@ actually loaded, the fixture dates, and the git HEAD of the run. Two reports are
 directly comparable when their seed digests and fixture dates match. A run whose
 digest differs from the newest committed report's prints a drift warning naming the
 mismatch — the seed-drift case that used to force re-runs now names itself instead
-of silently producing an incomparable pair. A lever that needs fresh fixtures
-captures them at its own iteration's start, so its pair is captured-together by
-construction.
+of silently producing an incomparable pair. Fresh fixtures are captured at each
+iteration's start, so a cycle's report is captured-together by construction.
 
 ### Bench operational rules
 
