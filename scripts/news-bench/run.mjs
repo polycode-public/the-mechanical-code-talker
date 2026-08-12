@@ -23,6 +23,7 @@ import {
 import { NEWS_SOURCE_RECORDS, createNewsFetcher } from "../../src/adapters/corpus/news-sources.mjs";
 import { serializeCard, enforceFeedSizeBound, feedDocumentBytes, MAX_FEED_DOCUMENT_BYTES } from "../../server/news-worker/handler.mjs";
 import * as metrics from "./metrics.mjs";
+import { buildArticlesReport, renderArticlesMarkdown } from "./articles.mjs";
 import { ROOT, FIXTURE_SOURCE_IDS, latestSourceDate, loadFixture, replayFetchImplFor } from "./fixtures.mjs";
 
 const recordFor = (id) => NEWS_SOURCE_RECORDS.find((r) => r.id === id);
@@ -170,6 +171,7 @@ export async function runBench({ seed = "xl", date = null, sourceIds = FIXTURE_S
     const paragraph = metrics.paragraphShape(feed);
     const rankedNoise = metrics.rankedTermNoise(rankedEntries);
     const size = metrics.sizeMetrics(rows, admission.aggregate.admitted, feedDocBytes, MAX_FEED_DOCUMENT_BYTES);
+    const articles = buildArticlesReport({ feed, state, rows });
 
     return {
       meta: { seed, sourceIds, fixtureDates: dates, now: runNow },
@@ -188,6 +190,7 @@ export async function runBench({ seed = "xl", date = null, sourceIds = FIXTURE_S
         size,
       },
       definitions: metrics.DEFINITIONS,
+      articles,
     };
   });
 }
@@ -268,9 +271,11 @@ export function writeReport(report, { runDate, label }) {
   const base = `${runDate}-${label}`;
   const jsonPath = join(dir, `${base}.json`);
   const mdPath = join(dir, `${base}.md`);
+  const articlesPath = join(dir, `${base}-articles.md`);
   writeFileSync(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
   writeFileSync(mdPath, renderMarkdown(report, { runDate, label }));
-  return { jsonPath, mdPath };
+  writeFileSync(articlesPath, renderArticlesMarkdown(report, report.articles, { runDate, label }));
+  return { jsonPath, mdPath, articlesPath };
 }
 
 function parseArgs(argv) {
@@ -289,8 +294,8 @@ async function main() {
   const label = args.label || args.seed;
   const report = await runBench({ seed: args.seed, date: args.date, sourceIds: args.sources ?? FIXTURE_SOURCE_IDS });
   const runDate = new Date().toISOString().slice(0, 10);
-  const { jsonPath, mdPath } = writeReport(report, { runDate, label });
-  process.stdout.write(`wrote ${jsonPath}\nwrote ${mdPath}\n`);
+  const { jsonPath, mdPath, articlesPath } = writeReport(report, { runDate, label });
+  process.stdout.write(`wrote ${jsonPath}\nwrote ${mdPath}\nwrote ${articlesPath}\n`);
   process.stdout.write(
     `admission ${(report.metrics.admissionRate.aggregate.rate * 100).toFixed(2)}%, `
     + `dedupe ratio ${num(report.metrics.dedupeRatio.ratio)}, `

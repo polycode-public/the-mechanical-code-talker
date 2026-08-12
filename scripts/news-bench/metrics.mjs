@@ -119,7 +119,10 @@ function median(sorted) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-export function groundedTermProportion(state, rows) {
+/** Metric 2's own per-item numerator/denominator, exported so the articles
+ *  log (each card's backing article(s)) can quote the same figures the
+ *  aggregate report is built from rather than recomputing a second way. */
+export function groundedTermPerItem(state, rows) {
   const rowsById = new Map(rows.map((r) => [r.id, r]));
   const ledger = ledgerFromPayload(state.ledger);
   const ungroundedByItem = new Map();
@@ -149,6 +152,11 @@ export function groundedTermProportion(state, rows) {
       proportion: extracted.size ? grounded.size / extracted.size : null,
     });
   }
+  return perItem;
+}
+
+export function groundedTermProportion(state, rows) {
+  const perItem = groundedTermPerItem(state, rows);
 
   function summarize(items) {
     const withData = items.filter((r) => r.extracted > 0);

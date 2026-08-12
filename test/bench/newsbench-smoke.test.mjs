@@ -85,4 +85,27 @@ test("two fast-lane runs over the same fixtures produce byte-identical metrics a
   assert.deepEqual(a.metrics, b.metrics);
   assert.deepEqual(a.definitions, b.definitions);
   assert.deepEqual(a.poll, b.poll);
+  assert.deepEqual(a.articles, b.articles);
+});
+
+test("the articles log accounts for every offered item exactly once, across cards, cardless-admitted and rejected", async () => {
+  const report = await fastBench();
+  const cardEntries = report.articles.filter((a) => a.kind === "card");
+  const cardlessEntries = report.articles.filter((a) => a.kind === "cardless-admitted");
+  const rejectedEntries = report.articles.filter((a) => a.kind === "rejected");
+  assert.equal(cardEntries.length, report.metrics.dedupeRatio.cards);
+
+  const backingItemIds = new Set();
+  for (const card of cardEntries) for (const item of card.backingItems) backingItemIds.add(item.id);
+  assert.equal(backingItemIds.size + cardlessEntries.length, report.metrics.admissionRate.aggregate.admitted);
+  assert.equal(rejectedEntries.length, report.metrics.admissionRate.aggregate.offered - report.metrics.admissionRate.aggregate.admitted);
+
+  for (const card of cardEntries) {
+    assert.ok(typeof card.hub === "string" && card.hub.length > 0);
+    assert.ok(typeof card.paragraph === "string");
+    assert.ok(Array.isArray(card.sources));
+    assert.ok(typeof card.headlinePresent === "boolean");
+    assert.ok(typeof card.linkPresent === "boolean");
+    assert.ok(typeof card.datePresent === "boolean");
+  }
 });
