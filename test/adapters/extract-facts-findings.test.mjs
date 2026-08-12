@@ -174,3 +174,20 @@ test("a sentence with nothing to decline reports empty finding lists", async () 
     ],
   );
 });
+
+test("a bare -ed complement after a copula is a mis-tagged participle, never a class", async () => {
+  const result = await ingestText(
+    "While dozens have been rescued, the search continues for an unknown number of missing people.",
+    { optimistic: true, findings: true },
+  );
+  assert.deepEqual(result.extracted, []);
+  assert.deepEqual(result.optimistic, []);
+});
+
+test("a determiner keeps a perfect copula's class complement mintable", async () => {
+  const result = await ingestText("The kraken has been a legend.", { optimistic: true, findings: true });
+  assert.deepEqual(
+    result.optimistic.map(({ subject, predicate, object }) => ({ subject, predicate, object })),
+    [{ subject: "kraken", predicate: "rdfs:subClassOf", object: "legend" }],
+  );
+});

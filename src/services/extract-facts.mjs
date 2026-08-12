@@ -401,7 +401,9 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
   // class ("a type of mammal" → mammal); a partitive container head states
   // composition, never a class ("a large body of ice" — no isa at all).
   const copulaObjectAt = (i) => {
+    let sawDeterminer = false;
     for (let j = i + 1; j < values.length; j += 1) {
+      if (pos[j] === "DET" || pos[j] === "NUM") sawDeterminer = true;
       // A naming periphrasis ("… termed as …", "… known as …") keeps the
       // frame copular: skip the participle and its "as" and read on.
       if ((pos[j] === "VERB" || pos[j] === "AUX") && COPULA_NAMING_PARTICIPLES.has(values[j]?.toLowerCase())
@@ -433,6 +435,12 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
         while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
       }
       const headWord = String(values[hi]).toLowerCase();
+      // A bare "-ed" complement straight after the copula is a predicative
+      // participle the tagger mis-read as a noun ("dozens have been rescued"),
+      // never a class: a real class complement carries a determiner or number
+      // ("has been a doctor"). Short true nouns in -ed (bed, seed, need) stay
+      // under the length bound.
+      if (!sawDeterminer && headWord.length >= 5 && headWord.endsWith("ed")) return null;
       const nextWord = values[hi + 1]?.toLowerCase();
       // "latency is the name for the time period …" defines latency; it does not
       // put latency under the class "name". The isa is declined and the object
