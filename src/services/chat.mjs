@@ -79,6 +79,7 @@ import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
 import { splitChoiceQuestion, routeChoiceRelation, lemmaFoldVariants, headNounOf, stemTopicCandidates, stemConstraintTerms } from "../domain/choice-question.mjs";
 import { subClassParents, subClassChildren, descendantSet, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
+import { buildSenseGate } from "../domain/sense-gate.mjs";
 import { ANSWER_STOP_SET } from "../domain/hub-terms.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { ENUMERATION_LANES, answerAssertsASet, retrievalMarkerLine } from "../domain/retrieval-marker.mjs";
@@ -8264,6 +8265,47 @@ function renderUniversalRestrictionLine(node, rows) {
 }
 export { renderUnionLine, renderEnumerationLine, renderUniversalRestrictionLine };
 
+/** The read-time twin of sense-gate.mjs's screen on isa DERIVATION. The
+ *  WordNet-derived bands flatten every sense of a word onto one label —
+ *  "region" carries a geographic sense and an anatomical one, and both rows
+ *  store the same six characters — so a walk that climbs through the shared
+ *  label comes straight back down the other sense: russia ⊑ country ⊑
+ *  geographical area ⊑ region ⊑ body part. The offline closure already
+ *  refuses that step. The readers here walk the same edges live, one question
+ *  at a time, and so need the same screen.
+ *
+ *  Built over the ASSERTED isa rows only. An entailed row is the closure's
+ *  own output, and feeding that back in is what the gate exists to stop. A
+ *  stated row is never screened either: nothing here constrains what a corpus
+ *  or a teacher recorded, only what a multi-hop walk concludes on top of it.
+ *
+ *  Pure over the fact set — buildSenseGate sorts every frontier and memoizes
+ *  per term, so two ingestion orders of the same rows give the same verdicts.
+ *  Held on the caller's per-turn factRows cache and keyed on the row array
+ *  itself, so one turn builds one gate however many readers ask for it. */
+function readTimeSenseScreen(rows, cache = null) {
+  if (cache?.senseScreen?.rows === rows) return cache.senseScreen.gate;
+  const subClassEdges = [];
+  const typeEdges = [];
+  for (const f of rows || []) {
+    if (String(f.provenance || "").includes("entailed:")) continue;
+    if (f.predicate === SUBCLASS_PREDICATE) subClassEdges.push([f.subject, f.object]);
+    else if (f.predicate === TYPE_PREDICATE) typeEdges.push([f.subject, f.object]);
+  }
+  const gate = buildSenseGate({ subClassEdges, typeEdges });
+  if (cache) cache.senseScreen = { rows, gate };
+  return gate;
+}
+
+/** True when concluding `from ⊑ <the asked term>` would cross two senses the
+ *  screen holds apart. Every spelling variant of the asked term is tried: an
+ *  unplaced spelling resolves to no top and so blocks nothing, which is the
+ *  gate's own "one unresolved end lets it through" rule. */
+function senseScreenBlocksWalk(screen, from, toVariants) {
+  for (const to of toVariants) if (screen.declines(from, to)) return true;
+  return false;
+}
+
 /** Append an is-a object's superclass chain to its rendered fact line, before
  *  the caveat and the citation: "rover is a kind of dog" becomes "rover is a
  *  kind of dog → canine → mammal → animal". Only the subject-side is-a lines
@@ -8271,11 +8313,20 @@ export { renderUnionLine, renderEnumerationLine, renderUniversalRestrictionLine 
  *
  *  `toward` steers the chain toward a specific ancestor (the class a "list …"
  *  question actually asked about) when the is-a object has more than one
- *  taught parent. */
-function renderFactLineWithChain(f, parents, subjectVariants, { toward = null } = {}) {
+ *  taught parent.
+ *
+ *  `screen` (readTimeSenseScreen's gate) trims the chain where it would cross
+ *  a sense join, so the rendered line stops at the last ancestor the fact's
+ *  own object really sits under rather than reading "…→ region → body part"
+ *  off a geographic subject. */
+function renderFactLineWithChain(f, parents, subjectVariants, { toward = null, screen = null } = {}) {
   const base = renderFactLine(f);
   if (!ISA_PREDICATES.has(f.predicate) || !subjectVariants.has(f.subject)) return base;
-  const chain = ancestryChain(f.object, parents, { cap: 6, stopAt: ANSWER_STOP_SET, toward });
+  let chain = ancestryChain(f.object, parents, { cap: 6, stopAt: ANSWER_STOP_SET, toward });
+  if (screen) {
+    const crossing = chain.findIndex((node, i) => i > 0 && screen.declines(f.object, node));
+    if (crossing > 0) chain = chain.slice(0, crossing);
+  }
   if (chain.length <= 1) return base;
   const suffix = ` → ${chain.slice(1).join(" → ")}`;
   const tail = factLineTail(f);
@@ -8292,10 +8343,11 @@ function renderFactLineWithChain(f, parents, subjectVariants, { toward = null } 
  *  Returns `{ lines, grouped }`. `lines` is the flat, chain-enhanced rendering
  *  (indented by `indent`) the caller uses when senses do not split. `grouped`
  *  is a ready `{ text, replace, pending? }` answer when they do, else null. */
-function senseSplitFactList(hits, rows, subjectVariants, { indent = "" } = {}) {
+function senseSplitFactList(hits, rows, subjectVariants, { indent = "", cache = null } = {}) {
   const subClassEdges = rows.filter((f) => f.predicate === SUBCLASS_PREDICATE).map((f) => [f.subject, f.object]);
   const parents = subClassParents(subClassEdges);
-  const lines = hits.map((f) => `${indent}${renderFactLineWithChain(f, parents, subjectVariants)}`);
+  const screen = readTimeSenseScreen(rows, cache);
+  const lines = hits.map((f) => `${indent}${renderFactLineWithChain(f, parents, subjectVariants, { screen })}`);
 
   const isaSubjectFacts = hits.filter((f) => ISA_PREDICATES.has(f.predicate) && subjectVariants.has(f.subject));
   const isaObjects = [...new Set(isaSubjectFacts.map((f) => f.object))];
@@ -8313,7 +8365,7 @@ function senseSplitFactList(hits, rows, subjectVariants, { indent = "" } = {}) {
   const restItems = [];
   let shownCount = 0;
   const addLine = (f) => {
-    const rendered = renderFactLineWithChain(f, parents, subjectVariants);
+    const rendered = renderFactLineWithChain(f, parents, subjectVariants, { screen });
     if (shownCount < FACT_ANSWER_CAP) { shownCount += 1; return `${indent}${rendered}`; }
     restItems.push(rendered);
     return null;
@@ -10052,7 +10104,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // trust-desc, byte-identical to before this feature existed.
     hits = rankByBiasThenTrust(hits, biasByBundle);
     const allRows = await factRows(memoryDir, cache);
-    const { lines, grouped } = senseSplitFactList(hits, allRows, variants);
+    const { lines, grouped } = senseSplitFactList(hits, allRows, variants, { cache });
     // A long undifferentiated "what is X" leads with the digest — a bounded
     // narrative over the same facts — and holds the full list behind the escape.
     // It wins over the sense-split grouping here: the digest's own selector
@@ -10657,12 +10709,21 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // framing on, just above.
     const isTaughtFact = (f) => !String(f.provenance || "").includes("corpus:") && !String(f.provenance || "").includes("web:");
     const isaRows = rows.filter((f) => ISA_PREDICATES.has(f.predicate) && isTaughtFact(f));
+    // Each subject this walk collects is a claim that it is a subtype of the
+    // ASKED term — a conclusion the walk derives, never a row anyone stated —
+    // so it takes the same disjointness screen the offline closure applies to
+    // the same conclusion. Without it a sense-mixed label part-way up the
+    // chain carries the walk down the other sense, and "what do you know
+    // about body part" answers with facts about Russia.
+    const subtypeScreen = readTimeSenseScreen(rows, cache);
     const subtypeSubjects = new Set();
     let frontier = variants;
     for (let hop = 0; hop < 8 && frontier.size; hop += 1) {
       const nextSubjects = new Set();
       for (const f of isaRows) {
-        if (frontier.has(f.object) && !subtypeSubjects.has(f.subject)) nextSubjects.add(f.subject);
+        if (!frontier.has(f.object) || subtypeSubjects.has(f.subject)) continue;
+        if (senseScreenBlocksWalk(subtypeScreen, f.subject, variants)) continue;
+        nextSubjects.add(f.subject);
       }
       if (!nextSubjects.size) break;
       for (const s of nextSubjects) subtypeSubjects.add(s);
@@ -10761,7 +10822,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     hits = rankByBiasThenTrust(hits, biasByBundle);
     const header = `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}`
       + `${viaSubtype ? " (including its known subtypes)" : ""}:`;
-    const { lines, grouped } = senseSplitFactList(hits, rows, variants, { indent: "  " });
+    const { lines, grouped } = senseSplitFactList(hits, rows, variants, { indent: "  ", cache });
     if (grouped) return { ...grouped, text: `${header}\n${grouped.text}`, ...(weakOnly ? { weakOnly: true } : {}) };
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
@@ -11812,9 +11873,17 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     //     technically-true-per-ConceptNet "yes" that has nothing to do with
     //     what the OPERATOR taught; only operator/teach/entailed-sourced isa
     //     facts are chased, matching "TAUGHT" in the gap's own name.
+    // Every chase from here down concludes a subsumption nobody stated, so
+    // each takes the same disjointness screen the offline closure applies to
+    // the same conclusion: a subject whose own asserted chain places it under
+    // a top disjoint from the asked class is not chased at all. A stated fact
+    // is untouched — the direct-hit and polarity branches above have already
+    // returned by the time this runs, so the screen only ever costs a walk.
+    const chaseSenseScreen = readTimeSenseScreen(rows, cache);
+    const chaseSubjects = [...subjCandidates].filter((s) => !senseScreenBlocksWalk(chaseSenseScreen, s, objVariants));
     const factForStep = (step) => (step.predicate === SC_PREDICATE ? chainSubClassRows : chainTypeRows)
       .find((f) => f.subject === step.subject && f.object === step.object);
-    for (const subj of subjCandidates) {
+    for (const subj of chaseSubjects) {
       const chain = findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassSucc, { maxHops: 2 });
       if (!chain) continue;
       const chainRefusal = disjointRefusalFor(subj);
@@ -11835,7 +11904,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // someValuesFrom chases keep their original, narrower discipline.
     const mixedFactForStep = (step) => (step.predicate === SC_PREDICATE ? mixedSubClassRows : mixedTypeRows)
       .find((f) => f.subject === step.subject && f.object === step.object);
-    for (const subj of subjCandidates) {
+    for (const subj of chaseSubjects) {
       const chain = findIsaChain(subj, objVariants, mixedTypeEdges, mixedSubClassSucc, { maxHops: 2 });
       if (!chain) continue;
       const chainRefusal = disjointRefusalFor(subj);
@@ -12015,7 +12084,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
             }
             : undefined;
         };
-        for (const subj of subjCandidates) {
+        for (const subj of chaseSubjects) {
           const chain = findIsaChain(subj, objVariants, chainTypeEdges, enlargedSubClassSucc, { maxHops: 3 });
           if (!chain) continue;
           const premises = chain.map(factForStepOrSvf);
@@ -12056,8 +12125,11 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // exists, and telling someone to teach a fact that already follows from
     // what they taught is the mirror lie. The probe reads the SAME taught
     // edge lists the chases use, and /syllogise closes over a superset of
-    // them, so a chain found here is one it can really materialize.
-    const deeperChainExists = [...subjCandidates].some(
+    // them, so a chain found here is one it can really materialize. The
+    // screened subject list is what the probe walks for that reason: a chain
+    // across a sense join is one /syllogise's own gate would refuse, so
+    // offering it here would send the reader after a fact that never lands.
+    const deeperChainExists = chaseSubjects.some(
       (subj) => findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassSucc, { maxHops: DEEP_CHAIN_PROBE_HOPS }),
     );
     // TRACK B1 — the automatic /prove fallback: every live chase above has
