@@ -1,0 +1,1265 @@
+{
+  "meta": {
+    "seed": "xl",
+    "sourceIds": [
+      "nyt-world"
+    ],
+    "fixtureDates": {
+      "nyt-world": "2026-08-12"
+    },
+    "now": "2026-08-12T12:00:00.000Z",
+    "take": null,
+    "doubleIngest": false
+  },
+  "provenance": {
+    "seedDigest": "dcd8b2bdf1a74c9a99babc8e790094af107dcb951874a17ad5d854a024b9c890",
+    "seedRowCount": 61736,
+    "fixtureDates": {
+      "nyt-world": "2026-08-12"
+    },
+    "gitHead": "8da0a99e6b82144024af34eef4904f50506b4649",
+    "sources": [
+      "nyt-world"
+    ],
+    "take": null,
+    "doubleIngest": false
+  },
+  "poll": {
+    "fetched": 1,
+    "newItems": 50,
+    "failures": 0,
+    "facts": 21,
+    "derived": 156,
+    "evicted": 0
+  },
+  "metrics": {
+    "admissionRate": {
+      "perSource": {
+        "nyt-world": {
+          "offered": 50,
+          "admitted": 17,
+          "rate": 0.34
+        }
+      },
+      "aggregate": {
+        "offered": 50,
+        "admitted": 17,
+        "rate": 0.34
+      }
+    },
+    "groundedTermProportion": {
+      "perSource": {
+        "nyt-world": {
+          "articles": 44,
+          "microAverage": 0.20588235294117646,
+          "distribution": {
+            "min": 0,
+            "median": 0,
+            "max": 1
+          }
+        }
+      },
+      "aggregate": {
+        "articles": 44,
+        "microAverage": 0.20588235294117646,
+        "distribution": {
+          "min": 0,
+          "median": 0,
+          "max": 1
+        }
+      }
+    },
+    "dedupeRatio": {
+      "cards": 20,
+      "admittedItems": 17,
+      "ratio": 1.1764705882352942,
+      "secondPassNewItems": null,
+      "secondPassNewCards": null,
+      "doubleIngestChecked": false
+    },
+    "entityPreservation": {
+      "rawCandidateCount": 254,
+      "anchoredCandidateCount": 18,
+      "factSurvivalRate": 0.1111111111111111,
+      "paragraphSurvivalRate": 0
+    },
+    "noisyHubRelationRate": {
+      "contextLines": 2,
+      "noisy": 0,
+      "rate": 0,
+      "noisyHubRateClosedList": 0
+    },
+    "paragraphShape": {
+      "cards": 20,
+      "sentencesPerCard": {
+        "min": 1,
+        "max": 5,
+        "mean": 1.35
+      },
+      "repeatedSentenceRate": 0.3333333333333333,
+      "aroundItRepeatRate": 0.5,
+      "headlinePresentRate": 1,
+      "linkPresentRate": 1,
+      "datePresentRate": 1
+    },
+    "rankedTermNoise": {
+      "entries": 20,
+      "noisy": 1,
+      "rate": 0.05
+    },
+    "size": {
+      "newsFactRows": 21,
+      "newsFactBytes": 15387,
+      "rowsPerArticle": 1.2352941176470589,
+      "bytesPerArticle": 905.1176470588235,
+      "feedDocumentBytes": 24274,
+      "maxFeedDocumentBytes": 358400,
+      "feedDocumentBudgetUsed": 0.06772879464285714
+    }
+  },
+  "definitions": {
+    "admissionRate": "per source: distinct polled items whose snapshot carries >=1 factId after grounding, divided by distinct items the source's fetcher returned.",
+    "groundedTermProportion": "per polled item: normalized subject/object terms of the item's own admitted facts, divided by that same set unioned with the terms the term-ledger recorded against the item's own id (its ungrounded terms) — a micro-average (summed numerators over summed denominators) per source and overall, plus the per-item distribution's min/median/max.",
+    "dedupeRatio": "feed cards built, divided by distinct polled items that admitted >=1 fact (the same set admissionRate's numerator counts) — a ratio below 1 means several admitted items consolidated onto shared hubs. secondPassNewItems/secondPassNewCards re-poll and re-build the same fixtures a second time and report what changed; both target zero.",
+    "entityPreservation": "a candidate is a date (ISO, \"Month D, YYYY\" or \"D Month YYYY\") or a capitalized 1-4 word sequence found in an item's title+summary text, gazetteer-anchored when the whole candidate or its text after the last comma normalizes to a term the seed graph already classifies as a place or person (GAZETTEER_CLASS_TERMS via rdf:type/rdfs:subClassOf). factSurvival counts an anchored candidate whose normalized form appears as a subject/object term of one of the item's own admitted facts; paragraphSurvival counts one whose literal text appears in a card the item contributed facts to. rawCandidateCount (no gazetteer filter) is reported alongside for reference.",
+    "noisyHubRelationRate": "a context line is an rdf:type/rdfs:subClassOf row among what a card's text actually shows, read off news-feed.mjs's own render functions rather than re-derived here: printedParagraphRows for the main paragraph (the report, then the identity clause — only when the hub reads in one sense, IDENTITY_MAX_CLASSES or fewer, otherwise it prints none of them — then the known-facts lead-in, then 'Around it', each block's own cap and the paragraph-wide sentence cap both already applied) plus knownFactRows for the backgroundParagraph disclosure, which shows that same background set in full. A row an entailment closure minted, or one sliced away before render by either cap, is never in this set — never the wider two-hop subgraph a card merely reaches. A hub that only ever appears as an object (a place a quake struck) carries its class-membership noise on the SUBJECT of a background row instead, which knownFactRows already reaches from the anchor side. A line (subject S, object Y) is noisy unless a same-sense test finds positive support for Y in S's own company: build a pool from the card's own news-sentence text (the backing item(s)' title+summary, tokenized) plus every OTHER term S connects to anywhere in the store (S's one-hop neighbourhood, the tested row excluded); a line is NOT noisy when Y itself, or any of Y's own one-hop neighbours, shares a content word (ABSTRACT_ROOT_TERMS-filtered) with that pool. Two disjoint WordNet senses of the same lemma share no such neighbour by construction, which is what catches 'earthquake is a kind of electrical device' with no closed list; a line that fits the hub's own topic almost always shares one (a hub's OTHER identity objects are each other's neighbours; a news article's own words usually name a real hypernym). noisyHubRateClosedList carries the prior closed-abstract-class-list reading of the same denominator, kept alongside for one release.",
+    "paragraphShape": "sentencesPerCard: each card's paragraph split on \". \", min/max/mean across the feed. repeatedSentenceRate: (sentence occurrences beyond each string's first) / (total sentence occurrences), pooled across every card's paragraph. aroundItRepeatRate: of cards whose paragraph carries an \"Around it: ...\" clause, the fraction whose clause text exactly matches another card's. headlinePresent/linkPresent/datePresent: the share of cards whose sources[] entries carry a non-empty title / url / any key named publishedAt or date.",
+    "rankedTermNoise": "ranked-terms panel entries whose term falls in RANKED_NOISE_TERMS, divided by the panel's own entry count (the same list /news rank renders, top 20).",
+    "size": "newsFactRows/newsFactBytes: fact rows (and their JSON byte size) whose provenance carries a news:/news-fixture:/research: tag. rowsPerArticle/bytesPerArticle: those totals divided by admitted-item count. feedDocumentBytes: the materialized feed document's own byte size (server/news-worker/handler.mjs's serializeCard + enforceFeedSizeBound), reported against MAX_FEED_DOCUMENT_BYTES."
+  },
+  "articles": [
+    {
+      "kind": "card",
+      "id": "news-feed:0390178590c01693",
+      "hub": "refugee crisis",
+      "paragraph": "social medium sparks refugee crisis.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "How Social Media Sparked a Refugee Crisis Between Spain and Morocco",
+          "url": "https://www.nytimes.com/2026/08/11/technology/social-media-ceuta-spain-morocco.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-11T13:23:38.000Z",
+          "summary": "A wave of disinformation online contributed to a surge of migrants in the Spanish enclave of Ceuta who were trying to reach Europe, resulting in about 90 deaths."
+        }
+      ],
+      "date": "2026-08-11T13:23:38.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:3696480437715384",
+          "sourceId": "nyt-world",
+          "title": "How Social Media Sparked a Refugee Crisis Between Spain and Morocco",
+          "url": "https://www.nytimes.com/2026/08/11/technology/social-media-ceuta-spain-morocco.html",
+          "publishedAt": "2026-08-11T13:23:38.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 6,
+        "microAverage": 0.3333333333333333
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "social medium",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:0619c120515d20f4",
+      "hub": "election",
+      "paragraph": "nigel farage forces election.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "How Nigel Farage Ended Up Running Against Count Binface in Clacton",
+          "url": "https://www.nytimes.com/2026/08/12/world/europe/count-binface-nigel-farage-clacton.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-12T07:59:50.000Z",
+          "summary": "Nigel Farage forced a new election in his parliamentary seat after coming under pressure over his finances. His main challenger is Count Binface, a novelty candidate."
+        }
+      ],
+      "date": "2026-08-12T07:59:50.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:016bd4e727ed8849",
+          "sourceId": "nyt-world",
+          "title": "How Nigel Farage Ended Up Running Against Count Binface in Clacton",
+          "url": "https://www.nytimes.com/2026/08/12/world/europe/count-binface-nigel-farage-clacton.html",
+          "publishedAt": "2026-08-12T07:59:50.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 4,
+        "extracted": 8,
+        "microAverage": 0.5
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "nigel farage",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:10be745f59559d95",
+      "hub": "boats hit by mystery attackers",
+      "paragraph": "ecuadorean fishings boats hit by mystery attackers.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "Ecuadorean Fishing Boats Hit by Mystery Attackers",
+          "url": "https://www.nytimes.com/2026/08/12/world/americas/ecuador-fishing-boat-strikes.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-12T09:02:30.000Z",
+          "summary": "Ecuadorean crews plying the waters of the Pacific have been targeted by a mysterious outfit equipped with drones. Some sailors appear to have lost their lives."
+        }
+      ],
+      "date": "2026-08-12T09:02:30.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:1e12aa4590055f17",
+          "sourceId": "nyt-world",
+          "title": "Ecuadorean Fishing Boats Hit by Mystery Attackers",
+          "url": "https://www.nytimes.com/2026/08/12/world/americas/ecuador-fishing-boat-strikes.html",
+          "publishedAt": "2026-08-12T09:02:30.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 4,
+        "extracted": 6,
+        "microAverage": 0.6666666666666666
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "ecuadorean",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:2223c002ec6af693",
+      "hub": "reporter amelia nierenberg",
+      "paragraph": "reporter amelia nierenberg describes right.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "Why Nigel Farage Is Running Against a ‘Trash Can’",
+          "url": "https://www.nytimes.com/video/world/europe/100000011041924/why-nigel-farage-is-running-against-a-trash-can.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-12T04:00:01.000Z",
+          "summary": "Our reporter Amelia Nierenberg describes how the right-wing British political leader Nigel Farage, who is seeking re-election to Parliament, faces an unconventional opponent: Count Binface."
+        }
+      ],
+      "date": "2026-08-12T04:00:01.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:0c6e7f81fd6a0665",
+          "sourceId": "nyt-world",
+          "title": "Why Nigel Farage Is Running Against a ‘Trash Can’",
+          "url": "https://www.nytimes.com/video/world/europe/100000011041924/why-nigel-farage-is-running-against-a-trash-can.html",
+          "publishedAt": "2026-08-12T04:00:01.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 10,
+        "microAverage": 0.2
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": null,
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:2354b92bb431f717",
+      "hub": "air war",
+      "paragraph": "ukraine expands air war.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "Russian Civilian Deaths Are Growing Rapidly as Ukraine Expands Its Air War",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/russia-ukraine-civilian-casualties.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-11T11:43:18.000Z",
+          "summary": "The higher tempo of Ukrainian strikes has fueled discontent among Russians, but it is far from clear that it will change the Kremlin’s calculus about the war."
+        }
+      ],
+      "date": "2026-08-11T11:43:18.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:55f7823ee97a41b7",
+          "sourceId": "nyt-world",
+          "title": "Russian Civilian Deaths Are Growing Rapidly as Ukraine Expands Its Air War",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/russia-ukraine-civilian-casualties.html",
+          "publishedAt": "2026-08-11T11:43:18.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 6,
+        "microAverage": 0.3333333333333333
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "ukraine",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:34a350fc240b86d3",
+      "hub": "unsolicited telemarketing calls",
+      "paragraph": "france bans unsolicited telemarketing calls.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "France Bans Unsolicited Telemarketing Calls",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/france-ban-unsolicited-telemarketing-calls.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-11T04:01:05.000Z",
+          "summary": "Companies will no longer be allowed to advertise goods and services through cold calls without previous consent from consumers."
+        }
+      ],
+      "date": "2026-08-11T04:01:05.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:5662182b6691757c",
+          "sourceId": "nyt-world",
+          "title": "France Bans Unsolicited Telemarketing Calls",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/france-ban-unsolicited-telemarketing-calls.html",
+          "publishedAt": "2026-08-11T04:01:05.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 6,
+        "microAverage": 0.3333333333333333
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "france",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:44d5e92c667c4c6b",
+      "hub": "ecuadorean",
+      "paragraph": "ecuadorean fishings boats hit by mystery attackers.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "Ecuadorean Fishing Boats Hit by Mystery Attackers",
+          "url": "https://www.nytimes.com/2026/08/12/world/americas/ecuador-fishing-boat-strikes.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-12T09:02:30.000Z",
+          "summary": "Ecuadorean crews plying the waters of the Pacific have been targeted by a mysterious outfit equipped with drones. Some sailors appear to have lost their lives."
+        }
+      ],
+      "date": "2026-08-12T09:02:30.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:1e12aa4590055f17",
+          "sourceId": "nyt-world",
+          "title": "Ecuadorean Fishing Boats Hit by Mystery Attackers",
+          "url": "https://www.nytimes.com/2026/08/12/world/americas/ecuador-fishing-boat-strikes.html",
+          "publishedAt": "2026-08-12T09:02:30.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 4,
+        "extracted": 6,
+        "microAverage": 0.6666666666666666
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "boats hit by mystery attackers",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:45d850f812ad43cf",
+      "hub": "italians",
+      "paragraph": "italians wants romans.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "In a Sweltering Summer, These Italians Want Romans to Curl",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/italy-curling-rome.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-11T04:01:06.000Z",
+          "summary": "By setting up a curling rink in the shadow of the Colosseum, sports officials hope to capitalize on the fresh popularity of the Winter Olympics phenomenon. Even in a heat wave and without any ice."
+        }
+      ],
+      "date": "2026-08-11T04:01:06.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:25ad97f41ad5a596",
+          "sourceId": "nyt-world",
+          "title": "In a Sweltering Summer, These Italians Want Romans to Curl",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/italy-curling-rome.html",
+          "publishedAt": "2026-08-11T04:01:06.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 4,
+        "extracted": 8,
+        "microAverage": 0.5
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "romans",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:55b82fa1a8483b3c",
+      "hub": "ukraine",
+      "paragraph": "ukraine expands air war.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "Russian Civilian Deaths Are Growing Rapidly as Ukraine Expands Its Air War",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/russia-ukraine-civilian-casualties.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-11T11:43:18.000Z",
+          "summary": "The higher tempo of Ukrainian strikes has fueled discontent among Russians, but it is far from clear that it will change the Kremlin’s calculus about the war."
+        }
+      ],
+      "date": "2026-08-11T11:43:18.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:55f7823ee97a41b7",
+          "sourceId": "nyt-world",
+          "title": "Russian Civilian Deaths Are Growing Rapidly as Ukraine Expands Its Air War",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/russia-ukraine-civilian-casualties.html",
+          "publishedAt": "2026-08-11T11:43:18.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 6,
+        "microAverage": 0.3333333333333333
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "air war",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:59d610dc2a9fb27c",
+      "hub": "robert gilman",
+      "paragraph": "russia releases robert gilman.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "Ex-Marine Robert Gilman, Freed by Russia After 4 Years in Prison, Arrives in the U.S.",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/russia-robert-gilman-release.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-12T07:18:15.000Z",
+          "summary": "Russia released Robert Gilman on “a humanitarian basis,” President Trump said. Mr. Gilman’s family had said he was in dire physical condition."
+        }
+      ],
+      "date": "2026-08-12T07:18:15.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:cad010ca50329055",
+          "sourceId": "nyt-world",
+          "title": "Ex-Marine Robert Gilman, Freed by Russia After 4 Years in Prison, Arrives in the U.S.",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/russia-robert-gilman-release.html",
+          "publishedAt": "2026-08-12T07:18:15.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 7,
+        "microAverage": 0.2857142857142857
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "russia",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:671d25a9225ac27a",
+      "hub": "romans",
+      "paragraph": "italians wants romans.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "In a Sweltering Summer, These Italians Want Romans to Curl",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/italy-curling-rome.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-11T04:01:06.000Z",
+          "summary": "By setting up a curling rink in the shadow of the Colosseum, sports officials hope to capitalize on the fresh popularity of the Winter Olympics phenomenon. Even in a heat wave and without any ice."
+        }
+      ],
+      "date": "2026-08-11T04:01:06.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:25ad97f41ad5a596",
+          "sourceId": "nyt-world",
+          "title": "In a Sweltering Summer, These Italians Want Romans to Curl",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/italy-curling-rome.html",
+          "publishedAt": "2026-08-11T04:01:06.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 4,
+        "extracted": 8,
+        "microAverage": 0.5
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "italians",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:6ad2dcce27d1326e",
+      "hub": "social medium",
+      "paragraph": "social medium sparks refugee crisis.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "How Social Media Sparked a Refugee Crisis Between Spain and Morocco",
+          "url": "https://www.nytimes.com/2026/08/11/technology/social-media-ceuta-spain-morocco.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-11T13:23:38.000Z",
+          "summary": "A wave of disinformation online contributed to a surge of migrants in the Spanish enclave of Ceuta who were trying to reach Europe, resulting in about 90 deaths."
+        }
+      ],
+      "date": "2026-08-11T13:23:38.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:3696480437715384",
+          "sourceId": "nyt-world",
+          "title": "How Social Media Sparked a Refugee Crisis Between Spain and Morocco",
+          "url": "https://www.nytimes.com/2026/08/11/technology/social-media-ceuta-spain-morocco.html",
+          "publishedAt": "2026-08-11T13:23:38.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 6,
+        "microAverage": 0.3333333333333333
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "refugee crisis",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:730a0dff0bb84e01",
+      "hub": "russia",
+      "paragraph": "russia releases robert gilman. russia is a country. Around it: country buys battery.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "Ex-Marine Robert Gilman, Freed by Russia After 4 Years in Prison, Arrives in the U.S.",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/russia-robert-gilman-release.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-12T07:18:15.000Z",
+          "summary": "Russia released Robert Gilman on “a humanitarian basis,” President Trump said. Mr. Gilman’s family had said he was in dire physical condition."
+        }
+      ],
+      "date": "2026-08-12T07:18:15.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:cad010ca50329055",
+          "sourceId": "nyt-world",
+          "title": "Ex-Marine Robert Gilman, Freed by Russia After 4 Years in Prison, Arrives in the U.S.",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/russia-robert-gilman-release.html",
+          "publishedAt": "2026-08-12T07:18:15.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 7,
+        "microAverage": 0.2857142857142857
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "robert gilman",
+      "repeatsAroundItOf": "france",
+      "sentenceCount": 3,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:9047279caa9f7b02",
+      "hub": "cuban smuggling ring",
+      "paragraph": "case targets cuban smuggling ring.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "How Raúl Castro’s Grandson, Raúl G. Rodríguez Castro, Became a Power Broker",
+          "url": "https://www.nytimes.com/2026/08/11/world/americas/raul-castro-trump-cuba.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-11T16:30:30.000Z",
+          "summary": "The Castro family envoy, Raúl G. Rodríguez Castro, who has been in talks with the Trump administration, was once named in a case targeting a Cuban smuggling ring."
+        }
+      ],
+      "date": "2026-08-11T16:30:30.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:4591b545c41c97d2",
+          "sourceId": "nyt-world",
+          "title": "How Raúl Castro’s Grandson, Raúl G. Rodríguez Castro, Became a Power Broker",
+          "url": "https://www.nytimes.com/2026/08/11/world/americas/raul-castro-trump-cuba.html",
+          "publishedAt": "2026-08-11T16:30:30.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 9,
+        "microAverage": 0.2222222222222222
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": null,
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:91cb3bc5f34b106f",
+      "hub": "sacred glow",
+      "paragraph": "quest restores sacred glow. request means the same as quest.",
+      "backgroundParagraph": "request means the same as quest.",
+      "sources": [
+        {
+          "title": "In Bali, a Quest to Restore the Sacred Glow of Fireflies",
+          "url": "https://www.nytimes.com/2026/08/12/world/asia/bali-restore-fireflies.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-12T07:35:12.000Z",
+          "summary": "The insects, revered in local culture, are disappearing for many reasons, including rapid development to cater to tourists."
+        }
+      ],
+      "date": "2026-08-12T07:35:12.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:4836ae3e12557de9",
+          "sourceId": "nyt-world",
+          "title": "In Bali, a Quest to Restore the Sacred Glow of Fireflies",
+          "url": "https://www.nytimes.com/2026/08/12/world/asia/bali-restore-fireflies.html",
+          "publishedAt": "2026-08-12T07:35:12.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 4,
+        "microAverage": 0.5
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "quest",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 2,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:96d792261193ada6",
+      "hub": "east asia",
+      "paragraph": "east asia deploys heat.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "A.C. Vests and UV Parasols: East Asia Deploys Heat-Fighting Gadgets",
+          "url": "https://www.nytimes.com/2026/08/11/world/asia/extreme-heat-wave-korea-japan-china-cooling.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-11T14:14:21.000Z",
+          "summary": "The innovations include air-conditioned apparel, refrigerators for humans and hand-held fans that use the science behind semiconductors. Governments are making cooling devices central to heat adaptation."
+        }
+      ],
+      "date": "2026-08-11T14:14:21.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:601afb82bfc2e819",
+          "sourceId": "nyt-world",
+          "title": "A.C. Vests and UV Parasols: East Asia Deploys Heat-Fighting Gadgets",
+          "url": "https://www.nytimes.com/2026/08/11/world/asia/extreme-heat-wave-korea-japan-china-cooling.html",
+          "publishedAt": "2026-08-11T14:14:21.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 7,
+        "microAverage": 0.2857142857142857
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": null,
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:c87cac78658ee879",
+      "hub": "sports officials",
+      "paragraph": "sports officials hopes popularity.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "In a Sweltering Summer, These Italians Want Romans to Curl",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/italy-curling-rome.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-11T04:01:06.000Z",
+          "summary": "By setting up a curling rink in the shadow of the Colosseum, sports officials hope to capitalize on the fresh popularity of the Winter Olympics phenomenon. Even in a heat wave and without any ice."
+        }
+      ],
+      "date": "2026-08-11T04:01:06.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:25ad97f41ad5a596",
+          "sourceId": "nyt-world",
+          "title": "In a Sweltering Summer, These Italians Want Romans to Curl",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/italy-curling-rome.html",
+          "publishedAt": "2026-08-11T04:01:06.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 4,
+        "extracted": 8,
+        "microAverage": 0.5
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": null,
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:d40606ef0a6fed47",
+      "hub": "france",
+      "paragraph": "france bans unsolicited telemarketing calls. france is a country. snake is found in france. marmoset is found in france. Around it: country buys battery.",
+      "backgroundParagraph": "snake is found in france. marmoset is found in france.",
+      "sources": [
+        {
+          "title": "France Bans Unsolicited Telemarketing Calls",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/france-ban-unsolicited-telemarketing-calls.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-11T04:01:05.000Z",
+          "summary": "Companies will no longer be allowed to advertise goods and services through cold calls without previous consent from consumers."
+        }
+      ],
+      "date": "2026-08-11T04:01:05.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:5662182b6691757c",
+          "sourceId": "nyt-world",
+          "title": "France Bans Unsolicited Telemarketing Calls",
+          "url": "https://www.nytimes.com/2026/08/11/world/europe/france-ban-unsolicited-telemarketing-calls.html",
+          "publishedAt": "2026-08-11T04:01:05.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 6,
+        "microAverage": 0.3333333333333333
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "unsolicited telemarketing calls",
+      "repeatsAroundItOf": "russia",
+      "sentenceCount": 5,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:e2a7b35f6019a436",
+      "hub": "quest",
+      "paragraph": "quest restores sacred glow.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "In Bali, a Quest to Restore the Sacred Glow of Fireflies",
+          "url": "https://www.nytimes.com/2026/08/12/world/asia/bali-restore-fireflies.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-12T07:35:12.000Z",
+          "summary": "The insects, revered in local culture, are disappearing for many reasons, including rapid development to cater to tourists."
+        }
+      ],
+      "date": "2026-08-12T07:35:12.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:4836ae3e12557de9",
+          "sourceId": "nyt-world",
+          "title": "In Bali, a Quest to Restore the Sacred Glow of Fireflies",
+          "url": "https://www.nytimes.com/2026/08/12/world/asia/bali-restore-fireflies.html",
+          "publishedAt": "2026-08-12T07:35:12.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 2,
+        "extracted": 4,
+        "microAverage": 0.5
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "sacred glow",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "card",
+      "id": "news-feed:e7c20bfa0cf89f42",
+      "hub": "nigel farage",
+      "paragraph": "nigel farage forces election.",
+      "backgroundParagraph": null,
+      "sources": [
+        {
+          "title": "How Nigel Farage Ended Up Running Against Count Binface in Clacton",
+          "url": "https://www.nytimes.com/2026/08/12/world/europe/count-binface-nigel-farage-clacton.html",
+          "name": "NYT World News",
+          "publishedAt": "2026-08-12T07:59:50.000Z",
+          "summary": "Nigel Farage forced a new election in his parliamentary seat after coming under pressure over his finances. His main challenger is Count Binface, a novelty candidate."
+        }
+      ],
+      "date": "2026-08-12T07:59:50.000Z",
+      "backingItems": [
+        {
+          "id": "news-item:016bd4e727ed8849",
+          "sourceId": "nyt-world",
+          "title": "How Nigel Farage Ended Up Running Against Count Binface in Clacton",
+          "url": "https://www.nytimes.com/2026/08/12/world/europe/count-binface-nigel-farage-clacton.html",
+          "publishedAt": "2026-08-12T07:59:50.000Z"
+        }
+      ],
+      "groundedTermProportion": {
+        "articles": 1,
+        "grounded": 4,
+        "extracted": 8,
+        "microAverage": 0.5
+      },
+      "noisyContextLines": {
+        "count": 0,
+        "objects": []
+      },
+      "repeatsSentencesOf": "election",
+      "repeatsAroundItOf": null,
+      "sentenceCount": 1,
+      "headlinePresent": true,
+      "linkPresent": true,
+      "datePresent": true,
+      "summaryPresent": true
+    },
+    {
+      "kind": "cardless-admitted",
+      "id": "news-item:27dbb7ba945f92cb",
+      "sourceId": "nyt-world",
+      "title": "Spain Urges Eclipse Watchers to Be Wary of Wildfire Risks",
+      "factCount": 1
+    },
+    {
+      "kind": "cardless-admitted",
+      "id": "news-item:2cd68c9b946e5f6b",
+      "sourceId": "nyt-world",
+      "title": "The Eclipse Is Coming, and Iceland Is Looking for a Break in the Clouds",
+      "factCount": 1
+    },
+    {
+      "kind": "cardless-admitted",
+      "id": "news-item:5e6183df61696363",
+      "sourceId": "nyt-world",
+      "title": "Frenzy for Solar Eclipse Glasses Takes Over London",
+      "factCount": 2
+    },
+    {
+      "kind": "cardless-admitted",
+      "id": "news-item:9fc38f89b746b7c2",
+      "sourceId": "nyt-world",
+      "title": "Solar eclipses occur when the sun, moon and Earth align in space.",
+      "factCount": 1
+    },
+    {
+      "kind": "cardless-admitted",
+      "id": "news-item:afe5edb02b487fd1",
+      "sourceId": "nyt-world",
+      "title": "An Electric Motorcycle Revolution",
+      "factCount": 1
+    },
+    {
+      "kind": "cardless-admitted",
+      "id": "news-item:cfc7c7b1cfa4cb62",
+      "sourceId": "nyt-world",
+      "title": "A Syrian Holdout Province, Sweida, Fears a Government Takeover",
+      "factCount": 1
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:027cd5d42c2dd868",
+      "sourceId": "nyt-world",
+      "title": "Before Trump’s Catering Container Ruse, Other Presidents Obscured Risky Travel Plans",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:04fc6efc2272dd9e",
+      "sourceId": "nyt-world",
+      "title": "Eclipse chasers stake out their viewing spots in Iceland.",
+      "stage": "no recognizable claim in the text"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:051c4dcbeb4125e4",
+      "sourceId": "nyt-world",
+      "title": "Deported From the U.S., Trapped in a Prison in Africa",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:0b15af6ce8d6414c",
+      "sourceId": "nyt-world",
+      "title": "Even outside the path of totality, the eclipse will provide remarkable views.",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:0f0b2bbf05478c74",
+      "sourceId": "nyt-world",
+      "title": "Total Eclipse",
+      "stage": "no recognizable claim in the text"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:1bc702e9ed8f40da",
+      "sourceId": "nyt-world",
+      "title": "Zhu Rongji, Former Premier Who Pushed China to a Market Economy, Dies at 97",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:37859695dd464431",
+      "sourceId": "nyt-world",
+      "title": "Syria Sentences Former President al-Assad to Death for Crimes Against Humanity",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:42aec1b72f084379",
+      "sourceId": "nyt-world",
+      "title": "Europeans, Braced for 5th Heat Wave of 2026, Have Had Enough",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:53af09a241beb450",
+      "sourceId": "nyt-world",
+      "title": "In Iceland, the eclipse czar is broken-hearted over the weather.",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:548101296b626b83",
+      "sourceId": "nyt-world",
+      "title": "As Death Toll From Colombia Earthquake Rises to at Least 181, Rescuers Hunt for Survivors",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:5d62ed3cecb08e87",
+      "sourceId": "nyt-world",
+      "title": "How Scientists Use Eclipses for Research",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:5dd61e9725d46caf",
+      "sourceId": "nyt-world",
+      "title": "A Rescue Effort After Colombia’s Earthquake",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:5f876b04546662e3",
+      "sourceId": "nyt-world",
+      "title": "Here’s the latest.",
+      "stage": "no recognizable claim in the text"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:73d3ff096c145bbe",
+      "sourceId": "nyt-world",
+      "title": "Effects of Record-Breaking El Niño Are Happening on 3 Continents",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:76d20551b5292387",
+      "sourceId": "nyt-world",
+      "title": "A Space Expert Hoped to Use the Eclipse as Science Class. The D.J.s Had Other Plans.",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:7b10b6dbe0f6a8c0",
+      "sourceId": "nyt-world",
+      "title": "Here’s how to stay safe watching the solar eclipse.",
+      "stage": "no recognizable claim in the text"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:805ab25571fd9266",
+      "sourceId": "nyt-world",
+      "title": "He Was Deported to Eswatini in Southern Africa. He May Never Go Free.",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:89cd0c2ae39a9e5a",
+      "sourceId": "nyt-world",
+      "title": "Live Updates: First Total Eclipse in Decades Turns Day to Night in Europe",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:8aeea6923d77ac6e",
+      "sourceId": "nyt-world",
+      "title": "Zambia Election: President Hichilema Faces Backlash Ahead of Vote",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:8bfe8bda74fcba06",
+      "sourceId": "nyt-world",
+      "title": "How to Safely Watch the Solar Eclipse, Even Without Glasses",
+      "stage": "no recognizable claim in the text"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:95306613100248f7",
+      "sourceId": "nyt-world",
+      "title": "Searching for Survivors After Colombia’s Earthquake",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:97d21220655e11fc",
+      "sourceId": "nyt-world",
+      "title": "Thailand Halts New Gun Permits After Mass Shooting at a School",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:a6a28fe038686997",
+      "sourceId": "nyt-world",
+      "title": "This remote spot has cliffs, seabirds — and today, a few extra seconds of darkness.",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:a7e710b98dbb239c",
+      "sourceId": "nyt-world",
+      "title": "As Europe Faces Heat Waves and Wildfires, Travelers Are Forced to Adapt",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:b90cbcc285e0d15b",
+      "sourceId": "nyt-world",
+      "title": "More Than 40 Dead After a Ferry Capsizes on Zimbabwe’s Lake Kariba",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:c8ddf99fa0c1ab3a",
+      "sourceId": "nyt-world",
+      "title": "Trump Tariffs Force Some Canadian Companies to Move South of the Border",
+      "stage": "no recognizable claim in the text"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:cb02d19ec58bdc70",
+      "sourceId": "nyt-world",
+      "title": "Why Rumors About Morocco Followed Spain’s Ceuta Migrant Surge",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:d3254b09768c9e54",
+      "sourceId": "nyt-world",
+      "title": "What happens to animals during an eclipse?",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:dbcf363a741e5a31",
+      "sourceId": "nyt-world",
+      "title": "What We Know About the Earthquake in Colombia",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:e929bbcb380f422a",
+      "sourceId": "nyt-world",
+      "title": "What to Know About the Cuban Mafia in Quintana Roo",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:ed11f976b0bd6893",
+      "sourceId": "nyt-world",
+      "title": "Six Killed in Houthi Strike on Red Sea Ship, Yemeni Government Says",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:f0a07f6be1a7e6e7",
+      "sourceId": "nyt-world",
+      "title": "A Partial Solar Eclipse Will Be Visible in Parts of the U.S. and Canada",
+      "stage": "parsed; term(s) never grounded"
+    },
+    {
+      "kind": "rejected",
+      "id": "news-item:f7dce2db059ced2e",
+      "sourceId": "nyt-world",
+      "title": "Man in Custody Over Bomb Threat at U.S. Consulate in Nova Scotia",
+      "stage": "parsed; term(s) never grounded"
+    }
+  ]
+}

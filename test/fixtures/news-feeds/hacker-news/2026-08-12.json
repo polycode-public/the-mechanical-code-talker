@@ -1,6 +1,6 @@
 {
   "sourceId": "hacker-news",
-  "capturedAt": "2026-08-12T19:01:34.817Z",
+  "capturedAt": "2026-08-12T19:30:19.692Z",
   "originUrl": "https://hacker-news.firebaseio.com/v0",
   "licence": "user-submitted, discussion linked",
   "calls": [
@@ -15,10 +15,10 @@
         49273478,
         49270953,
         49272655,
-        49275132,
         49272569,
+        49276534,
         49275335,
-        49275465
+        49275132
       ]
     },
     {
@@ -88,17 +88,6 @@
       }
     },
     {
-      "url": "https://hacker-news.firebaseio.com/v0/item/49275132.json",
-      "status": 200,
-      "kind": "json",
-      "body": {
-        "id": 49275132,
-        "title": "Glaciers on the Climate Dashboard",
-        "url": "https://climate.metoffice.cloud/glaciers.html",
-        "time": 1786552705
-      }
-    },
-    {
       "url": "https://hacker-news.firebaseio.com/v0/item/49272569.json",
       "status": 200,
       "kind": "json",
@@ -107,6 +96,17 @@
         "title": "Someone is running mass vulnerability scans, spoofing AI bots like ClaudeBot",
         "url": "https://knownagents.com/insights",
         "time": 1786543366
+      }
+    },
+    {
+      "url": "https://hacker-news.firebaseio.com/v0/item/49276534.json",
+      "status": 200,
+      "kind": "json",
+      "body": {
+        "id": 49276534,
+        "title": "Your Key to Success Isn't More Luck or Hard Work",
+        "url": "https://julienreszka.com/blog/your-key-to-success-isn-t-more-luck-or-hard-work/",
+        "time": 1786558623
       }
     },
     {
@@ -121,14 +121,14 @@
       }
     },
     {
-      "url": "https://hacker-news.firebaseio.com/v0/item/49275465.json",
+      "url": "https://hacker-news.firebaseio.com/v0/item/49275132.json",
       "status": 200,
       "kind": "json",
       "body": {
-        "id": 49275465,
-        "title": "Reflex (YC W23) Is hiring Growth and GTM Roles",
-        "url": "https://www.ycombinator.com/companies/reflex/jobs/71x5GFb-growth-engineer",
-        "time": 1786554021
+        "id": 49275132,
+        "title": "Glaciers on the Climate Dashboard",
+        "url": "https://climate.metoffice.cloud/glaciers.html",
+        "time": 1786552705
       }
     }
   ]
