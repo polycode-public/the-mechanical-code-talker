@@ -84,6 +84,29 @@ test("a sentence-final full stop never enters a stored term; an abbreviation kee
   );
 });
 
+test("a Title Case headline reads its verb off the closed band, not off the tagger", () => {
+  assert.deepEqual(
+    triplesOf("Thailand Halts New Gun Permits After Mass Shooting at a School"),
+    ["thailand mgx:halt new gun permit"],
+  );
+  assert.deepEqual(
+    triplesOf("A Bright Spot in Colombia as Rescuers Free Quake Victim"),
+    ["rescuers mgx:free quake victim"],
+  );
+});
+
+test("a headline verb the band never declared leaves the headline an honest miss", () => {
+  assert.deepEqual(triplesOf("Prime Minister Keir Starmer Faces a Vote"), []);
+  assert.deepEqual(triplesOf("How Nigel Farage Ended Up Running Against Count Binface in Clacton"), []);
+});
+
+test("a headline never reads its own first word as the event, so a name the band also spells stays a name", () => {
+  assert.deepEqual(
+    triplesOf("Bar Refaeli Halts a Modeling Contract in Israel"),
+    ["bar refaeli mgx:halt modeling contract"],
+  );
+});
+
 test("the frame adds nothing to prose that named no event", () => {
   for (const sentence of [
     "The quick brown fox jumps over something vague.",

@@ -225,6 +225,16 @@ const stripSentenceFinalStop = (word) => {
   return text.endsWith(".") && !text.slice(0, -1).includes(".") ? text.slice(0, -1) : text;
 };
 
+/** The closed-band lemma a word spells, or null. A Title Case headline carries
+ *  no tag a reader can trust, so the band's own vocabulary is what identifies
+ *  its verb: the word itself, or its -s fold ("Halts" → halt). */
+function newswireVerbLemma(word) {
+  const surface = stripSentenceFinalStop(String(word ?? "")).toLowerCase();
+  if (NEWSWIRE_RELATION_VERBS.has(surface)) return surface;
+  const bare = surface.endsWith("s") ? surface.slice(0, -1) : "";
+  return bare && NEWSWIRE_RELATION_VERBS.has(bare) ? bare : null;
+}
+
 /** Fold an entity surface to its stored key: a lexicon noun's lemma, else the
  *  word's own normFactTerm (the optimistic tier mints unlisted content nouns
  *  the way the strict teach lane already mints "redis"). */
@@ -293,12 +303,8 @@ function candidateTermOccurrencesPos(sentences, nlp, lexicon) {
         // A Title Case headline lifts its verbs to PROPN too ("Thailand Halts
         // New Gun Licenses…"), gluing a clause into one run. A token the verb
         // tables know splits the run: what stands before it is the name.
-        const verbShaped = (w) => {
-          const word = stripSentenceFinalStop(String(w)).toLowerCase();
-          const lemma = word.endsWith("s") ? word.slice(0, -1) : word;
-          return NEWSWIRE_RELATION_VERBS.has(word) || NEWSWIRE_RELATION_VERBS.has(lemma)
-            || Boolean(lookupVerb(lexicon, word));
-        };
+        const verbShaped = (w) => Boolean(newswireVerbLemma(w))
+          || Boolean(lookupVerb(lexicon, stripSentenceFinalStop(String(w)).toLowerCase()));
         let cut = -1;
         for (let k = i + 1; k <= hi; k += 1) if (verbShaped(values[k])) { cut = k; break; }
         const runEnd = cut === -1 ? hi : cut - 1;
@@ -442,6 +448,29 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     pos = doc.tokens().out(nlp.its.pos);
     lemmas = doc.tokens().out(nlp.its.lemma);
   } catch { return { triples: [], declined: [], minted: [] }; }
+  // A Title Case headline gives a tagger no lowercase to work from, and the
+  // tags come back unusable in both directions: the line's verb reads PROPN
+  // ("Thailand/PROPN Halts/PROPN New/PROPN Gun/PROPN"), while a plain noun in
+  // it reads VERB ("Permits/VERB", "Shooting/VERB"), which truncates the object
+  // run to "new gun". So in a Title Case sentence the closed vocabularies
+  // decide alone: a word the event band or the lexicon spells as a verb IS the
+  // verb, and every other token reads as a noun. Never the first token (a
+  // headline opens on its subject, and "Ban Ki-moon" opens on a name the band
+  // also spells), and never a band word straight after a determiner ("The Free
+  // Press").
+  if (readsAsTitleCase(values)) {
+    for (let i = 1; i < values.length; i += 1) {
+      const banded = pos[i - 1] === "DET" ? null : newswireVerbLemma(values[i]);
+      if (banded) {
+        pos[i] = "VERB";
+        lemmas[i] = banded;
+      } else if (lookupVerb(lexicon, stripSentenceFinalStop(String(values[i])).toLowerCase())) {
+        pos[i] = "VERB";
+      } else if (pos[i] === "VERB") {
+        pos[i] = "NOUN";
+      }
+    }
+  }
   // A found noun is read as its whole contiguous NOUN/PROPN run, head-lemma
   // folded — "a string instrument" is the class "string instrument", never
   // its modifier "string"; a single-word run keeps the plain lemma fold.
