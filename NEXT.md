@@ -74,11 +74,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   What the logs exposed, in lever order:
   - **Attribution conflation** — every quake card lists all 44 quake items as its
     sources (card-to-item mapping keys on the shared subject "earthquake"); the
-    same root plausibly drives the 79% "Around it" repeat. Strongest next lever.
+    same root plausibly drives the 79% "Around it" repeat. Lever agent in flight:
+    worktree `.claude/worktrees/agent-ac52d44f5656952c4` (Opus).
   - **The noisy-context metric under-counts** — "earthquake is a kind of
     electrical device / good health / flesh" scores zero because the closed
-    abstract-class list can't enumerate sense pollution; the metric needs a
-    same-sense definition (N2, and a metric revision, not a floor ratchet).
+    abstract-class list can't enumerate sense pollution; a same-sense definition
+    is being built bench-side: worktree
+    `.claude/worktrees/agent-adba3482e3f5e4ea6` (Sonnet; metric revision with
+    both iterations re-scored, not a product change).
   - Identity dumps lead card paragraphs ("france is … a cognition, a condition …"
     before the news sentence); clause hubs ("boats hit by mystery attackers")
     still head cards; "ecuadorean fishings boats" pluralization slip (N2/N4).
