@@ -1,6 +1,6 @@
 {
   "sourceId": "hacker-news",
-  "capturedAt": "2026-08-12T18:58:39.210Z",
+  "capturedAt": "2026-08-12T19:01:34.817Z",
   "originUrl": "https://hacker-news.firebaseio.com/v0",
   "licence": "user-submitted, discussion linked",
   "calls": [
@@ -10,14 +10,14 @@
       "kind": "json",
       "body": [
         49274600,
-        49272832,
         49276574,
+        49272832,
         49273478,
         49270953,
         49272655,
         49275132,
-        49275335,
         49272569,
+        49275335,
         49275465
       ]
     },
@@ -33,17 +33,6 @@
       }
     },
     {
-      "url": "https://hacker-news.firebaseio.com/v0/item/49272832.json",
-      "status": 200,
-      "kind": "json",
-      "body": {
-        "id": 49272832,
-        "title": "Tailscale Traces Database Corruption to 16y/o SQLite WAL-Reset Bug",
-        "url": "https://tailscale.com/blog/sqlite-wal-reset-bug",
-        "time": 1786544550
-      }
-    },
-    {
       "url": "https://hacker-news.firebaseio.com/v0/item/49276574.json",
       "status": 200,
       "kind": "json",
@@ -52,6 +41,17 @@
         "title": "Zed: Delta",
         "url": "https://zed.dev/blog/introducing-delta",
         "time": 1786558799
+      }
+    },
+    {
+      "url": "https://hacker-news.firebaseio.com/v0/item/49272832.json",
+      "status": 200,
+      "kind": "json",
+      "body": {
+        "id": 49272832,
+        "title": "Tailscale Traces Database Corruption to 16y/o SQLite WAL-Reset Bug",
+        "url": "https://tailscale.com/blog/sqlite-wal-reset-bug",
+        "time": 1786544550
       }
     },
     {
@@ -99,17 +99,6 @@
       }
     },
     {
-      "url": "https://hacker-news.firebaseio.com/v0/item/49275335.json",
-      "status": 200,
-      "kind": "json",
-      "body": {
-        "id": 49275335,
-        "title": "HTML over WebSockets: real-time SPAs with barely any JavaScript",
-        "url": "https://en.andros.dev/blog/ef4968f5/html-over-websockets-real-time-spas-with-barely-any-javascript/",
-        "time": 1786553485
-      }
-    },
-    {
       "url": "https://hacker-news.firebaseio.com/v0/item/49272569.json",
       "status": 200,
       "kind": "json",
@@ -118,6 +107,17 @@
         "title": "Someone is running mass vulnerability scans, spoofing AI bots like ClaudeBot",
         "url": "https://knownagents.com/insights",
         "time": 1786543366
+      }
+    },
+    {
+      "url": "https://hacker-news.firebaseio.com/v0/item/49275335.json",
+      "status": 200,
+      "kind": "json",
+      "body": {
+        "id": 49275335,
+        "title": "HTML over WebSockets: real-time SPAs with barely any JavaScript",
+        "url": "https://en.andros.dev/blog/ef4968f5/html-over-websockets-real-time-spas-with-barely-any-javascript/",
+        "time": 1786553485
       }
     },
     {
