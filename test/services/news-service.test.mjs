@@ -551,7 +551,7 @@ test("buildFeed badges a card newName when the lexicon has no everyday-noun read
   const { ctx } = await makeCtx();
   await appendFacts(ctx.memoryDir, [
     { subject: "xyzzyplugh", predicate: "mgx:hasA", object: "new role", provenance: "news:src@1", observedAt: FIXED_NOW },
-    { subject: "tariff", predicate: "mgx:hasA", object: "new schedule", provenance: "news:src@1", observedAt: FIXED_NOW },
+    { subject: "tariff", predicate: "mgx:hasA", object: "new schedule", provenance: "news:src@2", observedAt: FIXED_NOW },
   ]);
   const feed = await buildFeed(ctx);
   const unknown = feed.items.find((it) => it.hub === "xyzzyplugh");
@@ -718,9 +718,9 @@ test("buildFeed's card carries the item's own headline and description, so a rea
   await ingestNewsSnapshot(ctx, snapshot);
 
   const feed = await buildFeed(ctx);
-  const wanaItem = feed.items.find((it) => it.hub === "wana");
-  assert.equal(wanaItem.sources[0].title, "M 4.6 - 14 km NE of Wana, Pakistan");
-  assert.equal(wanaItem.sources[0].summary, "An earthquake struck near Wana.");
+  const quakeItem = feed.items.find((it) => it.sources.some((s) => s.url === "https://example.com/usgs/eq1"));
+  assert.equal(quakeItem.sources[0].title, "M 4.6 - 14 km NE of Wana, Pakistan");
+  assert.equal(quakeItem.sources[0].summary, "An earthquake struck near Wana.");
 });
 
 test("buildFeed's card cuts an over-long description at a word boundary rather than carrying a whole article into the feed document", async () => {
@@ -734,8 +734,9 @@ test("buildFeed's card cuts an over-long description at a word boundary rather t
   ctx.state.items = [snapshot];
   await ingestNewsSnapshot(ctx, snapshot);
 
-  const wanaItem = (await buildFeed(ctx)).items.find((it) => it.hub === "wana");
-  const carried = wanaItem.sources[0].summary;
+  const quakeItem = (await buildFeed(ctx)).items
+    .find((it) => it.sources.some((s) => s.url === "https://example.com/usgs/eq1"));
+  const carried = quakeItem.sources[0].summary;
   assert.ok(carried.length <= 401, `the carried description is bounded: ${carried.length}`);
   assert.ok(carried.endsWith("…"), "a cut description says it was cut");
   assert.ok(!/\s…$/.test(carried), "the cut lands on a word, not a trailing space");

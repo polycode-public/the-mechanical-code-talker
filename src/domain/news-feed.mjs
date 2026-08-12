@@ -527,9 +527,13 @@ export function hubSeedTerms(hub) {
  *  `seedTerms` starts the walk from more than the hub itself (hubSeedTerms).
  *  Everything downstream that asks "is this the hub" — the report sentences,
  *  the sources, the neighbourhood — still reads the hub term alone, so a seed
- *  widens only what the card can draw background from. */
+ *  widens only what the card can draw background from.
+ *
+ *  `excludeIds` drops rows before the cap rather than after it, so a card that
+ *  gives a report away to another card (storyCoverage) spends the freed budget
+ *  on rows it will actually show. */
 export function subgraphAround(rows, hub, {
-  hops = NEWS_HUB_HOPS, cap = 60, adjacency = null, priorityIds = null, seedTerms = null,
+  hops = NEWS_HUB_HOPS, cap = 60, adjacency = null, priorityIds = null, seedTerms = null, excludeIds = null,
 } = {}) {
   const adj = adjacency ?? buildTermAdjacency(rows);
   const hubTerm = normFactTerm(hub);
@@ -538,11 +542,13 @@ export function subgraphAround(rows, hub, {
   let frontier = [...new Set(seeds)].sort();
   const collected = new Map();
   const hopOf = new Map();
+  const isExcluded = excludeIds instanceof Set ? (id) => excludeIds.has(id) : () => false;
   for (let hop = 0; hop < hops; hop += 1) {
     const nextFrontier = new Set();
     for (const term of [...frontier].sort()) {
       for (const idx of adj.byTerm.get(term) ?? []) {
         const row = rows[idx];
+        if (isExcluded(row.id)) continue;
         collected.set(row.id, row);
         if (!hopOf.has(row.id)) hopOf.set(row.id, hop);
         const [s, o] = adj.terms[idx];
@@ -995,6 +1001,258 @@ export function renderKnownFactsParagraph(hub, subgraphRows, { reportedIds = nul
   return sentences.length ? `${sentences.join(". ")}.` : "";
 }
 
+// ---------------------------------------------------------------------------
+// Which story a card tells, and what it is called.
+// ---------------------------------------------------------------------------
+
+// The item tag a news row carries, at whatever depth the ingest wrapper
+// nested it ("news:<sourceId>@<itemId>", "optimistic-extract:news:…"), plus
+// the fixture replay's own twin. Every sentence a card prints comes from a
+// row, so which story a card is telling is readable from the fact set alone —
+// no source map, no arrival order, no clock.
+const NEWS_STORY_TAG_RE = /(?:^|:)news(?:-fixture)?:([^\s|]+)/;
+
+/** The newsworthy item one row reported, or "" when its provenance names
+ *  none. Pure. */
+export function newsStoryKey(row) {
+  return NEWS_STORY_TAG_RE.exec(String(row?.provenance || ""))?.[1] || "";
+}
+
+/** Every reported row touching each term, subject side or object side. Built
+ *  once per feed assembly and shared, for the same reason buildTermAdjacency
+ *  is. */
+function reportedRowsByTerm(reported) {
+  const byTerm = new Map();
+  for (const row of reported) {
+    for (const term of new Set([normFactTerm(row.subject), normFactTerm(row.object)])) {
+      if (!term) continue;
+      let rowsFor = byTerm.get(term);
+      if (!rowsFor) byTerm.set(term, (rowsFor = []));
+      rowsFor.push(row);
+    }
+  }
+  return byTerm;
+}
+
+// How many stories a term's own reports must span before it stops being one
+// story's subject. Two is enough: a term the day's second story also names is
+// a publication, a wire desk or a class every item shares, and a card headed
+// by one repeats whatever the per-story cards already said.
+const PUBLICATION_STORY_MIN = 2;
+
+/** How many distinct newsworthy items each term's own reports came from. */
+function storyCountsByTerm(rowsByTerm) {
+  const counts = new Map();
+  for (const [term, rowsFor] of rowsByTerm) {
+    const keys = new Set();
+    for (const row of rowsFor) {
+      const key = newsStoryKey(row);
+      if (key) keys.add(key);
+    }
+    counts.set(term, keys.size);
+  }
+  return counts;
+}
+
+// The classes the graph's own identity rows use to say a thing is a place or
+// a person. The same closed set the bench's entity-preservation metric reads
+// off the seed, duplicated here (not imported) because the domain layer never
+// imports a script.
+const PLACE_OR_PERSON_CLASS_TERMS = new Set([
+  "place", "person", "city", "country", "location", "nation", "continent",
+  "capital", "state", "province", "town", "region",
+]);
+
+/** Every term the graph itself types as a place or a person, whoever stated
+ *  the identity. A card prefers one of these for its own title: it is the
+ *  thing the story is about, where a clause the same report threw off is only
+ *  something that happened to it. Pure over `rows`. */
+export function placeAndPersonTerms(rows) {
+  const grounded = new Set();
+  for (const row of rows) {
+    if (row.predicate !== "rdf:type" && row.predicate !== "rdfs:subClassOf") continue;
+    if (!PLACE_OR_PERSON_CLASS_TERMS.has(normFactTerm(row.object))) continue;
+    const subject = normFactTerm(row.subject);
+    if (subject) grounded.add(subject);
+  }
+  return grounded;
+}
+
+// A predicate minted from a source's own verb, lemma only: "mgx:hit",
+// "mgx:discuss". The curated table's entries carry a capital ("mgx:partOf")
+// and a folded preposition carries a hyphen ("mgx:strike-near"), and neither
+// can be a single word inside a term, so neither belongs in the verb set.
+const MINTED_VERB_PREDICATE_RE = /^mgx:([a-z]+)$/;
+
+/** The verbs this window's own reports minted a predicate from. A term
+ *  carrying one of them is a clause the extraction cut in half, and the graph
+ *  says so itself rather than a hand-written verb list saying it. */
+export function reportedVerbWords(reported) {
+  const verbs = new Set();
+  for (const row of reported) {
+    const lemma = MINTED_VERB_PREDICATE_RE.exec(String(row.predicate || ""))?.[1];
+    if (lemma) verbs.add(lemma);
+  }
+  return verbs;
+}
+
+// How many words a name runs to before it reads as a sentence about a thing
+// rather than the thing's name. "south sandwich islands region" is a place;
+// "boats hit by mystery attackers" is what happened to some.
+const CLAUSE_TITLE_MAX_WORDS = 4;
+const CLAUSE_WORD_EDGE_RE = /^[^a-z0-9]+|[^a-z0-9]+$/g;
+
+/** Does `term` read as a clause rather than a name — longer than a name runs,
+ *  or carrying one of the verbs the window's own reports minted? A clause
+ *  never takes a card's title from a grounded entity term. */
+export function readsAsClauseTerm(term, verbWords) {
+  const words = String(term ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return false;
+  if (words.length > CLAUSE_TITLE_MAX_WORDS) return true;
+  const verbs = verbWords instanceof Set ? verbWords : new Set(verbWords || []);
+  return words.some((word) => verbs.has(word.replace(CLAUSE_WORD_EDGE_RE, "")));
+}
+
+/** The term a card is titled and keyed by, given the hub the gate chose and
+ *  the reported rows that hub sits in. In order:
+ *
+ *  1. the hub itself, when the graph already types it as a place or a person;
+ *  2. a place/person term the hub's own reports name — "bali" over "sacred
+ *     glow", "clacton" over "election";
+ *  3. the subject those reports share, but only when the hub reads as a clause
+ *     and only when that subject tells one story of its own — the publication
+ *     every headline hangs off is never a card's name;
+ *  4. the hub, unchanged.
+ *
+ *  Ties inside a step go to the term the reports name most, then alphabetical,
+ *  so the same fact set always titles a card the same way. Nothing here invents
+ *  a term: every candidate is already on one of the card's own rows. */
+export function hubTitleTerm(hubTerm, hubRows, { placeOrPerson, verbWords, storyCountByTerm }) {
+  if (placeOrPerson.has(hubTerm)) return hubTerm;
+
+  const namesAThing = (term) => Boolean(term) && term !== hubTerm && !STOP_SET.has(term)
+    && !isQuantityTerm(term) && looksLikeEntityTerm(term) && !readsAsClauseTerm(term, verbWords);
+
+  const groundedCounts = new Map();
+  const subjectCounts = new Map();
+  for (const row of hubRows) {
+    const subject = normFactTerm(row.subject);
+    const object = normFactTerm(row.object);
+    for (const term of new Set([subject, object])) {
+      if (namesAThing(term) && placeOrPerson.has(term)) groundedCounts.set(term, (groundedCounts.get(term) || 0) + 1);
+    }
+    if (object !== hubTerm || !namesAThing(subject)) continue;
+    if ((storyCountByTerm.get(subject) || 0) >= PUBLICATION_STORY_MIN) continue;
+    subjectCounts.set(subject, (subjectCounts.get(subject) || 0) + 1);
+  }
+
+  const mostNamed = (counts) => [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0]?.[0] || "";
+
+  return mostNamed(groundedCounts)
+    || (readsAsClauseTerm(hubTerm, verbWords) ? mostNamed(subjectCounts) : "")
+    || hubTerm;
+}
+
+/** True when a source spelled this term as a settlement and its region at once
+ *  — "wana, pakistan", "mina, nevada". The source has already said which of a
+ *  report's terms is the thing that happened somewhere, so the term reads as a
+ *  place even where no identity row types it as one. hubSeedTerms holds the
+ *  same reading for the walk. */
+const namesASettlementAndRegion = (term) => hubSeedTerms(term).length > 1;
+
+/** The gate's hubs retitled by hubTitleTerm, with two hubs that answer to the
+ *  same name merged into one. Each keeps the two readings storyCoverage ranks
+ *  cards by, taken on the title the card will actually wear. Keeps the gate's
+ *  own sort — changed count desc, then term asc. */
+function titledHubs(hubs, rows, reported, rowsByTerm) {
+  const placeOrPerson = placeAndPersonTerms(rows);
+  const verbWords = reportedVerbWords(reported);
+  const storyCountByTerm = storyCountsByTerm(rowsByTerm);
+  const changedByTitle = new Map();
+  for (const { term, changed } of hubs) {
+    const title = hubTitleTerm(term, rowsByTerm.get(term) || [], { placeOrPerson, verbWords, storyCountByTerm });
+    const held = changedByTitle.get(title);
+    if (held === undefined || changed > held) changedByTitle.set(title, changed);
+  }
+  return [...changedByTitle.entries()]
+    .map(([term, changed]) => ({
+      term,
+      changed,
+      namesAnEntity: placeOrPerson.has(term) || namesASettlementAndRegion(term),
+      clauseShaped: readsAsClauseTerm(term, verbWords),
+      reportSubject: (rowsByTerm.get(term) || []).some((row) => normFactTerm(row.subject) === term),
+    }))
+    .sort((a, b) => b.changed - a.changed || (a.term < b.term ? -1 : a.term > b.term ? 1 : 0));
+}
+
+/** How a story picks between the cards that want to tell it. In order: the
+ *  hub whose own reports span fewest stories, since a card about one story
+ *  beats a publication's roundup of it; then the hub that names a place or a
+ *  person, since that is what the story is about; then the hub that
+ *  reads as a name rather than a clause; then the one the report puts on the
+ *  subject side, the story's actor where the object is what happened to it;
+ *  then the gate's own changed count; then the term itself, so the answer never
+ *  comes down to arrival order. */
+function byCardClaim(a, b) {
+  return a.storyCount - b.storyCount
+    || (Number(b.namesAnEntity) - Number(a.namesAnEntity))
+    || (Number(a.clauseShaped) - Number(b.clauseShaped))
+    || (Number(b.reportSubject) - Number(a.reportSubject))
+    || (b.changed - a.changed)
+    || (a.term < b.term ? -1 : a.term > b.term ? 1 : 0);
+}
+
+/** Which stories each hub gets to tell, and which of its reports belong to
+ *  another card. One story mints one card: the hubs bid for it in byCardClaim
+ *  order and the first takes it, so a report that threw off both a subject hub
+ *  and an object hub ("ukraine" beside "air war", "london" beside "glass")
+ *  stops minting a card each. A hub left with no story of its own does not
+ *  mint, and one that keeps some carries only those — the "hackernews" card
+ *  that repeated both of the day's Hacker News cards wholesale is gone, and one
+ *  that repeated three of four carries the fourth alone.
+ *
+ *  A row whose provenance names no story is never claimed and never dropped, so
+ *  a hub built only from those still mints.
+ *
+ *  Returns hub term -> `{ mints, coveredRowIds }`. */
+export function storyCoverage(hubs, rowsByTerm) {
+  const rowIdsByStory = new Map();
+  for (const { term } of hubs) {
+    const byStory = new Map();
+    for (const row of rowsByTerm.get(term) || []) {
+      const key = newsStoryKey(row);
+      if (!key) continue;
+      let ids = byStory.get(key);
+      if (!ids) byStory.set(key, (ids = []));
+      ids.push(row.id);
+    }
+    rowIdsByStory.set(term, byStory);
+  }
+
+  const bidders = hubs
+    .map((hub) => ({ ...hub, storyCount: rowIdsByStory.get(hub.term).size }))
+    .sort(byCardClaim);
+
+  const claimed = new Set();
+  const coverage = new Map();
+  for (const { term, storyCount } of bidders) {
+    const stories = rowIdsByStory.get(term);
+    const coveredRowIds = new Set();
+    let ownStories = 0;
+    for (const key of [...stories.keys()].sort()) {
+      if (claimed.has(key)) {
+        for (const id of stories.get(key)) coveredRowIds.add(id);
+        continue;
+      }
+      claimed.add(key);
+      ownStories += 1;
+    }
+    coverage.set(term, { mints: storyCount === 0 || ownStories > 0, coveredRowIds });
+  }
+  return coverage;
+}
+
 /** newsworthyHubs -> one item per hub (PLAN_NEWS_FEED.md section 6.6),
  *  paragraph included, sorted builtAt desc then id asc. `sourcesByFactId`
  *  maps fact ids to snapshot source links ({ title, url, name, publishedAt?
@@ -1011,7 +1269,14 @@ export function renderKnownFactsParagraph(hub, subgraphRows, { reportedIds = nul
  *  nothing else. The two-hop walk reaches every row a shared class node
  *  touches, so attributing the whole sub-graph gave one quake's card all 44 of
  *  the day's quake headlines. An "Around it" neighbour is context the card
- *  borrows, and it carries its own citation on its own card. */
+ *  borrows, and it carries its own citation on its own card.
+ *
+ *  Between the gate and the render sit two more reads over the same reported
+ *  rows: `titledHubs` names each card after the entity its own report grounds
+ *  rather than a clause the report threw off, and `storyCoverage` leaves a
+ *  publication with only the stories no other card tells. Both are pure over
+ *  the fact set, so a feed built from the same rows in two orders still comes
+ *  back byte for byte. */
 export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId = new Map(), readsAsEntityTerm } = {}) {
   const reported = reportedRows(rows, { now, windowMs });
   const reportedIds = new Set(reported.map((r) => r.id));
@@ -1019,10 +1284,15 @@ export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId
   const prior = priorTerms(rows);
   const hubOptions = { now, windowMs, limit, adjacency, prior };
   if (readsAsEntityTerm) hubOptions.readsAsEntityTerm = readsAsEntityTerm;
-  const hubs = newsworthyHubs(rows, reported, hubOptions);
-  const items = hubs.map(({ term, changed }) => {
+  const rowsByTerm = reportedRowsByTerm(reported);
+  const hubs = titledHubs(newsworthyHubs(rows, reported, hubOptions), rows, reported, rowsByTerm);
+  const coverage = storyCoverage(hubs, rowsByTerm);
+  const items = hubs.filter(({ term }) => coverage.get(term).mints).map(({ term, changed }) => {
     const subgraphRows = subgraphAround(rows, term, {
-      adjacency, priorityIds: reportedIds, seedTerms: hubSeedTerms(term),
+      adjacency,
+      priorityIds: reportedIds,
+      seedTerms: hubSeedTerms(term),
+      excludeIds: coverage.get(term).coveredRowIds,
     });
     const factIds = subgraphRows.map((r) => r.id).sort();
     const { background } = splitCardRows(subgraphRows, reportedIds);
