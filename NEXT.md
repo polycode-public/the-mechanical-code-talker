@@ -103,7 +103,16 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   - Identity dumps lead card paragraphs ("france is … a cognition, a condition …"
     before the news sentence); clause hubs ("boats hit by mystery attackers")
     still head cards; "ecuadorean fishings boats" pluralization slip (N2/N4).
-  Also remaining: NYT admission 26%, the global item cap, N5 floors into CI.
+  Current change queue, worst first (from the nyt-full and it5-start article logs):
+  the hackernews publication card duplicates its story cards; hub naming picks the
+  clause over the entity ("sacred glow", "election" instead of Bali, Farage);
+  "ecuadorean fishings boats" pluralization; two NYT shapes parse but never ground;
+  the fixture-lane `repeatedSentenceRate` smoke floor is red on `main` (0.2418 vs
+  0.20 ceiling — must be resolved before the next push). Engine speed remainders,
+  measured and named by the perf pass (per-article 10.8 s → 4.3 s live, a 60 s
+  cycle grounds ~14 articles): seed re-assembly on any removal (~2 s each, an
+  ordering-invariant change), `migrateStoredMemory` re-running per memory-handle
+  load, `buildMemoryIndex` rebuilt per write. N5 floors into CI still pending.
   Bench operational notes: pass a distinct `--label` per run (same-day runs
   collide on the report filename), and xl metrics drift with freshly regenerated
   corpus artifacts (chat-seed inputs) — the run that measures a lever must
