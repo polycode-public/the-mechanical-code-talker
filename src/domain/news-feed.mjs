@@ -72,6 +72,51 @@ export function newsWindowRows(rows, { now, windowMs }) {
 }
 
 // ---------------------------------------------------------------------------
+// Item identity: what makes two fetched snapshots the same newsworthy item.
+// ---------------------------------------------------------------------------
+
+// Everything a source can respell between two readings of one article —
+// punctuation, capitalisation, entity escapes already stripped upstream, run
+// of spaces — folds away, so the key answers to the item's words alone.
+const CONTENT_KEY_NOISE_RE = /[^a-z0-9]+/g;
+
+function itemContentText(snapshot) {
+  return `${snapshot?.title ?? ""} ${snapshot?.summary ?? ""}`
+    .toLowerCase()
+    .replace(CONTENT_KEY_NOISE_RE, " ")
+    .trim();
+}
+
+/** The content key one snapshot answers to, or "" when it carries no words:
+ *  its source, its own publication stamp and its normalized text. The key a
+ *  source with no stable id of its own de-dupes on, and the second chance at
+ *  recognising an article a source re-issued under a fresh id. The publication
+ *  stamp stays in so two genuinely different events that happen to share a
+ *  headline — two quakes of the same size near the same town — keep separate
+ *  keys. Pure. */
+export function newsItemContentKey(snapshot) {
+  const text = itemContentText(snapshot);
+  if (!text) return "";
+  const sourceId = String(snapshot?.sourceId ?? "");
+  const publishedAt = String(snapshot?.publishedAt ?? "");
+  return `news-text:${sha256HexPrefix(`${sourceId}\0${publishedAt}\0${text}`, 8)}`;
+}
+
+/** Every key a fetched snapshot is the same item under: the id the fetcher
+ *  minted from the source's own identifier (Hacker News story id, USGS event
+ *  id, an RSS guid, a Wikinews page id, a Wikimedia article title) and its
+ *  content key. Two snapshots sharing any key name one item. Pure — a function
+ *  of the snapshot's own fields, never of when or in what order it arrived. */
+export function newsItemKeys(snapshot) {
+  const keys = [];
+  const id = String(snapshot?.id ?? "");
+  if (id) keys.push(id);
+  const contentKey = newsItemContentKey(snapshot);
+  if (contentKey) keys.push(contentKey);
+  return keys;
+}
+
+// ---------------------------------------------------------------------------
 // The newsworthiness gate (PLAN_NEWS_FEED.md section 17). A card reports what
 // a contemporary source said inside the window; everything the graph looked
 // up, inferred or already held is background. classifyNewsRow bands a single

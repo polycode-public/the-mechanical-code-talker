@@ -143,8 +143,8 @@ test("pollNewsSources merges snapshots by id, ingests only the genuinely new one
           ? [{ guid: "1", title: "A module is a component.", url: "https://x/1", summary: "" }]
           : [
             { guid: "1", title: "A module is a component.", url: "https://x/1", summary: "" },
-            { guid: "2", title: "A module is a component.", url: "https://x/2", summary: "" },
-            { guid: "3", title: "A module is a component.", url: "https://x/3", summary: "" },
+            { guid: "2", title: "A widget is a component.", url: "https://x/2", summary: "" },
+            { guid: "3", title: "A gadget is a component.", url: "https://x/3", summary: "" },
           ];
         return { items: normalizeFeedItems("hacker-news", raw, { now: FIXED_NOW }), bytes: 100 };
       },

@@ -128,6 +128,42 @@ async function pollWith(sourceIds) {
   return { ctx, result, rows, feed };
 }
 
+/** The same cycle as pollWith, run twice against one store — the re-poll every
+ *  source gets when its feed has not moved on. */
+async function pollTwiceWith(sourceIds) {
+  const backend = await openMemoryBackend("unused-repo-root", "memory");
+  const ctx = {
+    memoryDir: backend.dir,
+    store: { loadMemory, readFactRows, appendFacts, removeFacts },
+    cache: null,
+    lexicon: loadLexicon(),
+    config: clampNewsConfig({ sources: sourceIds }),
+    state: createNewsState(),
+    providers: {
+      newsFetchers: new Map(sourceIds.map((id) => [
+        id,
+        createNewsFetcher(recordFor(id), { fetchImpl: transportFor(id), minIntervalMs: 0, now: NOW }),
+      ])),
+    },
+    now: () => NOW,
+    notify: null,
+  };
+  const reading = async () => {
+    const rows = readFactRows(await loadMemory(ctx.memoryDir));
+    const feed = await buildFeed(ctx);
+    return {
+      newsFactIds: rows.filter((row) => isNewsProvenance(row.provenance)).map((row) => row.id).sort(),
+      cardIds: feed.items.map((item) => item.id).sort(),
+    };
+  };
+  const first = await pollNewsSources(ctx);
+  const afterFirst = await reading();
+  const second = await pollNewsSources(ctx);
+  const afterSecond = await reading();
+  await backend.close();
+  return { first, second, afterFirst, afterSecond };
+}
+
 const newsRowsFrom = (rows, sourceId) => rows.filter(
   (row) => isNewsProvenance(row.provenance) && String(row.provenance).includes(`news:${sourceId}@`),
 );
@@ -193,6 +229,18 @@ test("one cycle over every poll-capable source ends with a fact from each and a 
   assert.equal(quakePlace.paragraph, "earthquake strikes near wana, pakistan.");
   for (const item of feed.items) {
     assert.ok(item.paragraph, `the card for ${item.hub} rendered nothing`);
+  }
+});
+
+test("every source's own identifier survives a re-poll: the same feed twice mints nothing the second time", async () => {
+  const sourceIds = ["wikimedia-featured", "hacker-news", "usgs-quakes", "nyt-world", "wikinews-published"];
+  for (const sourceId of sourceIds) {
+    const { first, second, afterFirst, afterSecond } = await pollTwiceWith([sourceId]);
+    assert.ok(first.newItems >= 1, `${sourceId} admitted nothing on the first poll`);
+    assert.equal(second.newItems, 0, `${sourceId} read its own item as new a second time`);
+    assert.equal(second.facts, 0, `${sourceId} admitted a fact twice`);
+    assert.deepEqual(afterSecond.newsFactIds, afterFirst.newsFactIds, `${sourceId} duplicated a news fact`);
+    assert.deepEqual(afterSecond.cardIds, afterFirst.cardIds, `${sourceId} duplicated a card`);
   }
 });
 
