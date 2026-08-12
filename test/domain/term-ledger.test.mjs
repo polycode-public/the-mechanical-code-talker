@@ -181,6 +181,89 @@ test("ledgerFromPayload drops a function-word entry already sitting in a persist
   assert.deepEqual([...ledger.terms.keys()], ["tariff"]);
 });
 
+test("bumpTerms never admits a bare measurement-unit token, even at a count that would otherwise rank it first", () => {
+  const ledger = createTermLedger();
+  bumpTerms(
+    ledger,
+    new Map([
+      ["km", 9],
+      ["m", 6],
+      ["mi", 4],
+      ["ft", 3],
+      ["kg", 2],
+      ["mph", 2],
+      ["tariff", 1],
+    ]),
+    "item-1",
+    "2026-08-08T09:00:00Z",
+  );
+  const ranked = rankedTerms(ledger).map((e) => e.term);
+  assert.deepEqual(ranked, ["tariff"]);
+});
+
+test("bumpTerms never admits a bare compass abbreviation, even at a count that would otherwise rank it first", () => {
+  const ledger = createTermLedger();
+  bumpTerms(
+    ledger,
+    new Map([
+      ["ssw", 4],
+      ["n", 3],
+      ["ne", 2],
+      ["sse", 2],
+      ["tariff", 1],
+    ]),
+    "item-1",
+    "2026-08-08T09:00:00Z",
+  );
+  const ranked = rankedTerms(ledger).map((e) => e.term);
+  assert.deepEqual(ranked, ["tariff"]);
+});
+
+test("bumpTerms never admits a bare foreign particle, even at a count that would otherwise rank it first", () => {
+  const ledger = createTermLedger();
+  bumpTerms(
+    ledger,
+    new Map([
+      ["de", 4],
+      ["la", 3],
+      ["von", 2],
+      ["tariff", 1],
+    ]),
+    "item-1",
+    "2026-08-08T09:00:00Z",
+  );
+  const ranked = rankedTerms(ledger).map((e) => e.term);
+  assert.deepEqual(ranked, ["tariff"]);
+});
+
+test("bumpTerms leaves a multi-word term containing a foreign particle untouched", () => {
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map([["tour de france", 3]]), "item-1", "2026-08-08T09:00:00Z");
+  assert.deepEqual([...ledger.terms.keys()], ["tour de france"]);
+  assert.equal(ledger.terms.get("tour de france").count, 3);
+});
+
+test("bumpTerms still admits u.s. as a real place, not a suppressed particle", () => {
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map([["u.s.", 4]]), "item-1", "2026-08-08T09:00:00Z");
+  assert.deepEqual([...ledger.terms.keys()], ["u.s."]);
+  assert.equal(ledger.terms.get("u.s.").count, 4);
+});
+
+test("ledgerFromPayload drops persisted units, compass abbreviations and foreign particles, but keeps u.s.", () => {
+  const payload = {
+    terms: [
+      { term: "km", count: 9, vocabGrounded: false, itemIds: [], firstSeen: "2026-08-08T09:00:00Z", lastSeen: "2026-08-08T09:00:00Z", status: "pending", missedAt: "" },
+      { term: "ssw", count: 4, vocabGrounded: false, itemIds: [], firstSeen: "2026-08-08T09:00:00Z", lastSeen: "2026-08-08T09:00:00Z", status: "pending", missedAt: "" },
+      { term: "de", count: 4, vocabGrounded: false, itemIds: [], firstSeen: "2026-08-08T09:00:00Z", lastSeen: "2026-08-08T09:00:00Z", status: "pending", missedAt: "" },
+      { term: "u.s.", count: 4, vocabGrounded: true, itemIds: [], firstSeen: "2026-08-08T09:00:00Z", lastSeen: "2026-08-08T09:00:00Z", status: "pending", missedAt: "" },
+      { term: "tariff", count: 1, vocabGrounded: true, itemIds: [], firstSeen: "2026-08-08T09:00:00Z", lastSeen: "2026-08-08T09:00:00Z", status: "pending", missedAt: "" },
+    ],
+  };
+  const ledger = ledgerFromPayload(payload);
+  assert.deepEqual([...ledger.terms.keys()].sort(), ["tariff", "u.s."]);
+});
+
 test("ledgerPayload emits entries in ranking order and round-trips byte-identically", () => {
   const ledger = createTermLedger();
   bumpTerms(
