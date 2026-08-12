@@ -42,32 +42,48 @@ the deployed worker persists state and does not.
 
 The work list, ranked by value against the plan's target card.
 
-1. [~] **Extraction widenings, shape by shape** — CODE COMPLETE on
-   `worktree-agent-ac0d4448f66cb44a5`, merge pending. Six shapes widened:
+1. [~] **Extraction widenings, shape by shape** — CODE COMPLETE, merged as
+   `1ef4b7a5`, awaiting the full suite at the next push. Six shapes widened:
    clause-shaped terms, Title Case headline reading, passives with and without a
    named actor, comma crossing plus name trimming, reported speech, and the term
-   ledger. Two remainders, both real:
-   - The Gilman card now grounds two near-synonymous rows ("russia frees robert
-     gilman. russia releases robert gilman.") because headline and description
-     state one event with two verbs. Deduplicating synonymous predicates is a
-     vocabulary question, not a shape one.
-   - An unwrapped claim is not attributed to its speaker on the row. That needs
-     a new name in the memory layer's closed findings vocabulary
-     (`src/adapters/memory/shacl.mjs`, `core.mjs`'s byte-pinned vocabulary note,
-     `docs/adapter-contract.md`). The speaker still reaches the enrichment queue,
-     and every row rides its article's provenance.
-2. [ ] **The `bright` card's filler sentence** — "dull is the opposite of bright"
-   survives the sense scope because `topsOf("bright")` is empty, so the bands
-   never place the hub and a hub-anchored scope is off for that card. Item 1
-   re-heads that card on `rescuers`, so check whether this dies on its own once
-   item 1 merges before doing any more here.
-3. [ ] **Engine speed remainders** — in flight on
-   `worktree-agent-a8524b7876375a001`. Seed re-assembly on any removal (~2 s
-   each; 15 lines of unwired slot-structure scaffolding preserved on branch
-   `worktree-agent-add917bc647f82f46`, unmerged), `migrateStoredMemory`
-   re-running per memory-handle load, `buildMemoryIndex` rebuilt per write.
-   Expected: more articles ground per 60 s press; faster runs.
-4. [ ] **Thin-source cards crowd the feed** — in flight on
+   ledger. Iteration 11 measured the result: 9 cards became 14, enrichment
+   defined 6 terms where it defined 4, and only 2 lookups missed where 4 did.
+   Remainder, still open: an unwrapped claim is not attributed to its speaker on
+   the row. That needs a new name in the memory layer's closed findings
+   vocabulary (`src/adapters/memory/shacl.mjs`, `core.mjs`'s byte-pinned
+   vocabulary note, `docs/adapter-contract.md`). The speaker still reaches the
+   enrichment queue, and every row rides its article's provenance.
+2. [ ] **An unplaced hub turns the sense scope off entirely** — when `topsOf(hub)`
+   is empty the bands never place it, the hub-anchored scope switches off, and
+   every neighbour is admitted as filler. Iteration 11 killed the `bright`
+   specimen by re-heading that card on `rescuers`, and the same cause
+   immediately surfaced on another card: `syrian holdout province` emits
+   "pronounce means the same as say. say is a kind of matter." Fixing a hub
+   cures one card; the class needs the scope to do something better than switch
+   off. One measured non-answer already: anchoring on the hub's seeds plus the
+   far side of its reported rows reshuffles noise rather than cutting it.
+3. [ ] **`buildMemoryIndex` rebuilt per write** — the remainder of the engine
+   speed work, which shipped the other two (removal patching 2231→409 ms, the
+   load-time migrations settled 21.8→0.0 ms, and the seed's ord map handed to
+   the projection rather than rebuilt, appendFact 341.7→288.8 ms). Two cheap
+   restructurings of the index build measured neutral and were reverted. Making
+   the index survive across writes needs a handle-level index beside
+   `handle.cachedPayload` with a copy-on-write overlay per mutate — the copy
+   gives every individual a new object identity, so `individualsById` can't be
+   reused as-is, and `factRecordsByGroup`'s values are arrays that call sites
+   mutate in place, so the overlay must copy on read. ~15 call sites plus
+   `patchAssembledPayload`. Worth ~74 ms of a ~280 ms write.
+4. [ ] **Enrichment mints junk off a definition body** — in flight on
+   `worktree-agent-acb29adac571da0a8`. Iteration 11 wrote
+   `year | rdfs:subClassOf | eclipse` from simple-wikipedia's solar_eclipse
+   body, and it reached a live card's background. Same family as the wikidata
+   rows already fixed, through a different source path.
+5. [ ] **Phrasal verbs split, and one event states itself twice** — in flight on
+   `worktree-agent-a8807a5a6b26758d7`. "Takes Over London" reads as
+   `tmct:takes` with the particle dropped and the wrong subject; the russia card
+   carries both `tmct:releases` and `mgx:free` for one release, from the
+   headline and the description.
+6. [ ] **Thin-source cards crowd the feed** — in flight on
    `worktree-agent-a5b1b24c0282ad707`. Iteration 9 printed nine cards and seven
    were Hacker News, each reading "hackernews discuss X" with no background. The
    synthesised summary itself is right and deliberate (`news-sources.mjs` quotes
@@ -77,7 +93,8 @@ The work list, ranked by value against the plan's target card.
    both the live page and this loop's own measurement. Wanted: admission or
    ranking that stops a bodyless source crowding out cards with real content —
    without silently dropping items, which would hide misses rather than fix them.
-5. [ ] **Fact-listing line order tracks arrival order** — the repo invariant says
+7. [ ] **Fact-listing line order tracks arrival order** — in flight on
+   `worktree-agent-a8ebf6f96b26ab822`. The repo invariant says
    any read-time resolver over the fact store is a pure function of the fact
    set, and the listing reader is not yet one in its ordering.
    `rankByBiasThenTrust` is a stable sort, so equal-trust rows keep ingestion
@@ -86,7 +103,7 @@ The work list, ranked by value against the plan's target card.
    of the sense-screen change, so it predates it. The fix is a
    content-addressed tiebreak on every fact listing, which redraws pinned
    outputs across the estate — that width is why it is its own item.
-6. [ ] **Wikidata** — the pinned dated dump
+8. [ ] **Wikidata** — the pinned dated dump
    (`wikidata-20260810-all.json.gz`, 155,457,882,747 bytes) is downloading in
    the operator's terminal via `bash scripts/resume-wikidata-dump.sh`, which
    resumes from wherever a break left it — re-run it after any interruption.
