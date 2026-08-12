@@ -200,6 +200,28 @@ test("wikimedia-feed: both days failing reads as null", async () => {
   assert.equal(await fetcher.fetchItems(), null);
 });
 
+test("wikimedia-feed: publishedAt is stamped from the feed's own UTC day, since neither news nor mostread carries a per-article timestamp", async () => {
+  const body = readJson("wikimedia-featured.json");
+  const record = recordFor("wikimedia-featured");
+  const fetcher = createNewsFetcher(record, { fetchImpl: async () => jsonResponse(body), minIntervalMs: 0, now: NOW });
+  const result = await fetcher.fetchItems();
+  assert.ok(result.items.length > 0);
+  for (const item of result.items) assert.equal(item.publishedAt, "2026-08-08T00:00:00.000Z");
+});
+
+test("wikimedia-feed: a 404 retry stamps publishedAt from the day that actually answered, not the day first requested", async () => {
+  const body = readJson("wikimedia-featured.json");
+  const record = recordFor("wikimedia-featured");
+  const fetchImpl = async (url) => {
+    if (String(url).endsWith("/2026/08/08")) return jsonResponse({}, { status: 404 });
+    return jsonResponse(body);
+  };
+  const fetcher = createNewsFetcher(record, { fetchImpl, minIntervalMs: 0, now: NOW });
+  const result = await fetcher.fetchItems();
+  assert.ok(result.items.length > 0);
+  for (const item of result.items) assert.equal(item.publishedAt, "2026-08-07T00:00:00.000Z");
+});
+
 // ---- hn ---------------------------------------------------------------------
 
 test("hn: topstories then item fetches map to snapshots, title only, url from the item, summary empty", async () => {
