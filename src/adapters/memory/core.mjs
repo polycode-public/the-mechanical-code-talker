@@ -263,6 +263,9 @@ export function createInMemoryStore() {
 export function applySeedPayload(memoryDir, seedPayload) {
   if (!seedPayload) return;
   memoryDir.payload = { ...memoryDir.payload, ...seedPayload };
+  // A seed arrives from anywhere, so whatever an earlier load settled about the
+  // ids this store holds no longer describes it.
+  memoryDir.storeMigrationsSettled = false;
   stampStoreWrite(memoryDir);
 }
 
@@ -1327,8 +1330,11 @@ function readSqlitePayload(handle) {
   if (handle.cachedPayload && handle.cachedDataVersion !== dataVersion) {
     // Another connection committed, so the fold this handle holds describes a
     // store that no longer exists — it goes with the payload it was taken of.
+    // So does what an earlier load settled about the ids the store carries: the
+    // other writer is the one path that can put a shape there this one wouldn't.
     stampStoreWrite(handle);
     handle.cachedPayload = null;
+    handle.storeMigrationsSettled = false;
   }
   if (!handle.cachedPayload) {
     handle.cachedPayload = buildSqlitePayloadFromRows(handle);
@@ -2049,8 +2055,8 @@ export async function snapshotMemory(dir, { retentionVersions } = {}) {
  *  append creates the file). The result is a raw entities payload;
  *  parseEntities() loads it. */
 export async function loadMemory(dir) {
-  if (isMemoryHandle(dir)) return migrateStoredMemory(dir.payload);
-  if (isSqliteHandle(dir)) return migrateStoredMemory(readSqlitePayload(dir));
+  if (isMemoryHandle(dir)) return migrateStoredMemoryOnce(dir, dir.payload);
+  if (isSqliteHandle(dir)) return migrateStoredMemoryOnce(dir, readSqlitePayload(dir));
   // Not migrated here: a row handle migrates the payload once, as it assembles
   // it, so every read after the first is spared two walks of the whole graph.
   if (isRowHandle(dir)) return readRowPayload(dir);
@@ -2068,6 +2074,30 @@ export async function loadMemory(dir) {
  *  the assertion re-key that follows content-addresses off the current one.
  *  Both are pure payload transforms and both converge to no-ops. */
 const migrateStoredMemory = (payload) => migrateFactAssertionKeys(migrateLegacyFactIds(payload));
+
+/** True when some Fact still carries an id from before one of the two
+ *  migrations above — a pre-widening 32-bit id, or a pre-assertion-model id
+ *  keyed on the triple alone. Both lack the `@` a record id carries, so one
+ *  pass over the individuals answers it, allocating nothing. */
+function carriesPreMigrationFactIds(payload) {
+  for (const ind of payload?.individuals || []) {
+    if (ind?.class === FACT_CLASS && !String(ind.id || "").includes("@")) return true;
+  }
+  return false;
+}
+
+/** `migrateStoredMemory` for a handle that hands back the same store on every
+ *  read. A store whose Facts are all on current ids cannot acquire an old one —
+ *  every write mints through `factIdFor` — so the first load that finds nothing
+ *  to migrate settles the question for this handle and later loads skip even
+ *  the scan. A store that IS on old ids keeps migrating on every read until a
+ *  write persists the healed form, exactly as before. */
+function migrateStoredMemoryOnce(handle, payload) {
+  if (handle.storeMigrationsSettled) return payload;
+  if (carriesPreMigrationFactIds(payload)) return migrateStoredMemory(payload);
+  handle.storeMigrationsSettled = true;
+  return payload;
+}
 
 // A Fact id written before factIdFor widened to 64 bits — `fact:` + exactly 8
 // hex. A current id is 16 hex, so this anchored test never matches one, and a
