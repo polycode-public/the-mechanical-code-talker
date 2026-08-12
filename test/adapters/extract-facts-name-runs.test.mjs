@@ -17,10 +17,14 @@ const GILMAN_DESCRIPTION = "Russia released Robert Gilman on a humanitarian basi
  *  ingest as separate paragraphs, exactly as the news service joins them. */
 const asArticle = (title, description) => `${title}\n\n${description}`;
 
-test("a name run in a headline reaches the queue as the whole name, never as its words", async () => {
+test("a name run in a headline reaches the whole path as the whole name, never as its words", async () => {
+  const counts = ungroundedTermOccurrences([GILMAN_HEADLINE], []);
+  assert.ok(counts.has("robert gilman"), `the whole name is captured (got ${[...counts.keys()].join(", ")})`);
+
   const result = await ingestText(GILMAN_HEADLINE, { optimistic: true });
+  const endpoints = result.optimistic.flatMap((fact) => [fact.subject, fact.object]);
+  assert.ok(endpoints.includes("robert gilman"), `the whole name is what grounds (got ${endpoints.join(", ")})`);
   const terms = [...result.ungroundedCounts.keys()];
-  assert.ok(terms.includes("robert gilman"), `the whole name is queued (got ${terms.join(", ")})`);
   assert.equal(terms.includes("gilman"), false, "the surname never queues beside the name");
   assert.equal(terms.includes("robert"), false, "the given name never queues beside the name");
 });
@@ -32,9 +36,9 @@ test("a leading role word only Title Case lifted to a name is trimmed off the ru
   }
 });
 
-test("a name standing alone in its own sentence still queues on its own terms", async () => {
-  const result = await ingestText(GILMAN_HEADLINE, { optimistic: true });
-  assert.equal(result.ungroundedCounts.get("russia"), 1, "russia is nobody's fragment here");
+test("a name standing alone in its own sentence is never folded onto the name beside it", () => {
+  const counts = ungroundedTermOccurrences([GILMAN_HEADLINE], []);
+  assert.equal(counts.get("russia"), 1, "russia is nobody's fragment here");
 });
 
 test("a bare later mention of a captured name counts toward the whole name", () => {

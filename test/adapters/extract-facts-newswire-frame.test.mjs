@@ -42,6 +42,13 @@ test("a passive states who it happened to, so the actor takes the subject side a
   );
 });
 
+test("a headline that names its subject and then interrupts itself still reaches that subject", () => {
+  assert.deepEqual(
+    triplesOf("Ex-Marine Robert Gilman, Freed by Russia After 4 Years in Prison, Arrives in the U.S."),
+    ["russia mgx:free robert gilman"],
+  );
+});
+
 test("an agentless passive names no actor, so it states the subject's own condition instead", () => {
   assert.deepEqual(
     triplesOf("Yabloko, the Russian antiwar party, is banned from parliament elections."),

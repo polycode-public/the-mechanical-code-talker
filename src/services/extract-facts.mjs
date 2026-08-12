@@ -338,10 +338,14 @@ function headlineReadPos(values, pos, lemmas, lexicon) {
   const read = [...pos];
   for (let i = 1; i < values.length; i += 1) {
     const banded = read[i - 1] === "DET" ? null : newswireVerbLemma(values[i]);
+    // The tagger's own lemma still counts where it reaches a band verb the
+    // surface fold cannot ("Freed" → free), so a headline's past participle
+    // keeps the tag it had.
+    const taggedBandVerb = read[i] === "VERB" && NEWSWIRE_RELATION_VERBS.has(String(lemmas?.[i] ?? "").toLowerCase());
     if (banded) {
       read[i] = "VERB";
       if (lemmas) lemmas[i] = banded;
-    } else if (lookupVerb(lexicon, stripSentenceFinalStop(String(values[i])).toLowerCase())) {
+    } else if (taggedBandVerb || lookupVerb(lexicon, stripSentenceFinalStop(String(values[i])).toLowerCase())) {
       read[i] = "VERB";
     } else if (read[i] === "VERB" && demoteUnlistedVerbs) {
       read[i] = "NOUN";
@@ -535,32 +539,41 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     while (lo - 1 >= 0 && isNounish(lo - 1)) lo -= 1;
     while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
     if (lo === hi) return foldEntity(values[i], lexicon, lemmas?.[i]);
-    const last = stripSentenceFinalStop(values[hi]);
+    // A run of proper nouns spells a name, and a name sheds the honorific or
+    // role word stacked in front of it — "Ex-Marine Robert Gilman" is Robert
+    // Gilman. A run holding any common noun is a compound, not a name, and
+    // keeps every word ("disk operating system").
+    let words = values.slice(lo, hi + 1);
+    if (words.every((_, k) => pos[lo + k] === "PROPN")) words = trimNameRun(words, lexicon);
+    const last = stripSentenceFinalStop(words[words.length - 1]);
     const head = lookupNoun(lexicon, last.toLowerCase());
-    return normFactTerm([...values.slice(lo, hi), head ? head.lemma : singularHead(last, lemmas?.[hi])].join(" "));
+    if (words.length === 1) return normFactTerm(head ? head.lemma : singularHead(last, lemmas?.[hi]));
+    return normFactTerm([...words.slice(0, -1), head ? head.lemma : singularHead(last, lemmas?.[hi])].join(" "));
   };
-  // The comma opening a bare appositive the scan below reads through, or -1.
-  // "Yabloko, the Russian antiwar party, is banned …" names its subject before
-  // the aside, and a leftward scan stops dead on the closing comma otherwise.
-  // An aside qualifies only when it holds no verb of its own — a relative
-  // clause ("the quake, which killed 100 people, damaged …") predicates about
-  // the noun in front of it and is never read through.
-  const appositiveOpenerBefore = (close) => {
+  // Where a leftward scan resumes when it meets a comma, or -1 when the comma
+  // stands between it and another clause. A news sentence names its subject
+  // first and then interrupts itself — "Yabloko, the Russian antiwar party, is
+  // banned …", "Robert Gilman, Freed by Russia, Arrives …" — so a scan that
+  // stops dead on a comma never reaches the subject at all. It may cross when
+  // nothing between the comma and either an earlier comma or the sentence start
+  // predicates: a relative clause ("the quake, which killed 100 people,
+  // damaged …") holds a verb, and that keeps the scan out.
+  const commaCrossingFrom = (close) => {
     for (let k = close - 1; k >= 0; k -= 1) {
       if (values[k] === ",") return k;
       if (pos[k] === "VERB" || pos[k] === "AUX" || pos[k] === "PUNCT") return -1;
     }
-    return -1;
+    return close;
   };
   const nearestEntityIndex = (idx, step, blocked = null) => {
-    let readThroughAppositive = step < 0;
+    let mayCrossComma = step < 0;
     for (let i = idx + step; i >= 0 && i < values.length; i += step) {
       if (pos[i] === "PUNCT") {
-        if (!readThroughAppositive || values[i] !== ",") break;
-        const opener = appositiveOpenerBefore(i);
-        if (opener < 0) break;
-        readThroughAppositive = false;
-        i = opener;
+        if (!mayCrossComma || values[i] !== ",") break;
+        const resume = commaCrossingFrom(i);
+        if (resume < 0) break;
+        mayCrossComma = false;
+        i = resume;
         continue;
       }
       if (blocked && blocked.has(pos[i])) break;
