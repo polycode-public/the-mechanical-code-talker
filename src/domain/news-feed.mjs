@@ -538,11 +538,11 @@ function tierOf(rows) {
   return kinds[0] || "";
 }
 
-function collectSources(subgraphRows, sourcesByFactId) {
+function collectSources(citedRows, sourcesByFactId) {
   const get = (id) => (sourcesByFactId instanceof Map ? sourcesByFactId.get(id) : sourcesByFactId?.[id]);
   const seen = new Set();
   const sources = [];
-  for (const row of subgraphRows) {
+  for (const row of citedRows) {
     const src = get(row.id);
     if (!src) continue;
     const key = src.url || src.title || "";
@@ -561,6 +561,95 @@ function joinWithAnd(items) {
   if (items.length === 0) return "";
   if (items.length === 1) return items[0];
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+// ---------------------------------------------------------------------------
+// What one card reports, and whose neighbourhood it sits in.
+// ---------------------------------------------------------------------------
+
+/** An id membership test over a Set, an array, or null — null meaning "every
+ *  row counts", which is what a caller with no reported-row set of its own
+ *  (the background paragraph, a direct render call) needs. */
+function idMembership(ids) {
+  if (ids === null || ids === undefined) return () => true;
+  if (ids instanceof Set) return (id) => ids.has(id);
+  return (id) => ids.includes(id);
+}
+
+const rowObservedRank = (row) => {
+  const t = rowObservedMs(row);
+  return Number.isFinite(t) ? t : 0;
+};
+
+/** The reported rows of `subgraphRows` that touch `hub` directly — what this
+ *  card actually reports, and so what it may attribute a source to. A row
+ *  further out in the two-hop walk was reached through a term the hub merely
+ *  shares; it belongs to some other card's report. */
+export function hubReportRows(hub, subgraphRows, { reportedIds = null } = {}) {
+  const hubTerm = normFactTerm(hub);
+  const isReported = idMembership(reportedIds);
+  return subgraphRows.filter((row) => isReported(row.id)
+    && (normFactTerm(row.subject) === hubTerm || normFactTerm(row.object) === hubTerm));
+}
+
+/** Every term sitting one edge from `hub` inside this card's own sub-graph. */
+function hubLinkTerms(subgraphRows, hubTerm) {
+  const terms = new Set();
+  for (const row of subgraphRows) {
+    const s = normFactTerm(row.subject);
+    const o = normFactTerm(row.object);
+    if (s === hubTerm && o) terms.add(o);
+    else if (o === hubTerm && s) terms.add(s);
+  }
+  terms.delete(hubTerm);
+  return terms;
+}
+
+const NEIGHBOUR_ROW_LIMIT = 3;
+
+/** This hub's own neighbourhood: the reported rows one further edge out,
+ *  reached only through a link term specific enough to name a neighbourhood.
+ *  A link term the clause cannot name in full — one reaching more rows than
+ *  the sentence prints — is a category node, not a neighbour: "earthquake"
+ *  sits between all 44 quakes of a day, so every quake card walked through it
+ *  and printed the same arbitrary three. Naming a slice of a category is what
+ *  made sibling cards identical, so a term over the clause's own capacity
+ *  contributes nothing and a card with no specific link prints no "Around it"
+ *  at all.
+ *
+ *  Survivors rank by a predicate the hub's own report also used, then by
+ *  observation time, then by id — this hub's choice, and a pure function of
+ *  the fact set either way. */
+export function neighbourRows(hub, subgraphRows, { reportedIds = null, limit = NEIGHBOUR_ROW_LIMIT } = {}) {
+  const hubTerm = normFactTerm(hub);
+  const isReported = idMembership(reportedIds);
+  const linkTerms = hubLinkTerms(subgraphRows, hubTerm);
+
+  const reachedByLinkTerm = new Map();
+  for (const row of subgraphRows) {
+    const s = normFactTerm(row.subject);
+    const o = normFactTerm(row.object);
+    if (s === hubTerm || o === hubTerm || !isReported(row.id)) continue;
+    for (const term of new Set([s, o])) {
+      if (!term || !linkTerms.has(term)) continue;
+      let reached = reachedByLinkTerm.get(term);
+      if (!reached) reachedByLinkTerm.set(term, (reached = []));
+      reached.push(row);
+    }
+  }
+
+  const candidates = new Map();
+  for (const [, reached] of reachedByLinkTerm) {
+    if (reached.length > limit) continue;
+    for (const row of reached) candidates.set(row.id, row);
+  }
+
+  const hubPredicates = new Set(hubReportRows(hub, subgraphRows, { reportedIds }).map((r) => r.predicate));
+  return [...candidates.values()]
+    .sort((a, b) => (Number(hubPredicates.has(b.predicate)) - Number(hubPredicates.has(a.predicate)))
+      || (rowObservedRank(b) - rowObservedRank(a))
+      || byId(a, b))
+    .slice(0, limit);
 }
 
 const IDENTITY_PREDICATES = new Set(["rdf:type", "rdfs:subClassOf"]);
@@ -590,9 +679,9 @@ function predicatesInRenderOrder(rows) {
 
 /** The fixed five-sentence paraphrase template (PLAN_NEWS_FEED.md section
  *  8.3): identity first, then the hub's own relations grouped by predicate in
- *  FACT_PREDICATE_PHRASES table order, then one closing sentence naming up to
- *  three second-hop facts. Every sentence shown is a grounded fact, never a
- *  paraphrase of prose the grammar could not read.
+ *  FACT_PREDICATE_PHRASES table order, then one closing sentence naming this
+ *  hub's own neighbours (neighbourRows). Every sentence shown is a grounded
+ *  fact, never a paraphrase of prose the grammar could not read.
  *
  *  `reportedIds` (PLAN_NEWS_FEED.md section 17.4), when given, restricts the
  *  relation sentences and the closing "Around it" sentence to rows in that
@@ -602,14 +691,10 @@ function predicatesInRenderOrder(rows) {
  *  existing caller and pin is unaffected. */
 export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = {}) {
   const hubTerm = normFactTerm(hub);
-  const isReported = reportedIds === null
-    ? () => true
-    : (id) => (reportedIds instanceof Set ? reportedIds.has(id) : reportedIds.includes(id));
+  const isReported = idMembership(reportedIds);
   const hubRows = subgraphRows.filter((r) => normFactTerm(r.subject) === hubTerm);
   const reportedHubRows = hubRows.filter((r) => isReported(r.id));
-  const secondHopRows = subgraphRows.filter(
-    (r) => normFactTerm(r.subject) !== hubTerm && normFactTerm(r.object) !== hubTerm && isReported(r.id),
-  );
+  const neighbours = neighbourRows(hub, subgraphRows, { reportedIds });
 
   const sentences = [];
 
@@ -645,14 +730,8 @@ export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = 
     if (aboutHub.length) sentences.push(aboutHub.join("; "));
   }
 
-  if (sentences.length < SENTENCE_CAP && secondHopRows.length) {
-    const around = secondHopRows
-      .slice()
-      .sort(byId)
-      .slice(0, 3)
-      .map((r) => factSentence(r))
-      .join("; ");
-    sentences.push(`Around it: ${around}`);
+  if (sentences.length < SENTENCE_CAP && neighbours.length) {
+    sentences.push(`Around it: ${neighbours.map((r) => factSentence(r)).join("; ")}`);
   }
 
   const capped = sentences.slice(0, SENTENCE_CAP);
@@ -668,7 +747,12 @@ export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = 
  *  both keep their prior behaviour for every other caller. Each item's
  *  two-hop sub-graph then splits into its own `reported`/`background` rows,
  *  so a card's paragraph draws from what was reported and its collapsed
- *  `backgroundParagraph` draws from what the graph already knew. */
+ *  `backgroundParagraph` draws from what the graph already knew.
+ *
+ *  A card attributes a source only to the rows it reports (hubReportRows) and
+ *  the neighbours it names (neighbourRows), never to its whole sub-graph. The
+ *  walk reaches every row a shared class node touches, so attributing the
+ *  sub-graph gave one quake's card all 44 of the day's quake headlines. */
 export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId = new Map(), readsAsEntityTerm } = {}) {
   const reported = reportedRows(rows, { now, windowMs });
   const reportedIds = new Set(reported.map((r) => r.id));
@@ -681,6 +765,10 @@ export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId
     const subgraphRows = subgraphAround(rows, term, { adjacency, priorityIds: reportedIds });
     const factIds = subgraphRows.map((r) => r.id).sort();
     const { background } = splitCardRows(subgraphRows, reportedIds);
+    const citedRows = [
+      ...hubReportRows(term, subgraphRows, { reportedIds }),
+      ...neighbourRows(term, subgraphRows, { reportedIds }),
+    ];
     return {
       id: `news-feed:${sha256HexPrefix(`${term}\0${factIds.join(",")}`, 8)}`,
       hub: term,
@@ -689,7 +777,7 @@ export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId
       builtAt: now,
       paragraph: renderNewsParagraph(term, subgraphRows, { reportedIds }),
       tier: tierOf(subgraphRows),
-      sources: collectSources(subgraphRows, sourcesByFactId),
+      sources: collectSources(citedRows, sourcesByFactId),
       background: background.map((r) => r.id).sort(),
       backgroundParagraph: renderNewsParagraph(term, background),
     };
