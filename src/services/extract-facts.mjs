@@ -303,6 +303,53 @@ function trimNameRun(words, lexicon) {
   return words.slice(start);
 }
 
+// A headline is set in Title Case AND carries no sentence-final stop. Both
+// halves matter, and they buy different things — see headlineReadPos.
+const SENTENCE_FINAL_STOPS = new Set([".", "!", "?"]);
+const readsAsHeadline = (values) => readsAsTitleCase(values)
+  && !SENTENCE_FINAL_STOPS.has(String(values[values.length - 1] ?? ""));
+
+/**
+ * How a sentence's parts of speech read once Title Case is allowed for. A
+ * tagger given a headline has no lowercase to work from and comes back wrong in
+ * both directions: the line's verb reads PROPN ("Thailand/PROPN Halts/PROPN
+ * New/PROPN Gun/PROPN"), while its plainest noun reads VERB ("Permits/VERB",
+ * "Shooting/VERB"). Two corrections, on two different conditions.
+ *
+ * In ANY Title Case sentence, a word the event band or the lexicon spells as a
+ * verb IS the verb (and a `lemmas` array passed in is corrected to match): no
+ * name run holds one of those, so promoting it can only split a run the
+ * capitals glued together.
+ *
+ * Demoting an unlisted VERB to a noun takes the stricter test — a real
+ * sentence can pass the capitalization test on its own ("The delegation met
+ * Prime Minister Keir Starmer."), and demoting its verb would cost every tag
+ * it already had right. The missing sentence-final stop is what tells a
+ * headline from that.
+ *
+ * Never the first token either way: a headline opens on its subject, and "Bar
+ * Refaeli" opens on a name the band also spells. Never a band word straight
+ * after a determiner ("The Free Press"). Any other sentence gets its tags back
+ * untouched.
+ */
+function headlineReadPos(values, pos, lemmas, lexicon) {
+  if (!readsAsTitleCase(values)) return pos;
+  const demoteUnlistedVerbs = readsAsHeadline(values);
+  const read = [...pos];
+  for (let i = 1; i < values.length; i += 1) {
+    const banded = read[i - 1] === "DET" ? null : newswireVerbLemma(values[i]);
+    if (banded) {
+      read[i] = "VERB";
+      if (lemmas) lemmas[i] = banded;
+    } else if (lookupVerb(lexicon, stripSentenceFinalStop(String(values[i])).toLowerCase())) {
+      read[i] = "VERB";
+    } else if (read[i] === "VERB" && demoteUnlistedVerbs) {
+      read[i] = "NOUN";
+    }
+  }
+  return read;
+}
+
 /** Every NOUN/PROPN token `sentences` names, surface-form occurrence-counted —
  *  a POS tagger reads unknown words by context, so an unlisted noun ("wombat")
  *  counts exactly like a lexicon-known one. A contiguous run of two or more
@@ -314,31 +361,35 @@ function candidateTermOccurrencesPos(sentences, nlp, lexicon) {
   for (const sentence of sentences) {
     let values;
     let pos;
+    let lemmas;
     try {
       const doc = nlp.readDoc(String(sentence || ""));
       values = doc.tokens().out(nlp.its.value);
       pos = doc.tokens().out(nlp.its.pos);
+      lemmas = doc.tokens().out(nlp.its.lemma);
     } catch { continue; }
+    const headline = readsAsHeadline(values);
+    pos = headlineReadPos(values, pos, lemmas, lexicon);
+    // A headline's capitals say nothing about which words spell a name, so its
+    // runs read over every noun; ordinary prose keeps the capital as the tell
+    // and runs over proper nouns alone.
+    const runsWith = (k) => (headline ? pos[k] === "NOUN" || pos[k] === "PROPN" : pos[k] === "PROPN");
+    // A role noun standing in front of a name is a title on that name, not a
+    // term of its own — "President Trump" is one lookup, while "president" and
+    // "trump" are two half ones. Only a common noun the lexicon knows opens a
+    // run this way, and a headline's own capitals carry no such distinction.
+    const opensRoleTitledName = (k) => !headline && pos[k] === "NOUN" && pos[k + 1] === "PROPN"
+      && Boolean(lookupNoun(lexicon, stripSentenceFinalStop(String(values[k])).toLowerCase()));
     for (let i = 0; i < values.length; i += 1) {
       if (pos[i] !== "NOUN" && pos[i] !== "PROPN") continue;
       let hi = i;
-      if (pos[i] === "PROPN") while (hi + 1 < values.length && pos[hi + 1] === "PROPN") hi += 1;
+      if (runsWith(i) || opensRoleTitledName(i)) {
+        while (hi + 1 < values.length && runsWith(hi + 1)) hi += 1;
+      }
       if (hi > i) {
-        // A Title Case headline lifts its verbs to PROPN too ("Thailand Halts
-        // New Gun Licenses…"), gluing a clause into one run. A token the verb
-        // tables know splits the run: what stands before it is the name.
-        const verbShaped = (w) => Boolean(newswireVerbLemma(w))
-          || Boolean(lookupVerb(lexicon, stripSentenceFinalStop(String(w)).toLowerCase()));
-        let cut = -1;
-        for (let k = i + 1; k <= hi; k += 1) if (verbShaped(values[k])) { cut = k; break; }
-        const runEnd = cut === -1 ? hi : cut - 1;
-        if (runEnd > i) {
-          const name = trimNameRun(values.slice(i, runEnd + 1), lexicon).join(" ");
-          counts.set(name, (counts.get(name) || 0) + 1);
-        } else {
-          counts.set(values[i], (counts.get(values[i]) || 0) + 1);
-        }
-        i = cut === -1 ? hi : cut;
+        const name = trimNameRun(values.slice(i, hi + 1), lexicon).join(" ");
+        counts.set(name, (counts.get(name) || 0) + 1);
+        i = hi;
         continue;
       }
       counts.set(values[i], (counts.get(values[i]) || 0) + 1);
@@ -472,29 +523,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     pos = doc.tokens().out(nlp.its.pos);
     lemmas = doc.tokens().out(nlp.its.lemma);
   } catch { return { triples: [], declined: [], minted: [] }; }
-  // A Title Case headline gives a tagger no lowercase to work from, and the
-  // tags come back unusable in both directions: the line's verb reads PROPN
-  // ("Thailand/PROPN Halts/PROPN New/PROPN Gun/PROPN"), while a plain noun in
-  // it reads VERB ("Permits/VERB", "Shooting/VERB"), which truncates the object
-  // run to "new gun". So in a Title Case sentence the closed vocabularies
-  // decide alone: a word the event band or the lexicon spells as a verb IS the
-  // verb, and every other token reads as a noun. Never the first token (a
-  // headline opens on its subject, and "Ban Ki-moon" opens on a name the band
-  // also spells), and never a band word straight after a determiner ("The Free
-  // Press").
-  if (readsAsTitleCase(values)) {
-    for (let i = 1; i < values.length; i += 1) {
-      const banded = pos[i - 1] === "DET" ? null : newswireVerbLemma(values[i]);
-      if (banded) {
-        pos[i] = "VERB";
-        lemmas[i] = banded;
-      } else if (lookupVerb(lexicon, stripSentenceFinalStop(String(values[i])).toLowerCase())) {
-        pos[i] = "VERB";
-      } else if (pos[i] === "VERB") {
-        pos[i] = "NOUN";
-      }
-    }
-  }
+  pos = headlineReadPos(values, pos, lemmas, lexicon);
   // A found noun is read as its whole contiguous NOUN/PROPN run, head-lemma
   // folded — "a string instrument" is the class "string instrument", never
   // its modifier "string"; a single-word run keeps the plain lemma fold.

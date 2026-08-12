@@ -80,6 +80,25 @@ test("a title stacked in front of a full name is trimmed back to the name", () =
   assert.ok(counts.has("keir starmer"), `expected the name alone, got ${[...counts.keys()].join(", ")}`);
 });
 
+test("a headline's noun pile queues as the phrase it spells, never as the fragment a mis-tag cut it to", () => {
+  const counts = ungroundedTermOccurrences(["Thailand Halts New Gun Permits After Mass Shooting at a School"], []);
+  const terms = [...counts.keys()];
+  assert.ok(terms.includes("thailand"), `the subject queues on its own: ${terms.join(", ")}`);
+  assert.ok(terms.includes("new gun permits"), `the object phrase queues whole: ${terms.join(", ")}`);
+  assert.equal(terms.includes("new gun"), false, "a tagger calling the head noun a verb never cuts the phrase short");
+});
+
+test("a role noun standing in front of a name is a title on it, not a term of its own", () => {
+  const counts = ungroundedTermOccurrences(
+    ['Russia released Robert Gilman on "a humanitarian basis," President Trump said.'],
+    [],
+  );
+  const terms = [...counts.keys()];
+  assert.ok(terms.includes("president trump"), `the title and the name queue as one: ${terms.join(", ")}`);
+  assert.equal(terms.includes("president"), false, "the title never queues alone");
+  assert.equal(terms.includes("trump"), false, "the name never queues without its title beside it");
+});
+
 test("a fact already grounding a name takes that name's fragments out of the queue with it", () => {
   const rows = [{ subject: "russia", predicate: "tmct:releases", object: "robert gilman" }];
   const counts = ungroundedTermOccurrences(["Russia released Robert Gilman.", "Mr. Gilman flew home."], rows);
