@@ -798,19 +798,15 @@ async function lookupThroughBreaker(ctx, provider, sourceId, term, skipped) {
  *  skipped goes back to pending instead: nothing asked it, so nothing knows
  *  it is missing. */
 export async function enrichTopTerms(ctx, { limit } = {}) {
-  const { memoryDir, store, state, providers, config, now, lexicon } = ctx;
+  const { memoryDir, store, state, providers, config, now } = ctx;
   const shouldAbort = abortSignalOf(ctx);
   const nowVal = resolveNow(now);
   const cap = Number.isFinite(limit) ? limit : config.enrichTermsPerCycle;
 
   const ledger = ledgerFromPayload(state.ledger);
-  // Over-fetch so vocabulary words the lexicon already grounds never eat a
-  // lookup slot: "person" and "moon" rank high by raw occurrence, but the
-  // unknowns — the names — are what a lookup can actually define.
   const candidates = rankedTerms(ledger, {
-    limit: cap * 4, status: "pending", now: nowVal, ttlMs: config.negativeCacheTtlHours * 3600000,
+    limit: cap, status: "pending", now: nowVal, ttlMs: config.negativeCacheTtlHours * 3600000,
   });
-  const lex = lexicon || loadLexicon();
 
   const enriched = [];
   const missed = [];
@@ -821,11 +817,6 @@ export async function enrichTopTerms(ctx, { limit } = {}) {
 
   for (const entry of candidates) {
     if (shouldAbort()) { aborted = true; break; }
-    if (enriched.length + missed.length >= cap) break;
-    if (isVocabGroundedTerm(lex, entry.term)) {
-      markTerm(ledger, entry.term, "grounded", nowVal);
-      continue;
-    }
     markTerm(ledger, entry.term, "enriching", nowVal);
     let hit = null;
     let askedAnySource = false;
