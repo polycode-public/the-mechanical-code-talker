@@ -25,6 +25,7 @@ const NOISY_HUB_RELATION_RATE_CEILING = 0.5;
 const REPEATED_SENTENCE_RATE_CEILING = 0.50; // baseline 0.4095, a named N0 gap — this stops it getting worse
 const HEADLINE_PRESENT_RATE_FLOOR = 0.90; // baseline 1.0
 const LINK_PRESENT_RATE_FLOOR = 0.90; // baseline 1.0
+const DATE_PRESENT_RATE_FLOOR = 0.90; // baseline 1.0
 const RANKED_TERM_NOISE_CEILING = 0.30; // baseline 0.2
 
 let cached = null;
@@ -62,11 +63,12 @@ test("noisy-hub-relation rate stays under its ceiling", async () => {
   assert.ok(report.metrics.noisyHubRelationRate.rate <= NOISY_HUB_RELATION_RATE_CEILING);
 });
 
-test("paragraph shape holds its floors: repeated-sentence rate capped, headline and link presence floored", async () => {
+test("paragraph shape holds its floors: repeated-sentence rate capped, headline, link and date presence floored", async () => {
   const report = await fastBench();
   assert.ok(report.metrics.paragraphShape.repeatedSentenceRate <= REPEATED_SENTENCE_RATE_CEILING);
   assert.ok(report.metrics.paragraphShape.headlinePresentRate >= HEADLINE_PRESENT_RATE_FLOOR);
   assert.ok(report.metrics.paragraphShape.linkPresentRate >= LINK_PRESENT_RATE_FLOOR);
+  assert.ok(report.metrics.paragraphShape.datePresentRate >= DATE_PRESENT_RATE_FLOOR);
 });
 
 test("ranked-term noise stays under its ceiling", async () => {
