@@ -94,6 +94,11 @@ One iteration is:
 
 The live page stays the human check after each deploy batch, never the measurement.
 
+The loop never waits. The next iteration's lever dispatches as soon as the previous
+lever is merged and its report pair is committed — CI pipelines and deploys are
+shipping, not gates, and a measurement correction runs beside the loop, not in
+front of it.
+
 ## 5. Phases
 
 - **N0 — harness + fixtures + baseline.** Capture script, runner, metrics, npm scripts,
