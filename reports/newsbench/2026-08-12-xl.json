@@ -1,0 +1,168 @@
+{
+  "meta": {
+    "seed": "xl",
+    "sourceIds": [
+      "wikimedia-featured",
+      "hacker-news",
+      "usgs-quakes",
+      "nyt-world",
+      "wikinews-published"
+    ],
+    "fixtureDates": {
+      "wikimedia-featured": "2026-08-12",
+      "hacker-news": "2026-08-12",
+      "usgs-quakes": "2026-08-12",
+      "nyt-world": "2026-08-12",
+      "wikinews-published": "2026-08-12"
+    },
+    "now": "2026-08-12T12:00:00.000Z"
+  },
+  "poll": {
+    "fetched": 5,
+    "newItems": 121,
+    "failures": 0,
+    "facts": 77,
+    "derived": 756,
+    "evicted": 0
+  },
+  "metrics": {
+    "admissionRate": {
+      "perSource": {
+        "wikimedia-featured": {
+          "offered": 10,
+          "admitted": 5,
+          "rate": 0.5
+        },
+        "hacker-news": {
+          "offered": 10,
+          "admitted": 7,
+          "rate": 0.7
+        },
+        "usgs-quakes": {
+          "offered": 51,
+          "admitted": 44,
+          "rate": 0.8627450980392157
+        },
+        "nyt-world": {
+          "offered": 50,
+          "admitted": 13,
+          "rate": 0.26
+        },
+        "wikinews-published": {
+          "offered": 0,
+          "admitted": 0,
+          "rate": null
+        }
+      },
+      "aggregate": {
+        "offered": 121,
+        "admitted": 69,
+        "rate": 0.5702479338842975
+      }
+    },
+    "groundedTermProportion": {
+      "perSource": {
+        "wikimedia-featured": {
+          "articles": 10,
+          "microAverage": 0.1782178217821782,
+          "distribution": {
+            "min": 0,
+            "median": 0.08333333333333333,
+            "max": 0.46153846153846156
+          }
+        },
+        "hacker-news": {
+          "articles": 10,
+          "microAverage": 0.4827586206896552,
+          "distribution": {
+            "min": 0,
+            "median": 0.6666666666666666,
+            "max": 1
+          }
+        },
+        "usgs-quakes": {
+          "articles": 51,
+          "microAverage": 0.3682008368200837,
+          "distribution": {
+            "min": 0,
+            "median": 0.4,
+            "max": 1
+          }
+        },
+        "nyt-world": {
+          "articles": 45,
+          "microAverage": 0.15023474178403756,
+          "distribution": {
+            "min": 0,
+            "median": 0,
+            "max": 1
+          }
+        }
+      },
+      "aggregate": {
+        "articles": 116,
+        "microAverage": 0.2611683848797251,
+        "distribution": {
+          "min": 0,
+          "median": 0.2857142857142857,
+          "max": 1
+        }
+      }
+    },
+    "dedupeRatio": {
+      "cards": 53,
+      "admittedItems": 69,
+      "ratio": 0.7681159420289855,
+      "secondPassNewItems": 0,
+      "secondPassNewCards": 0
+    },
+    "entityPreservation": {
+      "rawCandidateCount": 501,
+      "anchoredCandidateCount": 26,
+      "factSurvivalRate": 0.38461538461538464,
+      "paragraphSurvivalRate": 0.3076923076923077
+    },
+    "noisyHubRelationRate": {
+      "contextLines": 27,
+      "noisy": 1,
+      "rate": 0.037037037037037035
+    },
+    "paragraphShape": {
+      "cards": 53,
+      "sentencesPerCard": {
+        "min": 1,
+        "max": 3,
+        "mean": 1.7735849056603774
+      },
+      "repeatedSentenceRate": 0.3723404255319149,
+      "aroundItRepeatRate": 0.7948717948717948,
+      "headlinePresentRate": 1,
+      "linkPresentRate": 1,
+      "datePresentRate": 0
+    },
+    "rankedTermNoise": {
+      "entries": 20,
+      "noisy": 6,
+      "rate": 0.3
+    },
+    "size": {
+      "newsFactRows": 67,
+      "newsFactBytes": 51118,
+      "rowsPerArticle": 0.9710144927536232,
+      "bytesPerArticle": 740.8405797101449,
+      "feedDocumentBytes": 250193,
+      "maxFeedDocumentBytes": 358400,
+      "feedDocumentBudgetUsed": 0.6980831473214286
+    }
+  },
+  "definitions": {
+    "admissionRate": "per source: distinct polled items whose snapshot carries >=1 factId after grounding, divided by distinct items the source's fetcher returned.",
+    "groundedTermProportion": "per polled item: normalized subject/object terms of the item's own admitted facts, divided by that same set unioned with the terms the term-ledger recorded against the item's own id (its ungrounded terms) — a micro-average (summed numerators over summed denominators) per source and overall, plus the per-item distribution's min/median/max.",
+    "dedupeRatio": "feed cards built, divided by distinct polled items that admitted >=1 fact (the same set admissionRate's numerator counts) — a ratio below 1 means several admitted items consolidated onto shared hubs. secondPassNewItems/secondPassNewCards re-poll and re-build the same fixtures a second time and report what changed; both target zero.",
+    "entityPreservation": "a candidate is a date (ISO, \"Month D, YYYY\" or \"D Month YYYY\") or a capitalized 1-4 word sequence found in an item's title+summary text, gazetteer-anchored when the whole candidate or its text after the last comma normalizes to a term the seed graph already classifies as a place or person (GAZETTEER_CLASS_TERMS via rdf:type/rdfs:subClassOf). factSurvival counts an anchored candidate whose normalized form appears as a subject/object term of one of the item's own admitted facts; paragraphSurvival counts one whose literal text appears in a card the item contributed facts to. rawCandidateCount (no gazetteer filter) is reported alongside for reference.",
+    "noisyHubRelationRate": "identity-sentence objects (rdf:type/rdfs:subClassOf rows whose subject is the card's own hub, drawn from the card's full factIds set) that fall in NOISY_HUB_CLASS_TERMS, divided by all such identity objects shown across the feed.",
+    "paragraphShape": "sentencesPerCard: each card's paragraph split on \". \", min/max/mean across the feed. repeatedSentenceRate: (sentence occurrences beyond each string's first) / (total sentence occurrences), pooled across every card's paragraph. aroundItRepeatRate: of cards whose paragraph carries an \"Around it: ...\" clause, the fraction whose clause text exactly matches another card's. headlinePresent/linkPresent/datePresent: the share of cards whose sources[] entries carry a non-empty title / url / any key named publishedAt or date.",
+    "rankedTermNoise": "ranked-terms panel entries whose term falls in RANKED_NOISE_TERMS, divided by the panel's own entry count (the same list /news rank renders, top 20).",
+    "size": "newsFactRows/newsFactBytes: fact rows (and their JSON byte size) whose provenance carries a news:/news-fixture:/research: tag. rowsPerArticle/bytesPerArticle: those totals divided by admitted-item count. feedDocumentBytes: the materialized feed document's own byte size (server/news-worker/handler.mjs's serializeCard + enforceFeedSizeBound), reported against MAX_FEED_DOCUMENT_BYTES."
+  }
+}
