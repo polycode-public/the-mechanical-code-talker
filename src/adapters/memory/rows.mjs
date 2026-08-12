@@ -89,8 +89,13 @@ function storedIndividualForm(ind) {
 /** The ord each row key carries. An existing key keeps the ord it already had
  *  and a new one takes the next free number, matching how a store keeps a row's
  *  sort position across an update. Without prior rows the ords are the payload's
- *  own array order. */
-function ordAssigner(priorRows) {
+ *  own array order.
+ *
+ *  `baseOrds` is a read-only layer's key -> ord map, consulted after the prior
+ *  rows so a key both layers hold keeps the row's own ord. It is read in place:
+ *  a caller holding one for the life of its handle hands it over rather than
+ *  projecting a row per key and parsing each back. */
+function ordAssigner(priorRows, baseOrds) {
   const priorOrds = new Map();
   let next = 0;
   for (const row of priorRows || []) {
@@ -100,8 +105,9 @@ function ordAssigner(priorRows) {
     priorOrds.set(row.rowKey, ord);
     if (ord >= next) next = ord + 1;
   }
+  for (const ord of baseOrds?.values() || []) if (Number.isFinite(ord) && ord >= next) next = ord + 1;
   return (rowKey) => {
-    const prior = priorOrds.get(rowKey);
+    const prior = priorOrds.get(rowKey) ?? baseOrds?.get(rowKey);
     if (prior !== undefined) return prior;
     const ord = next;
     next += 1;
@@ -139,14 +145,16 @@ const OVERSIZED_ROW_POSTURES = new Set(["throw", "drop", "keep"]);
  *
  *  `priorRows` are the rows this payload was last projected as; pass them and
  *  every unchanged row comes back byte-identical, so `diffRows` writes only
- *  what actually moved. `onOversizedRow` is "throw" (default), "drop", or
- *  "keep" (rows that never reach the wire — see `admitRow`), and `log` takes
- *  the drop notices. */
-export function payloadToRows(payload, { priorRows = null, onOversizedRow = "throw", log = warnToConsole } = {}) {
+ *  what actually moved. `priorOrds` is the same information for a read-only
+ *  layer that already holds it as a key -> ord map (a sqlite seed's own key
+ *  columns), read under the prior rows. `onOversizedRow` is "throw" (default),
+ *  "drop", or "keep" (rows that never reach the wire — see `admitRow`), and
+ *  `log` takes the drop notices. */
+export function payloadToRows(payload, { priorRows = null, priorOrds = null, onOversizedRow = "throw", log = warnToConsole } = {}) {
   if (!OVERSIZED_ROW_POSTURES.has(onOversizedRow)) {
     throw new TypeError(`onOversizedRow must be "throw", "drop", or "keep", got ${JSON.stringify(onOversizedRow)}`);
   }
-  const ordFor = ordAssigner(priorRows);
+  const ordFor = ordAssigner(priorRows, priorOrds);
   const posture = { onOversizedRow, log };
   const rows = [];
 

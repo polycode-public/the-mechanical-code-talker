@@ -995,7 +995,11 @@ async function persistRowPayload(handle, payload) {
   const before = handle.sqliteSeedStore ? handle.storedRows : overlayRows(handle.baseRows, handle.storedRows);
   const beforeByKey = new Map(before.map((row) => [row.rowKey, row]));
   const after = payloadToRows(handle.sqliteSeedStore ? payloadWithoutRowKeys(payload, seedKeys) : payload, {
-    priorRows: handle.sqliteSeedStore ? sqliteSeedPriorRows(handle) : before,
+    priorRows: handle.sqliteSeedStore ? handle.storedRows : before,
+    // The seed's ords are handed over as the map the handle already holds. The
+    // session's own rows come first, so a key both layers hold keeps the ord
+    // assembly gives it.
+    ...(handle.sqliteSeedStore ? { priorOrds: sqliteSeedKeyOrds(handle) } : {}),
     onOversizedRow: handle.onOversizedRow,
     ...(handle.log ? { log: handle.log } : {}),
   });
@@ -1107,15 +1111,6 @@ function sqliteSeedKeyOrds(handle) {
   for (const row of handle.sqliteSeedOverlayRows || []) ords.set(row.rowKey, ordOfRow(row));
   handle.sqliteSeedKeyOrds = ords;
   return ords;
-}
-
-/** What `payloadToRows` reads off prior rows: the ord each key already carries,
- *  in the smallest row shape that carries one. The session's own rows come
- *  last, so a key both layers hold keeps the session's ord — the precedence
- *  assembly gives it. */
-function* sqliteSeedPriorRows(handle) {
-  for (const [rowKey, ord] of sqliteSeedKeyOrds(handle)) yield { rowKey, json: `{"ord":${ord}}` };
-  yield* handle.storedRows;
 }
 
 function* chainedRows(...sources) {
