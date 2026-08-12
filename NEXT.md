@@ -39,23 +39,34 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   definitions reach cards — "russia is a country" on the russia card). The run
   command pair: `node scripts/news-bench/capture-fixtures.mjs` (fresh articles),
   `node scripts/news-bench/run-live-cycle.mjs` (the enriched cycle, four-part
-  card print). Iteration 5 answered §3.2:
-  definitions land in the graph (amigados → disk operating system, three facts,
-  research provenance) but never reach their card — background reads only the
-  fact's endpoints, and the article's own entities (tim king, amigados inside
-  the quoted title) are invisible to it. In flight: background-from-article-
-  entities (worktree `.claude/worktrees/agent-add3051443d22b90a`, Opus); the
-  Wikidata media-work type gate and the provenance-tag truncation fix are merged
-  (`85f79faa`); the sense-disjointness gate on the isa closure is merged
-  (2 commits through `9f4497a9`: a measured top-class table refuses ~38-40% of
-  derivations, russia ⊑ body part dead, asserted rows never blocked; its named
-  remainder — chat.mjs's own read-time BFS still walks asserted edges across
-  senses, same gate would fix it, 322 KB file deferred).
-  Next levers after those: extraction widenings from named specimens —
-  description sentences two and three of the Gilman article, the
-  "prime | mgx:minister | …" optimistic mint, agentless passives ("is banned
-  from …"), "ecuadorean fishings" pluralization, the "new gun" fragment; then
-  bulk knowledge only on §5.5 evidence.
+  card print). Iterations 6-7 landed the
+  first target-shaped card from live data: the tim-king card shows amigados'
+  looked-up definitions plus a correct gated entailment (amigados ⊑ software).
+  Merged: background-from-article-entities (`ddca4304` — cards read the entities
+  their article names; also fixed the doubled article, "a a country"); the
+  Wikidata media-work type gate + provenance-tag truncation fix (`85f79faa` —
+  album/paper matches now miss); the sense-disjointness gate on the isa closure
+  (through `9f4497a9` — a measured top-class table refuses ~38-40% of
+  derivations, russia ⊑ body part dead, asserted rows never blocked).
+  Next levers, in order:
+  - the re-grounding half of §3.2: a new definition should also let MORE of the
+    article's own sentences ground (`reprocessAfterGrounding` exists, unproven
+    end to end on a card);
+  - extraction widenings from named specimens — the Gilman description's
+    sentences two and three ("released on a humanitarian basis, President Trump
+    said" / "family had said he was in dire physical condition"), the
+    "prime | mgx:minister | …" optimistic mint, agentless passives ("is banned
+    from …"), "ecuadorean fishings" pluralization, the "new gun" fragment;
+  - asserted cross-sense corpus rows still drift into neighbourhoods ("orifice ⊑
+    passage" near the russia card) — the gate covers derivations only;
+  - the bench's noisy metric under-counts the new article-entity background rows
+    (`textShownRowsForCard` in `scripts/news-bench/metrics.mjs` doesn't see
+    them); chat.mjs's read-time BFS still walks asserted edges across senses
+    (same gate would fix it, 322 KB file, deferred);
+  - then bulk knowledge only on §5.5 evidence.
+  Harness note: `run-live-cycle.mjs` starts fresh state each run, so the
+  negative cache resets and the same misses re-burn lookup slots every run —
+  the deployed worker persists state and does not suffer this.
 
 - [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
   downloads in the operator's terminal (started 19:26, ~10 h). No bulk band gets
