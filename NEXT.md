@@ -29,20 +29,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **Wikidata slice — the download must restart against a pinned dated dump** —
-  the completed `latest-all.json.gz` download was corrupt by construction: the
-  symlink moved mid-download across resume sessions (its expected size changed
-  from 155,314,703,515 to 155,457,882,747 between the operator's own runs), so
-  the file spliced two dump versions and the extraction died 124 GB in with a
-  gzip Z_DATA_ERROR. Fixed at the root (`a77481d5`): the script now pins the
-  newest dated dump on first run and every resume reads the pin; the corrupt
-  file is deleted. Operator: re-run `bash scripts/resume-wikidata-dump.sh`
-  (fresh full download, ~11 h at recent rates), then
-  `node scripts/corpus-bands/extract-wikidata-slice.mjs`, then the band build
-  and the operator-gated load per `PLAN_MEMORY_ROLLOUT.md` section 4. If the
-  slice is wanted sooner, say so: the 12 seed entities and their objects can be
-  fetched from the live entity API in minutes as an interim route (a route
-  change from the plan's chosen full-dump path, so it waits for the word).
+- [ ] **Wikidata slice — band built from the live API; the load is the operator's** —
+  the live-entity fetch found 12/12 seeds and 148/148 derived objects, and the
+  band is built and durable: `~/tmct-dumps/wikidata-slice.band.jsonl` (156 rows,
+  sha256 `b5675036…4cdfe7b4bf`, CC0). The operator's load (credentialed,
+  digest-checked no-op on re-run):
+  `AWS_PROFILE=tmct-prod node bin/tmct.mjs corpus load wikidata-slice --table tmct-prod-prod-website-RowServiceTable2B650E09-1AG9XEDHMG359 --source ~/tmct-dumps/wikidata-slice.band.jsonl`
+  Then the `bandStatus` + `queryBandTerm` read-back closes the load leg. The
+  pinned dated-dump redownload continues in the operator's terminal for future
+  larger slices (growing `SEED_QIDS` re-runs the same extract/build path).
 
 - [ ] **News feed quality — the local bench and its loop** — plan of record is
   `PLAN_NEWS_FEED_QUALITY.md` (operator-commissioned 2026-08-12): frozen live-feed
