@@ -768,9 +768,9 @@ function identityFans(subgraphRows) {
   return { senseFan, sourcedSenseFan, categoryFan };
 }
 
-/** What this card is ABOUT: its hub, the place-name halves of a hub the source
- *  spelled "settlement, region", and the other terms its own report sentences
- *  name — minus any of those that reads across senses. A quake card's report
+/** What this card is ABOUT: its hub, the region of a hub the source spelled
+ *  "settlement, region", and the other terms its own report sentences name —
+ *  minus any of those that reads across senses. A quake card's report
  *  names "earthquake" and a place; the class term is where the graph's
  *  knowledge is thinnest and its senses widest, so background drawn through it
  *  is background about earthquakes in general, never about this quake. The hub
