@@ -1154,9 +1154,16 @@ export function hubTitleTerm(hubTerm, hubRows, { placeOrPerson, verbWords, story
     || hubTerm;
 }
 
+/** True when a source spelled this term as a settlement and its region at once
+ *  — "wana, pakistan", "mina, nevada". The source has already said which of a
+ *  report's terms is the thing that happened somewhere, so the term reads as a
+ *  place even where no identity row types it as one. hubSeedTerms holds the
+ *  same reading for the walk. */
+const namesASettlementAndRegion = (term) => hubSeedTerms(term).length > 1;
+
 /** The gate's hubs retitled by hubTitleTerm, with two hubs that answer to the
- *  same name merged into one. The merge is where a story that threw off both
- *  a subject and a clause stops minting two cards for itself. Keeps the gate's
+ *  same name merged into one. Each keeps the two readings storyCoverage ranks
+ *  cards by, taken on the title the card will actually wear. Keeps the gate's
  *  own sort — changed count desc, then term asc. */
 function titledHubs(hubs, rows, reported, rowsByTerm) {
   const placeOrPerson = placeAndPersonTerms(rows);
@@ -1169,22 +1176,44 @@ function titledHubs(hubs, rows, reported, rowsByTerm) {
     if (held === undefined || changed > held) changedByTitle.set(title, changed);
   }
   return [...changedByTitle.entries()]
-    .map(([term, changed]) => ({ term, changed }))
+    .map(([term, changed]) => ({
+      term,
+      changed,
+      namesAnEntity: placeOrPerson.has(term) || namesASettlementAndRegion(term),
+      clauseShaped: readsAsClauseTerm(term, verbWords),
+      reportSubject: (rowsByTerm.get(term) || []).some((row) => normFactTerm(row.subject) === term),
+    }))
     .sort((a, b) => b.changed - a.changed || (a.term < b.term ? -1 : a.term > b.term ? 1 : 0));
 }
 
+/** How a story picks between the cards that want to tell it. In order: the
+ *  hub whose own reports span fewest stories, since a card about one story
+ *  beats a publication's roundup of it; then the hub that names a place or a
+ *  person, since that is what the story is about; then the hub that
+ *  reads as a name rather than a clause; then the one the report puts on the
+ *  subject side, the story's actor where the object is what happened to it;
+ *  then the gate's own changed count; then the term itself, so the answer never
+ *  comes down to arrival order. */
+function byCardClaim(a, b) {
+  return a.storyCount - b.storyCount
+    || (Number(b.namesAnEntity) - Number(a.namesAnEntity))
+    || (Number(a.clauseShaped) - Number(b.clauseShaped))
+    || (Number(b.reportSubject) - Number(a.reportSubject))
+    || (b.changed - a.changed)
+    || (a.term < b.term ? -1 : a.term > b.term ? 1 : 0);
+}
+
 /** Which stories each hub gets to tell, and which of its reports belong to
- *  another card. A hub whose reports span one story keeps it, always — that
- *  card IS the story. A hub whose reports span PUBLICATION_STORY_MIN or more
- *  is a publication, and it carries only the stories nothing else covers: the
- *  "hackernews" card that repeated both of the day's Hacker News cards wholesale
- *  now mints nothing, and one that repeated three of four carries the fourth
- *  alone.
+ *  another card. One story mints one card: the hubs bid for it in byCardClaim
+ *  order and the first takes it, so a report that threw off both a subject hub
+ *  and an object hub ("ukraine" beside "air war", "london" beside "glass")
+ *  stops minting a card each. A hub left with no story of its own does not
+ *  mint, and one that keeps some carries only those — the "hackernews" card
+ *  that repeated both of the day's Hacker News cards wholesale is gone, and one
+ *  that repeated three of four carries the fourth alone.
  *
- *  Publications take what is left in a fixed order — fewest stories first,
- *  then alphabetical — so two of them never race for the same story and the
- *  answer never depends on which row arrived first. A row whose provenance
- *  names no story is never claimed and never dropped.
+ *  A row whose provenance names no story is never claimed and never dropped, so
+ *  a hub built only from those still mints.
  *
  *  Returns hub term -> `{ mints, coveredRowIds }`. */
 export function storyCoverage(hubs, rowsByTerm) {
@@ -1201,32 +1230,25 @@ export function storyCoverage(hubs, rowsByTerm) {
     rowIdsByStory.set(term, byStory);
   }
 
+  const bidders = hubs
+    .map((hub) => ({ ...hub, storyCount: rowIdsByStory.get(hub.term).size }))
+    .sort(byCardClaim);
+
   const claimed = new Set();
   const coverage = new Map();
-  const publications = [];
-  for (const { term } of hubs) {
+  for (const { term, storyCount } of bidders) {
     const stories = rowIdsByStory.get(term);
-    if (stories.size >= PUBLICATION_STORY_MIN) {
-      publications.push({ term, storyCount: stories.size });
-      continue;
-    }
-    for (const key of stories.keys()) claimed.add(key);
-    coverage.set(term, { mints: true, coveredRowIds: new Set() });
-  }
-
-  publications.sort((a, b) => a.storyCount - b.storyCount || (a.term < b.term ? -1 : a.term > b.term ? 1 : 0));
-  for (const { term } of publications) {
     const coveredRowIds = new Set();
     let ownStories = 0;
-    for (const key of [...rowIdsByStory.get(term).keys()].sort()) {
+    for (const key of [...stories.keys()].sort()) {
       if (claimed.has(key)) {
-        for (const id of rowIdsByStory.get(term).get(key)) coveredRowIds.add(id);
+        for (const id of stories.get(key)) coveredRowIds.add(id);
         continue;
       }
       claimed.add(key);
       ownStories += 1;
     }
-    coverage.set(term, { mints: ownStories > 0, coveredRowIds });
+    coverage.set(term, { mints: storyCount === 0 || ownStories > 0, coveredRowIds });
   }
   return coverage;
 }

@@ -352,6 +352,15 @@ function quakeRows(places = QUAKE_PLACES) {
   }));
 }
 
+// One site discussing two of its own stories: one subject node, two items, the
+// shape a publication hub is read off.
+function discussionRows() {
+  return [
+    row("fact:1", "hackernews", "mgx:discuss", "a recipe builder", { provenance: "news:hacker-news@item-recipe" }),
+    row("fact:2", "hackernews", "mgx:discuss", "an eclipse webcam", { provenance: "news:hacker-news@item-webcam" }),
+  ];
+}
+
 function quakeSources(places = QUAKE_PLACES) {
   return new Map(places.map((place, i) => [
     `fact:quake-${i}`,
@@ -386,11 +395,7 @@ test("a term shared by more reports than the closing sentence can name is a cate
 });
 
 test("a link term the closing sentence can name in full still yields neighbours, and each card names its own", () => {
-  const rows = [
-    row("fact:1", "hackernews", "mgx:discuss", "a recipe builder"),
-    row("fact:2", "hackernews", "mgx:discuss", "an eclipse webcam"),
-  ];
-  const items = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 10 });
+  const items = buildNewsItems(discussionRows(), { now: NOW, windowMs: 6 * HOUR, limit: 10 });
   const byHub = new Map(items.map((item) => [item.hub, item]));
 
   assert.match(byHub.get("recipe builder").paragraph, /Around it: hackernews discuss an eclipse webcam/);
@@ -421,11 +426,7 @@ test("hubReportRows keeps the reported rows touching the hub and drops the rest 
 });
 
 test("a card's sources and its \"Around it\" survive the rows arriving in a different order", () => {
-  const rows = [
-    ...quakeRows(),
-    row("fact:hn-1", "hackernews", "mgx:discuss", "a recipe builder"),
-    row("fact:hn-2", "hackernews", "mgx:discuss", "an eclipse webcam"),
-  ];
+  const rows = [...quakeRows(), ...discussionRows()];
   const sourcesByFactId = quakeSources();
   const opts = { now: NOW, windowMs: 6 * HOUR, limit: 12, sourcesByFactId };
   const forward = buildNewsItems(rows, opts);
