@@ -29,14 +29,20 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **Wikidata slice — dump downloaded, extraction running** — the download
-  finished 2026-08-12 (155,457,882,747 bytes, verified). The slice extraction
-  (`extract-wikidata-slice.mjs`, streaming, per-phase resumable) is running in the
-  coordinator's background; on its completion:
-  `node scripts/corpus-bands/build-wikidata-slice.mjs --source ~/tmct-dumps/wikidata-slice.jsonl`,
-  then the operator-gated `tmct corpus load wikidata-slice` per
-  `PLAN_MEMORY_ROLLOUT.md` section 4, then the `bandStatus` + `queryBandTerm`
-  read-back closes this item.
+- [ ] **Wikidata slice — the download must restart against a pinned dated dump** —
+  the completed `latest-all.json.gz` download was corrupt by construction: the
+  symlink moved mid-download across resume sessions (its expected size changed
+  from 155,314,703,515 to 155,457,882,747 between the operator's own runs), so
+  the file spliced two dump versions and the extraction died 124 GB in with a
+  gzip Z_DATA_ERROR. Fixed at the root (`a77481d5`): the script now pins the
+  newest dated dump on first run and every resume reads the pin; the corrupt
+  file is deleted. Operator: re-run `bash scripts/resume-wikidata-dump.sh`
+  (fresh full download, ~11 h at recent rates), then
+  `node scripts/corpus-bands/extract-wikidata-slice.mjs`, then the band build
+  and the operator-gated load per `PLAN_MEMORY_ROLLOUT.md` section 4. If the
+  slice is wanted sooner, say so: the 12 seed entities and their objects can be
+  fetched from the live entity API in minutes as an interim route (a route
+  change from the plan's chosen full-dump path, so it waits for the word).
 
 - [ ] **News feed quality — the local bench and its loop** — plan of record is
   `PLAN_NEWS_FEED_QUALITY.md` (operator-commissioned 2026-08-12): frozen live-feed
