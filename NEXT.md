@@ -32,17 +32,28 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] **Wikidata dump download — operator-run, outside any session** — run
   `bash scripts/resume-wikidata-dump.sh` from the repo root (re-run after any
   interruption; it resumes, prints a progress line per minute, and verifies the final
-  byte count). File: `~/tmct-dumps/wikidata-latest-all.json.gz` (155.3 GB). When it
-  reports done, the next steps are `PLAN_MEMORY_ROLLOUT.md` section 4.
+  byte count). File: `~/tmct-dumps/wikidata-latest-all.json.gz` (155.3 GB; ~85% on
+  2026-08-12). When it reports done, the next steps are `PLAN_MEMORY_ROLLOUT.md`
+  section 4; the slice-extraction agent (worktree
+  `.claude/worktrees/agent-a7fd69026eddc4bd5`) is building the one-command
+  pass-A/pass-B extractor now so completion has a ready command.
 
 - [ ] **News feed quality — the local bench and its loop** — plan of record is
   `PLAN_NEWS_FEED_QUALITY.md` (operator-commissioned 2026-08-12): frozen live-feed
   fixtures, a deterministic offline bench runner with mechanical metrics (admission,
   grounded-term proportion, de-dupe, entity preservation, noisy-hub-relation rate,
   paragraph shape, ranked-term noise, size), and a ratcheting floor per landed
-  improvement. Phases N0–N5 there; N0 (harness + fixtures + baseline) is in build.
-  The two phrasing warts from the empty-feed item fold into this plan's N2/N4
-  (junk-hub over-read, "scientists reports" agreement).
+  improvement. Phases N0–N5 there. In flight (dispatched 2026-08-12):
+  - N0 bench harness + fixtures + baseline — worktree
+    `.claude/worktrees/agent-a0ca9e417e6cb8e76`
+  - N1 de-dupe (one card per newsworthy item) — worktree
+    `.claude/worktrees/agent-adf57b832d79a72ca`
+  - "scientists reports" agreement fix (N4 wart) — worktree
+    `.claude/worktrees/agent-a9e4ad9cff12c83ff`
+  - units/compass/particle noise out of ranked terms (N3 leg) — worktree
+    `.claude/worktrees/agent-a5ee2df55964811b7`
+  Remaining after these: N2 context quality (incl. the junk-hub over-read), the rest
+  of N3/N4, N5 floors into CI.
 
 ## Discipline
 
