@@ -57,26 +57,20 @@ The work list, ranked by value against the plan's target card:
    Expected: RELATED FACTS keeps israel/turkey/australia-are-countries, drops
    the anatomy strays. Effort: one Opus agent, same-sense discipline applied to
    neighbourhood selection.
-4. [ ] **Bench article-entity under-count** — `textShownRowsForCard` in
-   `scripts/news-bench/metrics.mjs` cannot see the new background rows.
-   Measurement-only fix. Effort: main thread, ~20 min.
-5. [ ] **Shipping** — 22 commits local-only; 6.0.18 is the last deployed
+4. [ ] **Shipping** — 22 commits local-only; 6.0.18 is the last deployed
    version. Roll, full suite, push; retry the pipeline if GitLab's runner
    shortage (`stuck_pending_no_matching_runners`) recurs. Effort: ~20 min,
    mostly unattended.
-6. [ ] **chat.mjs read-time BFS gate** — the chat surface still walks asserted
+5. [ ] **chat.mjs read-time BFS gate** — the chat surface still walks asserted
    cross-sense edges live (russia can reach body part in a two-hop chase).
    Same gate, different reader. Effort: one careful Opus agent, 322 KB file.
-7. [ ] **Engine speed remainders** — seed re-assembly on any removal (~2 s
+6. [ ] **Engine speed remainders** — seed re-assembly on any removal (~2 s
    each; mid-implementation exploration preserved on branch
    `worktree-agent-add917bc647f82f46`, unmerged), `migrateStoredMemory`
    re-running per memory-handle load, `buildMemoryIndex` rebuilt per write.
    Expected: more articles ground per 60 s press; faster runs. Effort: resume
    the branch (Opus) plus two small fixes.
-8. [ ] **`research.mjs` media-gate opt-out** — the explicit chat research
-   command inherits the news lane's media-work miss; it may deliberately want
-   the album. Effort: main thread, ~30 min.
-9. [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
+7. [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
    downloads in the operator's terminal; when the loop's evidence says live
    lookups are too thin (plan §5.5), build the bulk band with row count and
    DynamoDB write cost printed before any load. Until then: nothing. The
