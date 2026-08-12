@@ -625,7 +625,7 @@ export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = 
       .map((r) => r.object)
       .sort();
     if (!objects.length) continue;
-    sentences.push(`${hub} ${predicatePhrase(predicate)} ${joinObjects(objects)}`);
+    sentences.push(`${hub} ${predicatePhrase(predicate, hub)} ${joinObjects(objects)}`);
   }
 
   // A hub that only ever appears as an OBJECT — the place a quake struck, the
