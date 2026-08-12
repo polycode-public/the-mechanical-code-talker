@@ -123,6 +123,9 @@ test("a headline torn into subject, predicate and remainder leaves a term with a
   assert.equal(readsAsEntityTerm("new gun permits after mass shooting"), false);
   assert.equal(readsAsEntityTerm("boats hit by mystery attackers"), false);
   assert.equal(readsAsEntityTerm("glaciers on the climate dashboard"), false);
+  // A source that quoted the headline is naming a title, and a title is free
+  // to read as a clause.
+  assert.equal(readsAsEntityTerm('"tim king, amigados developer, has died"'), true);
 });
 
 test("a name built with \"of\" still reads as a name, and so does a surname the clause-word list also spells", () => {

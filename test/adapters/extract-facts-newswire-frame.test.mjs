@@ -29,10 +29,33 @@ test("a modal chain is one verb complex: the subject is read from left of the wh
   );
 });
 
-test("a passive states who it happened to, so an active read of one is declined", () => {
-  assert.deepEqual(triplesOf("Roberto Mosquera was arrested by ICE last year."), []);
+test("a passive states who it happened to, so the actor takes the subject side and never the patient", () => {
+  assert.deepEqual(
+    triplesOf("Roberto Mosquera was arrested by ICE last year."),
+    ["ice mgx:arrest roberto mosquera"],
+  );
+  // A reduced passive carries no auxiliary at all, so the "by" is the whole
+  // tell — the headline shape a feed reads most often.
+  assert.deepEqual(
+    triplesOf("Ecuadorean Fishing Boats Hit by Mystery Attackers"),
+    ["mystery attackers mgx:hit ecuadorean fishing boat"],
+  );
+});
+
+test("an agentless passive names no actor, so it states the subject's own condition instead", () => {
+  assert.deepEqual(
+    triplesOf("Yabloko, the Russian antiwar party, is banned from parliament elections."),
+    ["yabloko mgx:banned-from parliament election"],
+  );
+  assert.deepEqual(
+    triplesOf("The stowaway was deported to Ecuador."),
+    ["stowaway mgx:deported-to ecuador"],
+  );
+});
+
+test("a passive complement that names no place a fact can hold stays an honest miss", () => {
   assert.deepEqual(triplesOf("A group of Cuban men in Mexico was charged with smuggling people."), []);
-  assert.deepEqual(triplesOf("Yabloko, the Russian antiwar party, is banned from parliament elections."), []);
+  assert.deepEqual(triplesOf("Robert Gilman was released."), []);
 });
 
 test("a progressive is not an event that happened: the be-form auxiliary declines it", () => {
@@ -59,6 +82,17 @@ test("a counting of-chain reads through to what the event touched; any other of-
 test("a relative clause has no subject of its own here, so its event verb is declined", () => {
   assert.deepEqual(
     triplesOf("The quake, which killed more than 100 people, damaged hundreds of buildings."),
+    [],
+  );
+});
+
+test("a subject scan reads through a bare appositive but never through a relative clause", () => {
+  assert.deepEqual(
+    triplesOf("Ecuador, the smallest OPEC member, halted the fishing fleet."),
+    ["ecuador mgx:halt fishing fleet"],
+  );
+  assert.deepEqual(
+    triplesOf("The government, which had promised reform, halted the fishing fleet."),
     [],
   );
 });

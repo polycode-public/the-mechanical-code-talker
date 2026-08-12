@@ -213,6 +213,16 @@ const OF_COUNT_HEADS = new Set(["hundred", "hundreds", "thousand", "thousands", 
 // of one states the reverse of the sentence. The scan crosses adverbs only, so
 // a modal chain that is still active ("will completely block") reads on.
 const BE_AUXILIARIES = new Set(["is", "are", "was", "were", "be", "been", "being", "am"]);
+// The prepositions an agentless passive states its subject's own condition
+// with: "banned FROM parliament elections", "deported TO Mexico", "detained AT
+// the border". Each says where the subject ended up, so the pair reads back as
+// one predicate about the subject. Deliberately narrow — "charged WITH
+// smuggling people" and "convicted OF fraud" take a whole clause or an
+// abstraction after them, not a place a fact can hold, and "of" would collide
+// with the of-chain climbs above.
+const PASSIVE_STATE_PREPOSITIONS = new Set([
+  "from", "to", "in", "at", "into", "on", "near", "under", "over", "across", "off",
+]);
 
 // wink's tokenizer keeps a sentence-final full stop glued to the word before
 // it when that word ends the text ("… block the sun." tokenizes as one PROPN
@@ -238,13 +248,27 @@ function newswireVerbLemma(word) {
 /** Fold an entity surface to its stored key: a lexicon noun's lemma, else the
  *  word's own normFactTerm (the optimistic tier mints unlisted content nouns
  *  the way the strict teach lane already mints "redis"). */
-function foldEntity(word, lexicon) {
+function foldEntity(word, lexicon, taggedLemma = "") {
   const surface = stripSentenceFinalStop(word);
   // A multi-word name is stored exactly as it reads. "United States" is the
   // name; "united state" is a lemma fold of a word that was never on its own.
   if (surface.includes(" ")) return normFactTerm(surface);
   const noun = lookupNoun(lexicon, surface.toLowerCase());
-  return normFactTerm(noun ? noun.lemma : surface);
+  return normFactTerm(noun ? noun.lemma : singularHead(surface, taggedLemma));
+}
+
+/** The singular a head noun folds to when the lexicon carries no entry for it:
+ *  the tagger's own lemma, and only where that lemma is the surface with an -s
+ *  or -es taken off. A lemma that respells the word further ("analyses" →
+ *  "analyzes") is not a singular, and a proper noun keeps its own spelling
+ *  ("Wales", "Netherlands"), which is what a tagger returns for one anyway. */
+function singularHead(surface, taggedLemma) {
+  const word = String(surface ?? "");
+  const lemma = String(taggedLemma ?? "");
+  if (!lemma || lemma === word) return word;
+  const lower = word.toLowerCase();
+  const base = lemma.toLowerCase();
+  return lower === `${base}s` || lower === `${base}es` ? lemma : word;
 }
 
 // The shortest word ingestText's fact-degree scan treats as a content-noun
@@ -481,14 +505,35 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     let hi = i;
     while (lo - 1 >= 0 && isNounish(lo - 1)) lo -= 1;
     while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
-    if (lo === hi) return foldEntity(values[i], lexicon);
+    if (lo === hi) return foldEntity(values[i], lexicon, lemmas?.[i]);
     const last = stripSentenceFinalStop(values[hi]);
     const head = lookupNoun(lexicon, last.toLowerCase());
-    return normFactTerm([...values.slice(lo, hi), head ? head.lemma : last].join(" "));
+    return normFactTerm([...values.slice(lo, hi), head ? head.lemma : singularHead(last, lemmas?.[hi])].join(" "));
+  };
+  // The comma opening a bare appositive the scan below reads through, or -1.
+  // "Yabloko, the Russian antiwar party, is banned …" names its subject before
+  // the aside, and a leftward scan stops dead on the closing comma otherwise.
+  // An aside qualifies only when it holds no verb of its own — a relative
+  // clause ("the quake, which killed 100 people, damaged …") predicates about
+  // the noun in front of it and is never read through.
+  const appositiveOpenerBefore = (close) => {
+    for (let k = close - 1; k >= 0; k -= 1) {
+      if (values[k] === ",") return k;
+      if (pos[k] === "VERB" || pos[k] === "AUX" || pos[k] === "PUNCT") return -1;
+    }
+    return -1;
   };
   const nearestEntityIndex = (idx, step, blocked = null) => {
+    let readThroughAppositive = step < 0;
     for (let i = idx + step; i >= 0 && i < values.length; i += step) {
-      if (pos[i] === "PUNCT") break;
+      if (pos[i] === "PUNCT") {
+        if (!readThroughAppositive || values[i] !== ",") break;
+        const opener = appositiveOpenerBefore(i);
+        if (opener < 0) break;
+        readThroughAppositive = false;
+        i = opener;
+        continue;
+      }
       if (blocked && blocked.has(pos[i])) break;
       if (isNounish(i)) return i;
     }
@@ -706,18 +751,57 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     }
     return at === null ? null : entityRunAt(at);
   };
+  // The first token of the complement a verb takes, adverbs crossed. A passive
+  // reads its own frame off this one word: "by" names the actor, a locative or
+  // directional preposition names where the subject ended up.
+  const complementHead = (i) => {
+    for (let k = i + 1; k < values.length; k += 1) {
+      if (pos[k] === "ADV") continue;
+      return k;
+    }
+    return -1;
+  };
   const readNewswireFrame = () => {
     for (let i = 1; i < values.length - 1; i += 1) {
       if (pos[i] !== "VERB") continue;
       if (lookupVerb(lexicon, String(values[i]).toLowerCase())) continue;
       const lemma = String(lemmas?.[i] ?? values[i]).toLowerCase();
       if (!NEWSWIRE_RELATION_VERBS.has(lemma)) continue;
-      if (beAuxiliaryBefore(i) || relativePronounBefore(i) >= 0) continue;
+      if (relativePronounBefore(i) >= 0) continue;
+      const declared = lookupVerb(lexicon, lemma);
+      const predicate = declared ? predicateOf(declared) : `mgx:${lemma}`;
+      const surface = stripSentenceFinalStop(String(values[i])).toLowerCase();
+      const head = complementHead(i);
+      const headWord = head === -1 ? "" : String(values[head]).toLowerCase();
+      const beAuxiliary = beAuxiliaryBefore(i);
+      // A progressive is not an event that happened, and its -ing form is the
+      // one thing that tells it apart from the past participle a passive takes.
+      if (beAuxiliary && surface.endsWith("ing")) continue;
+      // "<patient> (was) <participle> by <actor>" — the sentence names both
+      // roles, so it mints the ACTIVE edge with the actor on the subject side.
+      // A reduced passive carries no auxiliary at all ("Boats Hit by Mystery
+      // Attackers"), so the "by" is what identifies the frame.
+      if (headWord === "by") {
+        const actor = countChainEntity(head, +1);
+        const patient = countChainEntity(verbComplexStart(i), -1);
+        if (actor && patient) push(actor, predicate, patient);
+        continue;
+      }
+      if (beAuxiliary) {
+        // "<patient> is <participle> <prep> <complement>" — no actor is named,
+        // so nothing can take the subject side of an active edge. The claim the
+        // sentence DOES make is about the patient's own condition, and that is
+        // what the participle predicate states.
+        if (!PASSIVE_STATE_PREPOSITIONS.has(headWord)) continue;
+        const patient = countChainEntity(verbComplexStart(i), -1);
+        const complement = countChainEntity(head, +1);
+        if (patient && complement) push(patient, `mgx:${surface}-${headWord}`, complement);
+        continue;
+      }
       const subject = countChainEntity(verbComplexStart(i), -1);
       const object = countChainEntity(i, +1);
       if (!subject || !object) continue;
-      const declared = lookupVerb(lexicon, lemma);
-      push(subject, declared ? predicateOf(declared) : `mgx:${lemma}`, object);
+      push(subject, predicate, object);
     }
   };
 
@@ -1019,9 +1103,16 @@ const INTERIOR_CLAUSE_WORDS = new Set([
 // the same way.
 const PARTICIPIAL_NAME_LEAD_WORDS = new Set(["united", "allied", "combined", "armed", "organized", "associated"]);
 
+// A term the source itself wrapped in quotation marks is a title it quoted, and
+// a title is free to read as a clause — "Hackernews discusses \"Tim King,
+// AmigaDOS developer, has died\"" states a true fact about a whole headline.
+// The quotes are the tell, so they exempt the interior rule and nothing else.
+const QUOTED_TERM_RE = /^["“'‘].*["”'’]$/;
+
 /** Does `term` carry a clause- or phrase-opening word strictly between its
  *  first and last word? */
 export function carriesInteriorClauseWord(words) {
+  if (words.length >= 2 && QUOTED_TERM_RE.test(`${words[0]} ${words[words.length - 1]}`)) return false;
   for (let i = 1; i < words.length - 1; i += 1) {
     if (INTERIOR_CLAUSE_WORDS.has(String(words[i]).toLowerCase())) return true;
   }

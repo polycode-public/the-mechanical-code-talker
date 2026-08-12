@@ -312,6 +312,10 @@ const ENTITY_TRAILING_AUXILIARY_WORDS = new Set([
 // Mirrors extract-facts.mjs's INTERIOR_CLAUSE_WORDS, for the same reason the
 // sets above mirror their originals. "of" stays out: real names are built with
 // it ("house of representatives").
+// A term the source itself wrapped in quotation marks is a title it quoted, and
+// a title is free to read as a clause. Mirrors extract-facts.mjs's own
+// QUOTED_TERM_RE, and exempts the interior rule alone.
+const ENTITY_QUOTED_TERM_RE = /^["“'‘].*["”'’]$/;
 const ENTITY_INTERIOR_CLAUSE_WORDS = new Set([
   "a", "an", "the",
   "and", "or", "but", "because", "since", "although", "though", "whereas", "while", "so",
@@ -338,8 +342,10 @@ function looksLikeEntityTerm(term) {
   if (ENTITY_PARTICLE_LEAD_WORDS.has(first)) return false;
   if (ENTITY_PRONOUN_LEAD_WORDS.has(first.replace(ENTITY_CLITIC_SUFFIX_RE, ""))) return false;
   if (ENTITY_TRAILING_AUXILIARY_WORDS.has(words[words.length - 1].toLowerCase())) return false;
-  for (let i = 1; i < words.length - 1; i += 1) {
-    if (ENTITY_INTERIOR_CLAUSE_WORDS.has(words[i].toLowerCase())) return false;
+  if (!ENTITY_QUOTED_TERM_RE.test(`${words[0]} ${words[words.length - 1]}`)) {
+    for (let i = 1; i < words.length - 1; i += 1) {
+      if (ENTITY_INTERIOR_CLAUSE_WORDS.has(words[i].toLowerCase())) return false;
+    }
   }
   return true;
 }
