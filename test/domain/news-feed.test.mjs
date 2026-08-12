@@ -207,6 +207,18 @@ test("a quake card speaks about its own place, never about the class the report 
   assert.ok(!mina.paragraph.includes("cognition"));
 });
 
+test("a hub keeps its identity clause when the class it belongs to is a well-populated one — a crowded class is still this thing's own kind", () => {
+  const rows = [
+    row("fact:report", "france", "mgx:ban", "cold calls"),
+    row("fact:known", "france", "rdfs:subClassOf", "country", { provenance: "corpus:conceptnet" }),
+    ...["israel", "turkey", "australia", "chad", "mexico"].map((name, i) => row(
+      `fact:peer-${i}`, name, "rdfs:subClassOf", "country", { provenance: "corpus:conceptnet" },
+    )),
+  ];
+  const card = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 6 }).find((item) => item.hub === "france");
+  assert.match(card.paragraph, /^france bans cold calls\. france is a country\./);
+});
+
 test("hubSeedTerms adds the trailing region of a \"settlement, region\" name and nothing else", () => {
   assert.deepEqual(hubSeedTerms("mina, nevada"), ["mina, nevada", "nevada"]);
   assert.deepEqual(hubSeedTerms("san juan, puerto rico"), ["san juan, puerto rico", "puerto rico"]);

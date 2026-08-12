@@ -882,8 +882,6 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null } = {}) {
   const isReported = idMembership(reportedIds);
   const hubRows = subgraphRows.filter((r) => normFactTerm(r.subject) === hubTerm);
   const reportedHubRows = hubRows.filter((r) => isReported(r.id));
-  const { categoryFan } = identityFans(subgraphRows);
-
   const report = [];
   for (const predicate of predicatesInRenderOrder(reportedHubRows)) {
     if (IDENTITY_PREDICATES.has(predicate) || report.length >= REPORT_SENTENCE_CAP) continue;
@@ -917,9 +915,7 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null } = {}) {
     .filter((r) => IDENTITY_PREDICATES.has(r.predicate) && !isDerivedRow(r))
     .map((r) => r.object)
     .sort();
-  const identityIsSingleSense = identityObjects.length > 0
-    && identityObjects.length <= IDENTITY_MAX_CLASSES
-    && identityObjects.every((object) => (categoryFan.get(normFactTerm(object)) || 0) <= CATEGORY_FAN_MAX);
+  const identityIsSingleSense = identityObjects.length > 0 && identityObjects.length <= IDENTITY_MAX_CLASSES;
   if (identityIsSingleSense) {
     identity.push(`${hub} is ${joinObjects(identityObjects.map((object) => `${articleFor(object)} ${object}`))}`);
   }
