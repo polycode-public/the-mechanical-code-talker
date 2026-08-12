@@ -29,62 +29,58 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **The news quality loop — run, look, fix, repeat** — plan of record is
-  `PLAN_NEWS_FEED_QUALITY.md`: the target card (§2), the three blockers (§3), the
-  loop and its commands (§4), the working order (§5). Position on 2026-08-12
-  evening: iterations 1–4 run; merged levers so far — whole names reach the
-  lookup queue as single terms with fragments folded and numeric shrapnel gated;
-  one story mints one card with the entity taking the title and publications
-  covering only uncovered stories; enrichment proven live (lookups hit,
-  definitions reach cards — "russia is a country" on the russia card). The run
-  command pair: `node scripts/news-bench/capture-fixtures.mjs` (fresh articles),
-  `node scripts/news-bench/run-live-cycle.mjs` (the enriched cycle, four-part
-  card print). Iterations 6-7 landed the
-  first target-shaped card from live data: the tim-king card shows amigados'
-  looked-up definitions plus a correct gated entailment (amigados ⊑ software).
-  Merged: background-from-article-entities (`ddca4304` — cards read the entities
-  their article names; also fixed the doubled article, "a a country"); the
-  Wikidata media-work type gate + provenance-tag truncation fix (`85f79faa` —
-  album/paper matches now miss); the sense-disjointness gate on the isa closure
-  (through `9f4497a9` — a measured top-class table refuses ~38-40% of
-  derivations, russia ⊑ body part dead, asserted rows never blocked).
-  Next levers, in order:
-  - the re-grounding half of §3.2: a new definition should also let MORE of the
-    article's own sentences ground (`reprocessAfterGrounding` exists, unproven
-    end to end on a card);
-  - extraction widenings from named specimens — the Gilman description's
-    sentences two and three ("released on a humanitarian basis, President Trump
-    said" / "family had said he was in dire physical condition"), the
-    "prime | mgx:minister | …" optimistic mint, agentless passives ("is banned
-    from …"), "ecuadorean fishings" pluralization, the "new gun" fragment;
-  - asserted cross-sense corpus rows still drift into neighbourhoods ("orifice ⊑
-    passage" near the russia card) — the gate covers derivations only;
-  - the bench's noisy metric under-counts the new article-entity background rows
-    (`textShownRowsForCard` in `scripts/news-bench/metrics.mjs` doesn't see
-    them); chat.mjs's read-time BFS still walks asserted edges across senses
-    (same gate would fix it, 322 KB file, deferred);
-  - engine speed remainders from the perf pass: seed re-assembly on any removal
-    (~2 s each; a mid-implementation exploration is preserved on branch
-    `worktree-agent-add917bc647f82f46`, unmerged), `migrateStoredMemory`
-    re-running per memory-handle load, `buildMemoryIndex` rebuilt per write;
-  - then bulk knowledge only on §5.5 evidence.
-  Harness note: `run-live-cycle.mjs` starts fresh state each run, so the
-  negative cache resets and the same misses re-burn lookup slots every run —
-  the deployed worker persists state and does not suffer this.
+The method is `PLAN_NEWS_FEED_QUALITY.md`: run
+(`node scripts/news-bench/capture-fixtures.mjs`, then
+`node scripts/news-bench/run-live-cycle.mjs`), show every card whole in the
+four-part form, fix the top item below, merge, repeat — never waiting on
+pipelines. Position: iterations 1–7 run; the tim-king card is the first
+target-shaped card from live data (looked-up definitions plus a correct gated
+entailment on the card). Harness note: `run-live-cycle.mjs` starts fresh state
+each run, so the negative cache resets and the same misses re-burn lookup slots
+per run; the deployed worker persists state and does not.
 
-- [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
-  downloads in the operator's terminal (started 19:26, ~10 h). No bulk band gets
-  built or loaded until the loop's evidence says live lookups are too thin
-  (plan §5.5); when it does, the builder must print row count and DynamoDB
-  write cost before any load. The 12-QID slice band
-  (`~/tmct-dumps/wikidata-slice.band.jsonl`) is a pipeline proof only.
+The work list, ranked by value against the plan's target card:
 
-- [ ] **Shipping** — local `main` runs ahead of origin (the loop never waits on
-  deploys). At the next push moment: full suite, roll, push. The last pipeline's
-  `build:image` died on GitLab runner availability
-  (`stuck_pending_no_matching_runners`) — retry the pipeline if it repeats.
-  6.0.18 is the last deployed version; everything since (iterations 3–4 of the
-  loop, engine speed, per-source caps, NYT recognizer) is local-only.
+1. [ ] **Extraction widenings, shape by shape** — the named specimens: the Gilman
+   description's sentences two and three ("released on a humanitarian basis,
+   President Trump said" / "family had said he was in dire physical condition"),
+   the "prime | mgx:minister | …" optimistic mint, agentless passives ("is
+   banned from …"), "ecuadorean fishings" pluralization, the "new gun" fragment.
+   Expected: OUR PARAGRAPH grows from one sentence toward the target's three.
+   Effort: one Opus agent, closed-set work, taxonomy already exists.
+2. [ ] **The §3.2 re-grounding proof** — a new definition lets more of the
+   article's own sentences ground (`reprocessAfterGrounding` exists, unproven
+   end to end on a card). Expected: FACTS LEARNED grows after enrichment defines
+   a term the article names. Effort: one Opus agent, prove-then-fix.
+3. [ ] **Asserted cross-sense neighbourhood drift** — "orifice ⊑ passage" still
+   wanders near the russia card; the disjointness gate covers derivations only.
+   Expected: RELATED FACTS keeps israel/turkey/australia-are-countries, drops
+   the anatomy strays. Effort: one Opus agent, same-sense discipline applied to
+   neighbourhood selection.
+4. [ ] **Bench article-entity under-count** — `textShownRowsForCard` in
+   `scripts/news-bench/metrics.mjs` cannot see the new background rows.
+   Measurement-only fix. Effort: main thread, ~20 min.
+5. [ ] **Shipping** — 22 commits local-only; 6.0.18 is the last deployed
+   version. Roll, full suite, push; retry the pipeline if GitLab's runner
+   shortage (`stuck_pending_no_matching_runners`) recurs. Effort: ~20 min,
+   mostly unattended.
+6. [ ] **chat.mjs read-time BFS gate** — the chat surface still walks asserted
+   cross-sense edges live (russia can reach body part in a two-hop chase).
+   Same gate, different reader. Effort: one careful Opus agent, 322 KB file.
+7. [ ] **Engine speed remainders** — seed re-assembly on any removal (~2 s
+   each; mid-implementation exploration preserved on branch
+   `worktree-agent-add917bc647f82f46`, unmerged), `migrateStoredMemory`
+   re-running per memory-handle load, `buildMemoryIndex` rebuilt per write.
+   Expected: more articles ground per 60 s press; faster runs. Effort: resume
+   the branch (Opus) plus two small fixes.
+8. [ ] **`research.mjs` media-gate opt-out** — the explicit chat research
+   command inherits the news lane's media-work miss; it may deliberately want
+   the album. Effort: main thread, ~30 min.
+9. [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
+   downloads in the operator's terminal; when the loop's evidence says live
+   lookups are too thin (plan §5.5), build the bulk band with row count and
+   DynamoDB write cost printed before any load. Until then: nothing. The
+   12-QID slice band is a pipeline proof only.
 
 ## Discipline
 
