@@ -70,6 +70,23 @@ export const FACT_PREDICATE_PHRASES = Object.freeze({
  *  them back into English, so both read the one vocabulary. */
 export const TEACH_PARTICIPLE_SRC = "connected|related|associated|linked|based|derived|composed|made|used|known|located|found|involved|concerned";
 
+/** The participles a news report's agentless passive states its subject's own
+ *  condition with — "is banned from", "was deported to". One per verb in the
+ *  extractor's closed newswire event band, so the same list that decides which
+ *  events read also decides which passives read back as English. Kept apart
+ *  from TEACH_PARTICIPLE_SRC because the teach lane parses that list into its
+ *  own frames and nothing should widen those by writing here. */
+export const NEWS_PASSIVE_PARTICIPLE_SRC = [
+  "hit", "struck", "killed", "injured", "wounded", "damaged", "destroyed", "devastated",
+  "banned", "halted", "blocked", "barred", "suspended", "imposed",
+  "arrested", "detained", "jailed", "charged", "convicted", "sentenced", "deported", "released", "freed",
+  "elected", "appointed", "ousted", "overthrown",
+  "signed", "adopted", "approved", "rejected", "vetoed",
+  "launched", "unveiled", "seized", "captured", "invaded", "attacked", "bombed", "targeted",
+  "discovered", "uncovered", "rescued", "evacuated",
+  "sparked", "triggered", "caused", "forced", "deployed", "restored", "expanded",
+].join("|");
+
 /** The MECHANICAL fallback for a predicate the table has no curated entry
  *  for — specifically the minted "mgx:<lemma>" predicates ("mgx:eat",
  *  "mgx:drive", …) — the mechanical INVERSE of the naive -s/-es/-ies fold the
@@ -204,7 +221,7 @@ export function predicatePhrase(predicate, subject) {
   // a participle + preposition renders as its copula surface: mgx:connected-with
   // -> "is connected with" (the participle is already a participle, so no 3sg
   // fold — "connecteds" isn't a word)
-  const part = new RegExp(`^mgx:(${TEACH_PARTICIPLE_SRC})-([a-z]+)$`, "i").exec(p);
+  const part = new RegExp(`^mgx:(${TEACH_PARTICIPLE_SRC}|${NEWS_PASSIVE_PARTICIPLE_SRC})-([a-z]+)$`, "i").exec(p);
   if (part) return `is ${part[1].toLowerCase()} ${part[2].toLowerCase()}`;
   // a shared-attribute predicate: mgx:same-goal-as -> "has the same goal as"
   const same = /^mgx:same-([a-z]+)-as$/i.exec(p);
@@ -276,6 +293,7 @@ export function findingCaveat(finding) {
 export function phraseRendererSource() {
   return [
     `const TEACH_PARTICIPLE_SRC = ${JSON.stringify(TEACH_PARTICIPLE_SRC)};`,
+    `const NEWS_PASSIVE_PARTICIPLE_SRC = ${JSON.stringify(NEWS_PASSIVE_PARTICIPLE_SRC)};`,
     `const thirdPersonSingularSurface = ${thirdPersonSingularSurface};`,
     `const baseVerbSurface = ${baseVerbSurface};`,
     `const IRREGULAR_PLURAL_NOUNS = new Set(${JSON.stringify([...IRREGULAR_PLURAL_NOUNS])});`,

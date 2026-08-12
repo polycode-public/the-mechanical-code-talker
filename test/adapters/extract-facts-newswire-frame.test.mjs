@@ -29,10 +29,40 @@ test("a modal chain is one verb complex: the subject is read from left of the wh
   );
 });
 
-test("a passive states who it happened to, so an active read of one is declined", () => {
-  assert.deepEqual(triplesOf("Roberto Mosquera was arrested by ICE last year."), []);
+test("a passive states who it happened to, so the actor takes the subject side and never the patient", () => {
+  assert.deepEqual(
+    triplesOf("Roberto Mosquera was arrested by ICE last year."),
+    ["ice mgx:arrest roberto mosquera"],
+  );
+  // A reduced passive carries no auxiliary at all, so the "by" is the whole
+  // tell — the headline shape a feed reads most often.
+  assert.deepEqual(
+    triplesOf("Ecuadorean Fishing Boats Hit by Mystery Attackers"),
+    ["mystery attackers mgx:hit ecuadorean fishing boat"],
+  );
+});
+
+test("a headline that names its subject and then interrupts itself still reaches that subject", () => {
+  assert.deepEqual(
+    triplesOf("Ex-Marine Robert Gilman, Freed by Russia After 4 Years in Prison, Arrives in the U.S."),
+    ["russia mgx:free robert gilman"],
+  );
+});
+
+test("an agentless passive names no actor, so it states the subject's own condition instead", () => {
+  assert.deepEqual(
+    triplesOf("Yabloko, the Russian antiwar party, is banned from parliament elections."),
+    ["yabloko mgx:banned-from parliament election"],
+  );
+  assert.deepEqual(
+    triplesOf("The stowaway was deported to Ecuador."),
+    ["stowaway mgx:deported-to ecuador"],
+  );
+});
+
+test("a passive complement that names no place a fact can hold stays an honest miss", () => {
   assert.deepEqual(triplesOf("A group of Cuban men in Mexico was charged with smuggling people."), []);
-  assert.deepEqual(triplesOf("Yabloko, the Russian antiwar party, is banned from parliament elections."), []);
+  assert.deepEqual(triplesOf("Robert Gilman was released."), []);
 });
 
 test("a progressive is not an event that happened: the be-form auxiliary declines it", () => {
@@ -63,6 +93,17 @@ test("a relative clause has no subject of its own here, so its event verb is dec
   );
 });
 
+test("a subject scan reads through a bare appositive but never through a relative clause", () => {
+  assert.deepEqual(
+    triplesOf("Ecuador, the smallest OPEC member, halted the fishing fleet."),
+    ["ecuador mgx:halt fishing fleet"],
+  );
+  assert.deepEqual(
+    triplesOf("The government, which had promised reform, halted the fishing fleet."),
+    [],
+  );
+});
+
 test("verbs of speech and attribution stay out of the band: the noun after one opens a clause", () => {
   assert.deepEqual(triplesOf("The Yemeni government said the ship carried food supplies."), []);
   assert.deepEqual(triplesOf("Experts claimed the region has a complicated history."), []);
@@ -82,6 +123,42 @@ test("a sentence-final full stop never enters a stored term; an abbreviation kee
     triplesOf("The storm damaged the U.S."),
     ["storm mgx:damage u.s."],
   );
+});
+
+test("a Title Case headline reads its verb off the closed band, not off the tagger", () => {
+  assert.deepEqual(
+    triplesOf("Thailand Halts New Gun Permits After Mass Shooting at a School"),
+    ["thailand mgx:halt new gun permit"],
+  );
+  assert.deepEqual(
+    triplesOf("A Bright Spot in Colombia as Rescuers Free Quake Victim"),
+    ["rescuers mgx:free quake victim"],
+  );
+});
+
+test("a headline verb the band never declared leaves the headline an honest miss", () => {
+  assert.deepEqual(triplesOf("Prime Minister Keir Starmer Faces a Vote"), []);
+  assert.deepEqual(triplesOf("How Nigel Farage Ended Up Running Against Count Binface in Clacton"), []);
+});
+
+test("a headline never reads its own first word as the event, so a name the band also spells stays a name", () => {
+  assert.deepEqual(
+    triplesOf("Bar Refaeli Halts a Modeling Contract in Israel"),
+    ["bar refaeli mgx:halt modeling contract"],
+  );
+});
+
+test("a count phrase in front of what an event touched is read through to the noun", () => {
+  assert.deepEqual(
+    triplesOf("The quake killed more than 100 people."),
+    ["quake mgx:kill person"],
+  );
+  assert.deepEqual(
+    triplesOf("The blast injured at least 30 workers."),
+    ["blast mgx:injure worker"],
+  );
+  // A bare preposition carries no count, so nothing is read through it.
+  assert.deepEqual(triplesOf("The rebels attacked at dawn."), []);
 });
 
 test("the frame adds nothing to prose that named no event", () => {

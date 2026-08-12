@@ -207,12 +207,27 @@ const NEWSWIRE_RELATION_VERBS = new Set([
 // chain names its own head, so "restore the sacred glow of fireflies" restores
 // the glow, not the fireflies.
 const OF_COUNT_HEADS = new Set(["hundred", "hundreds", "thousand", "thousands", "million", "millions", "dozen", "dozens", "score", "scores", "handful"]);
+// The count phrases newswire writes in front of what an event touched. Closed
+// by list, and each has to close on the number itself, so a bare preposition
+// ("attacked at dawn") is never mistaken for one.
+const COUNT_PHRASE_RE = /^(?:more than|at least|at most|as many as|up to|fewer than|less than|nearly|almost|about|around|over|roughly)\s+\d[\d,.]*$/i;
+const COUNT_PHRASE_MAX_TOKENS = 4;
 // A verb whose own auxiliary is a be-form heads a passive or a progressive
 // ("was arrested by ICE", "are disappearing"), and there the noun on the
 // subject side is what the event happened TO, not who did it — an active read
 // of one states the reverse of the sentence. The scan crosses adverbs only, so
 // a modal chain that is still active ("will completely block") reads on.
 const BE_AUXILIARIES = new Set(["is", "are", "was", "were", "be", "been", "being", "am"]);
+// The prepositions an agentless passive states its subject's own condition
+// with: "banned FROM parliament elections", "deported TO Mexico", "detained AT
+// the border". Each says where the subject ended up, so the pair reads back as
+// one predicate about the subject. Deliberately narrow — "charged WITH
+// smuggling people" and "convicted OF fraud" take a whole clause or an
+// abstraction after them, not a place a fact can hold, and "of" would collide
+// with the of-chain climbs above.
+const PASSIVE_STATE_PREPOSITIONS = new Set([
+  "from", "to", "in", "at", "into", "on", "near", "under", "over", "across", "off",
+]);
 
 // wink's tokenizer keeps a sentence-final full stop glued to the word before
 // it when that word ends the text ("… block the sun." tokenizes as one PROPN
@@ -225,16 +240,40 @@ const stripSentenceFinalStop = (word) => {
   return text.endsWith(".") && !text.slice(0, -1).includes(".") ? text.slice(0, -1) : text;
 };
 
+/** The closed-band lemma a word spells, or null. A Title Case headline carries
+ *  no tag a reader can trust, so the band's own vocabulary is what identifies
+ *  its verb: the word itself, or its -s fold ("Halts" → halt). */
+function newswireVerbLemma(word) {
+  const surface = stripSentenceFinalStop(String(word ?? "")).toLowerCase();
+  if (NEWSWIRE_RELATION_VERBS.has(surface)) return surface;
+  const bare = surface.endsWith("s") ? surface.slice(0, -1) : "";
+  return bare && NEWSWIRE_RELATION_VERBS.has(bare) ? bare : null;
+}
+
 /** Fold an entity surface to its stored key: a lexicon noun's lemma, else the
  *  word's own normFactTerm (the optimistic tier mints unlisted content nouns
  *  the way the strict teach lane already mints "redis"). */
-function foldEntity(word, lexicon) {
+function foldEntity(word, lexicon, taggedLemma = "") {
   const surface = stripSentenceFinalStop(word);
   // A multi-word name is stored exactly as it reads. "United States" is the
   // name; "united state" is a lemma fold of a word that was never on its own.
   if (surface.includes(" ")) return normFactTerm(surface);
   const noun = lookupNoun(lexicon, surface.toLowerCase());
-  return normFactTerm(noun ? noun.lemma : surface);
+  return normFactTerm(noun ? noun.lemma : singularHead(surface, taggedLemma));
+}
+
+/** The singular a head noun folds to when the lexicon carries no entry for it:
+ *  the tagger's own lemma, and only where that lemma is the surface with an -s
+ *  or -es taken off. A lemma that respells the word further ("analyses" →
+ *  "analyzes") is not a singular, and a proper noun keeps its own spelling
+ *  ("Wales", "Netherlands"), which is what a tagger returns for one anyway. */
+function singularHead(surface, taggedLemma) {
+  const word = String(surface ?? "");
+  const lemma = String(taggedLemma ?? "");
+  if (!lemma || lemma === word) return word;
+  const lower = word.toLowerCase();
+  const base = lemma.toLowerCase();
+  return lower === `${base}s` || lower === `${base}es` ? lemma : word;
 }
 
 // The shortest word ingestText's fact-degree scan treats as a content-noun
@@ -269,6 +308,57 @@ function trimNameRun(words, lexicon) {
   return words.slice(start);
 }
 
+// A headline is set in Title Case AND carries no sentence-final stop. Both
+// halves matter, and they buy different things — see headlineReadPos.
+const SENTENCE_FINAL_STOPS = new Set([".", "!", "?"]);
+const readsAsHeadline = (values) => readsAsTitleCase(values)
+  && !SENTENCE_FINAL_STOPS.has(String(values[values.length - 1] ?? ""));
+
+/**
+ * How a sentence's parts of speech read once Title Case is allowed for. A
+ * tagger given a headline has no lowercase to work from and comes back wrong in
+ * both directions: the line's verb reads PROPN ("Thailand/PROPN Halts/PROPN
+ * New/PROPN Gun/PROPN"), while its plainest noun reads VERB ("Permits/VERB",
+ * "Shooting/VERB"). Two corrections, on two different conditions.
+ *
+ * In ANY Title Case sentence, a word the event band or the lexicon spells as a
+ * verb IS the verb (and a `lemmas` array passed in is corrected to match): no
+ * name run holds one of those, so promoting it can only split a run the
+ * capitals glued together.
+ *
+ * Demoting an unlisted VERB to a noun takes the stricter test — a real
+ * sentence can pass the capitalization test on its own ("The delegation met
+ * Prime Minister Keir Starmer."), and demoting its verb would cost every tag
+ * it already had right. The missing sentence-final stop is what tells a
+ * headline from that.
+ *
+ * Never the first token either way: a headline opens on its subject, and "Bar
+ * Refaeli" opens on a name the band also spells. Never a band word straight
+ * after a determiner ("The Free Press"). Any other sentence gets its tags back
+ * untouched.
+ */
+function headlineReadPos(values, pos, lemmas, lexicon) {
+  if (!readsAsTitleCase(values)) return pos;
+  const demoteUnlistedVerbs = readsAsHeadline(values);
+  const read = [...pos];
+  for (let i = 1; i < values.length; i += 1) {
+    const banded = read[i - 1] === "DET" ? null : newswireVerbLemma(values[i]);
+    // The tagger's own lemma still counts where it reaches a band verb the
+    // surface fold cannot ("Freed" → free), so a headline's past participle
+    // keeps the tag it had.
+    const taggedBandVerb = read[i] === "VERB" && NEWSWIRE_RELATION_VERBS.has(String(lemmas?.[i] ?? "").toLowerCase());
+    if (banded) {
+      read[i] = "VERB";
+      if (lemmas) lemmas[i] = banded;
+    } else if (taggedBandVerb || lookupVerb(lexicon, stripSentenceFinalStop(String(values[i])).toLowerCase())) {
+      read[i] = "VERB";
+    } else if (read[i] === "VERB" && demoteUnlistedVerbs) {
+      read[i] = "NOUN";
+    }
+  }
+  return read;
+}
+
 /** Every NOUN/PROPN token `sentences` names, surface-form occurrence-counted —
  *  a POS tagger reads unknown words by context, so an unlisted noun ("wombat")
  *  counts exactly like a lexicon-known one. A contiguous run of two or more
@@ -280,37 +370,43 @@ function candidateTermOccurrencesPos(sentences, nlp, lexicon) {
   for (const sentence of sentences) {
     let values;
     let pos;
+    let lemmas;
     try {
       const doc = nlp.readDoc(String(sentence || ""));
       values = doc.tokens().out(nlp.its.value);
       pos = doc.tokens().out(nlp.its.pos);
+      lemmas = doc.tokens().out(nlp.its.lemma);
     } catch { continue; }
+    const headline = readsAsHeadline(values);
+    const taggedPos = pos;
+    pos = headlineReadPos(values, pos, lemmas, lexicon);
+    // A headline read demotes an unlisted verb to a noun so a run can span it
+    // ("Mass Shooting"). That much is right for a run, and wrong for a term of
+    // its own: "Arrives" belongs inside no name and names nothing on its own.
+    const namesOnlyInsideARun = (k) => taggedPos[k] === "VERB" && pos[k] !== "VERB";
+    // A headline's capitals say nothing about which words spell a name, so its
+    // runs read over every noun; ordinary prose keeps the capital as the tell
+    // and runs over proper nouns alone.
+    const runsWith = (k) => (headline ? pos[k] === "NOUN" || pos[k] === "PROPN" : pos[k] === "PROPN");
+    // A role noun standing in front of a name is a title on that name, not a
+    // term of its own — "President Trump" is one lookup, while "president" and
+    // "trump" are two half ones. Only a common noun the lexicon knows opens a
+    // run this way, and a headline's own capitals carry no such distinction.
+    const opensRoleTitledName = (k) => !headline && pos[k] === "NOUN" && pos[k + 1] === "PROPN"
+      && Boolean(lookupNoun(lexicon, stripSentenceFinalStop(String(values[k])).toLowerCase()));
     for (let i = 0; i < values.length; i += 1) {
       if (pos[i] !== "NOUN" && pos[i] !== "PROPN") continue;
       let hi = i;
-      if (pos[i] === "PROPN") while (hi + 1 < values.length && pos[hi + 1] === "PROPN") hi += 1;
+      if (runsWith(i) || opensRoleTitledName(i)) {
+        while (hi + 1 < values.length && runsWith(hi + 1)) hi += 1;
+      }
       if (hi > i) {
-        // A Title Case headline lifts its verbs to PROPN too ("Thailand Halts
-        // New Gun Licenses…"), gluing a clause into one run. A token the verb
-        // tables know splits the run: what stands before it is the name.
-        const verbShaped = (w) => {
-          const word = stripSentenceFinalStop(String(w)).toLowerCase();
-          const lemma = word.endsWith("s") ? word.slice(0, -1) : word;
-          return NEWSWIRE_RELATION_VERBS.has(word) || NEWSWIRE_RELATION_VERBS.has(lemma)
-            || Boolean(lookupVerb(lexicon, word));
-        };
-        let cut = -1;
-        for (let k = i + 1; k <= hi; k += 1) if (verbShaped(values[k])) { cut = k; break; }
-        const runEnd = cut === -1 ? hi : cut - 1;
-        if (runEnd > i) {
-          const name = trimNameRun(values.slice(i, runEnd + 1), lexicon).join(" ");
-          counts.set(name, (counts.get(name) || 0) + 1);
-        } else {
-          counts.set(values[i], (counts.get(values[i]) || 0) + 1);
-        }
-        i = cut === -1 ? hi : cut;
+        const name = trimNameRun(values.slice(i, hi + 1), lexicon).join(" ");
+        counts.set(name, (counts.get(name) || 0) + 1);
+        i = hi;
         continue;
       }
+      if (namesOnlyInsideARun(i)) continue;
       counts.set(values[i], (counts.get(values[i]) || 0) + 1);
     }
   }
@@ -442,6 +538,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     pos = doc.tokens().out(nlp.its.pos);
     lemmas = doc.tokens().out(nlp.its.lemma);
   } catch { return { triples: [], declined: [], minted: [] }; }
+  pos = headlineReadPos(values, pos, lemmas, lexicon);
   // A found noun is read as its whole contiguous NOUN/PROPN run, head-lemma
   // folded — "a string instrument" is the class "string instrument", never
   // its modifier "string"; a single-word run keeps the plain lemma fold.
@@ -452,14 +549,44 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     let hi = i;
     while (lo - 1 >= 0 && isNounish(lo - 1)) lo -= 1;
     while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
-    if (lo === hi) return foldEntity(values[i], lexicon);
-    const last = stripSentenceFinalStop(values[hi]);
+    if (lo === hi) return foldEntity(values[i], lexicon, lemmas?.[i]);
+    // A run of proper nouns spells a name, and a name sheds the honorific or
+    // role word stacked in front of it — "Ex-Marine Robert Gilman" is Robert
+    // Gilman. A run holding any common noun is a compound, not a name, and
+    // keeps every word ("disk operating system").
+    let words = values.slice(lo, hi + 1);
+    if (words.every((_, k) => pos[lo + k] === "PROPN")) words = trimNameRun(words, lexicon);
+    const last = stripSentenceFinalStop(words[words.length - 1]);
     const head = lookupNoun(lexicon, last.toLowerCase());
-    return normFactTerm([...values.slice(lo, hi), head ? head.lemma : last].join(" "));
+    if (words.length === 1) return normFactTerm(head ? head.lemma : singularHead(last, lemmas?.[hi]));
+    return normFactTerm([...words.slice(0, -1), head ? head.lemma : singularHead(last, lemmas?.[hi])].join(" "));
+  };
+  // Where a leftward scan resumes when it meets a comma, or -1 when the comma
+  // stands between it and another clause. A news sentence names its subject
+  // first and then interrupts itself — "Yabloko, the Russian antiwar party, is
+  // banned …", "Robert Gilman, Freed by Russia, Arrives …" — so a scan that
+  // stops dead on a comma never reaches the subject at all. It may cross when
+  // nothing between the comma and either an earlier comma or the sentence start
+  // predicates: a relative clause ("the quake, which killed 100 people,
+  // damaged …") holds a verb, and that keeps the scan out.
+  const commaCrossingFrom = (close) => {
+    for (let k = close - 1; k >= 0; k -= 1) {
+      if (values[k] === ",") return k;
+      if (pos[k] === "VERB" || pos[k] === "AUX" || pos[k] === "PUNCT") return -1;
+    }
+    return close;
   };
   const nearestEntityIndex = (idx, step, blocked = null) => {
+    let mayCrossComma = step < 0;
     for (let i = idx + step; i >= 0 && i < values.length; i += step) {
-      if (pos[i] === "PUNCT") break;
+      if (pos[i] === "PUNCT") {
+        if (!mayCrossComma || values[i] !== ",") break;
+        const resume = commaCrossingFrom(i);
+        if (resume < 0) break;
+        mayCrossComma = false;
+        i = resume;
+        continue;
+      }
       if (blocked && blocked.has(pos[i])) break;
       if (isNounish(i)) return i;
     }
@@ -677,18 +804,69 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     }
     return at === null ? null : entityRunAt(at);
   };
+  // The first token of the complement a verb takes, adverbs crossed. A passive
+  // reads its own frame off this one word: "by" names the actor, a locative or
+  // directional preposition names where the subject ended up.
+  const complementHead = (i) => {
+    for (let k = i + 1; k < values.length; k += 1) {
+      if (pos[k] === "ADV") continue;
+      return k;
+    }
+    return -1;
+  };
+  // Newswire writes the count before the thing counted — "killed more than 100
+  // people", "injured at least 30 workers" — and the preposition inside the
+  // count phrase stops an object scan dead. Each lead below is skipped whole,
+  // and only where the number itself closes the phrase, so "attacked at dawn"
+  // (no number, no count) is untouched.
+  const skipCountPhrase = (idx) => {
+    for (let n = COUNT_PHRASE_MAX_TOKENS; n >= 2; n -= 1) {
+      const span = values.slice(idx + 1, idx + 1 + n);
+      if (span.length === n && COUNT_PHRASE_RE.test(span.join(" "))) return idx + n;
+    }
+    return idx;
+  };
   const readNewswireFrame = () => {
     for (let i = 1; i < values.length - 1; i += 1) {
       if (pos[i] !== "VERB") continue;
       if (lookupVerb(lexicon, String(values[i]).toLowerCase())) continue;
       const lemma = String(lemmas?.[i] ?? values[i]).toLowerCase();
       if (!NEWSWIRE_RELATION_VERBS.has(lemma)) continue;
-      if (beAuxiliaryBefore(i) || relativePronounBefore(i) >= 0) continue;
-      const subject = countChainEntity(verbComplexStart(i), -1);
-      const object = countChainEntity(i, +1);
-      if (!subject || !object) continue;
+      if (relativePronounBefore(i) >= 0) continue;
       const declared = lookupVerb(lexicon, lemma);
-      push(subject, declared ? predicateOf(declared) : `mgx:${lemma}`, object);
+      const predicate = declared ? predicateOf(declared) : `mgx:${lemma}`;
+      const surface = stripSentenceFinalStop(String(values[i])).toLowerCase();
+      const head = complementHead(i);
+      const headWord = head === -1 ? "" : String(values[head]).toLowerCase();
+      const beAuxiliary = beAuxiliaryBefore(i);
+      // A progressive is not an event that happened, and its -ing form is the
+      // one thing that tells it apart from the past participle a passive takes.
+      if (beAuxiliary && surface.endsWith("ing")) continue;
+      // "<patient> (was) <participle> by <actor>" — the sentence names both
+      // roles, so it mints the ACTIVE edge with the actor on the subject side.
+      // A reduced passive carries no auxiliary at all ("Boats Hit by Mystery
+      // Attackers"), so the "by" is what identifies the frame.
+      if (headWord === "by") {
+        const actor = countChainEntity(head, +1);
+        const patient = countChainEntity(verbComplexStart(i), -1);
+        if (actor && patient) push(actor, predicate, patient);
+        continue;
+      }
+      if (beAuxiliary) {
+        // "<patient> is <participle> <prep> <complement>" — no actor is named,
+        // so nothing can take the subject side of an active edge. The claim the
+        // sentence DOES make is about the patient's own condition, and that is
+        // what the participle predicate states.
+        if (!PASSIVE_STATE_PREPOSITIONS.has(headWord)) continue;
+        const patient = countChainEntity(verbComplexStart(i), -1);
+        const complement = countChainEntity(head, +1);
+        if (patient && complement) push(patient, `mgx:${surface}-${headWord}`, complement);
+        continue;
+      }
+      const subject = countChainEntity(verbComplexStart(i), -1);
+      const object = countChainEntity(skipCountPhrase(i), +1);
+      if (!subject || !object) continue;
+      push(subject, predicate, object);
     }
   };
 
@@ -905,6 +1083,47 @@ export function clauseCandidates(sentence, { nlp } = {}) {
   return out;
 }
 
+// The verbs a report attributes a claim with. Closed and deliberately short:
+// each of these carries the claim through unchanged, so the clause beside one
+// is what the article states. Hedging and reversing verbs stay out — "denied",
+// "alleged", "claimed" and "suggested" each change what the sentence says
+// about the clause, and a frame that unwrapped them would store the opposite of
+// the report.
+const REPORTED_SPEECH_VERB_SRC = "said|says|told|reported|reports|announced|announces|stated|states|confirmed|confirms|added|wrote|writes";
+// "<claim>, President Trump said." — the attribution rides the tail after a
+// comma and closes the sentence. A closing quote mark may sit between them.
+const TRAILING_ATTRIBUTION_RE = new RegExp(
+  `,\\s*["'“”‘’]?\\s*[\\w.'’-]+(?:\\s+[\\w.'’-]+){0,3}\\s+(?:${REPORTED_SPEECH_VERB_SRC})\\s*[.!?]?\\s*$`,
+  "i",
+);
+// "President Trump said (that) <claim>", "Mr. Gilman's family had said <claim>"
+// — the attribution leads and the claim is everything past it.
+const LEADING_ATTRIBUTION_RE = new RegExp(
+  `^\\s*[\\w.'’-]+(?:\\s+[\\w.'’-]+){0,4}\\s+(?:has\\s+|had\\s+|have\\s+)?(?:${REPORTED_SPEECH_VERB_SRC})\\s+(?:that\\s+)?(\\S.*)$`,
+  "i",
+);
+
+/**
+ * The claim a sentence attributes to a speaker, or the sentence unchanged. A
+ * report states most of what it knows this way, and the recognizer reading the
+ * WHOLE sentence reads the attribution as the claim: "Officials said the quake
+ * killed more than 100 people." came back as `officials mgx:say quake killed
+ * more than 100 people`, a whole clause stored as a term. Stripping the
+ * attribution leaves the claim the article is making, which is the thing worth
+ * grounding.
+ *
+ * The speaker is dropped rather than stored beside the claim: a fact row holds
+ * one triple, and every row this module writes already rides its article's own
+ * provenance.
+ */
+export function reportedClauseOf(sentence) {
+  const text = String(sentence ?? "").trim();
+  const trailingStripped = text.replace(TRAILING_ATTRIBUTION_RE, ".");
+  const leading = LEADING_ATTRIBUTION_RE.exec(trailingStripped);
+  const claim = leading ? leading[1].trim() : trailingStripped;
+  return claim.split(/\s+/).length >= 3 ? claim : text;
+}
+
 // A stored term names a thing. These words open a predicate remainder or a new
 // clause, so a term that STARTS with one is the tail of a sentence a recognizer
 // frame over-read, never an entity — "has a population of 1,683,115" and "and
@@ -961,6 +1180,50 @@ const COMPASS_LEAD_WORDS = new Set([
   "northeast", "northwest", "southeast", "southwest",
   "northern", "southern", "eastern", "western",
 ]);
+// A name is one noun phrase. These words open a new phrase or a new clause, so
+// a term carrying one BETWEEN its first and last word is a headline a frame
+// tore into subject + predicate + remainder: "colombia as rescuers free quake
+// victim", "keir starmer faces a vote", "new gun licenses after mass shooting",
+// "boats hit by mystery attackers" — all four reach the graph as a card's own
+// hub or object otherwise.
+//
+// "of" is deliberately absent: it is the one preposition real names are built
+// with ("house of representatives", "united states of america", "isle of man").
+// The rule reads STRICTLY interior positions for the same reason the lead and
+// trailing rules read the edges separately — "may" and "will" end real surnames
+// ("theresa may", "brian may") and open nothing there.
+const INTERIOR_CLAUSE_WORDS = new Set([
+  "a", "an", "the",
+  "and", "or", "but", "because", "since", "although", "though", "whereas", "while", "so",
+  "if", "when", "then", "however", "as", "that", "which", "who", "whom", "whose",
+  "is", "are", "was", "were", "be", "been", "being", "am", "has", "have", "had",
+  "do", "does", "did", "can", "could", "will", "would", "should", "may", "might", "must",
+  "in", "on", "at", "for", "to", "with", "from", "by", "into", "onto",
+  "over", "under", "after", "before", "between", "during", "about", "near", "through",
+  "against", "among", "within", "without", "per",
+]);
+
+// Past participles that open a real name. Read on the lowercased stored key,
+// wink tags each of these VERB, so the POS rule below turns down "united
+// states" — the name world news reports most often — and every sibling built
+// the same way.
+const PARTICIPIAL_NAME_LEAD_WORDS = new Set(["united", "allied", "combined", "armed", "organized", "associated"]);
+
+// A term the source itself wrapped in quotation marks is a title it quoted, and
+// a title is free to read as a clause — "Hackernews discusses \"Tim King,
+// AmigaDOS developer, has died\"" states a true fact about a whole headline.
+// The quotes are the tell, so they exempt the interior rule and nothing else.
+const QUOTED_TERM_RE = /^["“'‘].*["”'’]$/;
+
+/** Does `term` carry a clause- or phrase-opening word strictly between its
+ *  first and last word? */
+export function carriesInteriorClauseWord(words) {
+  if (words.length >= 2 && QUOTED_TERM_RE.test(`${words[0]} ${words[words.length - 1]}`)) return false;
+  for (let i = 1; i < words.length - 1; i += 1) {
+    if (INTERIOR_CLAUSE_WORDS.has(String(words[i]).toLowerCase())) return true;
+  }
+  return false;
+}
 
 /** Does `term` read as a thing's name rather than a clause fragment? Bounds
  *  the word count and rejects a leading conjunction, auxiliary, preposition,
@@ -979,7 +1242,9 @@ export function readsAsEntityTerm(term, nlp) {
   if (PARTICLE_LEAD_WORDS.has(first)) return false;
   if (PRONOUN_LEAD_WORDS.has(first.replace(CLITIC_SUFFIX_RE, ""))) return false;
   if (TRAILING_AUXILIARY_WORDS.has(words[words.length - 1].toLowerCase())) return false;
+  if (carriesInteriorClauseWord(words)) return false;
   if (COMPASS_LEAD_WORDS.has(first) && words[1].toLowerCase() !== "of") return true;
+  if (PARTICIPIAL_NAME_LEAD_WORDS.has(first)) return true;
   const engine = nlp === undefined ? winkInstance() : nlp;
   if (!engine) return true;
   try {
@@ -1087,6 +1352,10 @@ function canonicalLines(facts, storeRows) {
 /**
  * ingestText — the single ingest seam. Grounds `text` into facts and returns a
  * structured result; the CLI, the browser and the tool layer all drive this.
+ *
+ * A sentence that attributes its claim to a speaker is handed to the recognizer
+ * as the claim alone (`reportedClauseOf`); the ungrounded-term scan still reads
+ * the sentence as written, so the speaker keeps reaching the enrichment queue.
  *
  *   text     the raw string to ground.
  *   options:
@@ -1243,8 +1512,12 @@ export async function ingestText(text, {
         sentenceCount += 1;
         lastDecline = "";
         currentSentence = sentence;
-        const cleaned = stripCitationResidue(sentence);
-        cleanedSentences.push(cleaned);
+        const asWritten = stripCitationResidue(sentence);
+        // The ungrounded-term scan reads the sentence AS WRITTEN, so a speaker
+        // the article named still reaches the enrichment queue; only the
+        // recognizer reads the claim on its own.
+        cleanedSentences.push(asWritten);
+        const cleaned = reportedClauseOf(asWritten);
         // The stored term keys this sentence names with an identifier-shaped
         // token, read off the surface before normFactTerm folds the shape away.
         // Null when this run records no findings.
