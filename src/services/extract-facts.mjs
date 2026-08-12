@@ -174,12 +174,55 @@ const MAX_TRIPLES_PER_SENTENCE = 4;
 // abstains rather than guess, so a long noun pile never mints a stray class.
 const ATTRIBUTIVE_CHAIN_MAX_HOPS = 8;
 
+// The verbs a news report states an event with. The relation arm above reads a
+// verb only when the lexicon declares one, and the lexicon's verb list is a
+// software vocabulary — so a whole newswire paragraph ("the moon will
+// completely block the sun") carries no relation under it at all. This closed
+// band sits beside it: transitive event verbs, each of which takes a direct
+// object naming the thing the event happened to, so the frame below can demand
+// an adjacent noun on each side and get the actor and the affected thing.
+//
+// Verbs of speech and attribution are deliberately absent — "say", "tell",
+// "add", "report", "accuse", "claim" each open a reported clause, and the noun
+// after one is the subject of what was said, never the object of the saying.
+// So are verbs whose everyday reading swamps their news one ("hold", "face",
+// "follow", "lead", "reach", "back", "pass", "cut"): a band that admits those
+// buys a handful of events and pays for it in nonsense.
+const NEWSWIRE_RELATION_VERBS = new Set([
+  "hit", "strike", "kill", "injure", "wound", "damage", "destroy", "devastate",
+  "ban", "halt", "block", "bar", "suspend", "impose",
+  "arrest", "detain", "jail", "charge", "convict", "sentence", "deport", "release", "free",
+  "elect", "appoint", "oust", "overthrow",
+  "sign", "adopt", "approve", "reject", "veto",
+  "launch", "unveil", "seize", "capture", "invade", "attack", "bomb", "target",
+  "discover", "uncover", "rescue", "evacuate",
+  "spark", "trigger", "cause", "force", "deploy", "restore", "expand",
+]);
+// A verb whose own auxiliary is a be-form heads a passive or a progressive
+// ("was arrested by ICE", "are disappearing"), and there the noun on the
+// subject side is what the event happened TO, not who did it — an active read
+// of one states the reverse of the sentence. The scan crosses adverbs only, so
+// a modal chain that is still active ("will completely block") reads on.
+const BE_AUXILIARIES = new Set(["is", "are", "was", "were", "be", "been", "being", "am"]);
+
+// wink's tokenizer keeps a sentence-final full stop glued to the word before
+// it when that word ends the text ("… block the sun." tokenizes as one PROPN
+// "sun."), so a term read off the last token would otherwise be stored with
+// the sentence's own punctuation in its key. Only a LONE trailing stop comes
+// off: an abbreviation carries interior stops too ("U.S.", "P.K.K.") and keeps
+// every one of them.
+const stripSentenceFinalStop = (word) => {
+  const text = String(word ?? "");
+  return text.endsWith(".") && !text.slice(0, -1).includes(".") ? text.slice(0, -1) : text;
+};
+
 /** Fold an entity surface to its stored key: a lexicon noun's lemma, else the
  *  word's own normFactTerm (the optimistic tier mints unlisted content nouns
  *  the way the strict teach lane already mints "redis"). */
 function foldEntity(word, lexicon) {
-  const noun = lookupNoun(lexicon, String(word).toLowerCase());
-  return normFactTerm(noun ? noun.lemma : word);
+  const surface = stripSentenceFinalStop(word);
+  const noun = lookupNoun(lexicon, surface.toLowerCase());
+  return normFactTerm(noun ? noun.lemma : surface);
 }
 
 // The shortest word ingestText's fact-degree scan treats as a content-noun
@@ -257,10 +300,12 @@ function ungroundedTermOccurrences(sentences, rows, { lexicon, nlp }) {
 function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false } = {}) {
   let values;
   let pos;
+  let lemmas;
   try {
     const doc = nlp.readDoc(String(sentence || ""));
     values = doc.tokens().out(nlp.its.value);
     pos = doc.tokens().out(nlp.its.pos);
+    lemmas = doc.tokens().out(nlp.its.lemma);
   } catch { return { triples: [], declined: [], minted: [] }; }
   // A found noun is read as its whole contiguous NOUN/PROPN run, head-lemma
   // folded — "a string instrument" is the class "string instrument", never
@@ -273,8 +318,9 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     while (lo - 1 >= 0 && isNounish(lo - 1)) lo -= 1;
     while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
     if (lo === hi) return foldEntity(values[i], lexicon);
-    const head = lookupNoun(lexicon, String(values[hi]).toLowerCase());
-    return normFactTerm([...values.slice(lo, hi), head ? head.lemma : values[hi]].join(" "));
+    const last = stripSentenceFinalStop(values[hi]);
+    const head = lookupNoun(lexicon, last.toLowerCase());
+    return normFactTerm([...values.slice(lo, hi), head ? head.lemma : last].join(" "));
   };
   const nearestEntityIndex = (idx, step, blocked = null) => {
     for (let i = idx + step; i >= 0 && i < values.length; i += step) {
@@ -418,6 +464,17 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     return { label: entityRunAt(climbed), hi };
   };
 
+  // Does the verb complex headed at `i` open with a be-form auxiliary? Adverbs
+  // in between are crossed; anything else ends the complex.
+  const beAuxiliaryBefore = (i) => {
+    for (let k = i - 1; k >= 0; k -= 1) {
+      if (pos[k] === "ADV" || pos[k] === "PART") continue;
+      if (pos[k] !== "AUX") return false;
+      if (BE_AUXILIARIES.has(String(values[k]).toLowerCase())) return true;
+    }
+    return false;
+  };
+
   const triples = [];
   const declined = [];
   const minted = [];
@@ -432,6 +489,61 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     return triple;
   };
   const decline = (finding, candidate) => { declined.push({ finding, candidate }); };
+
+  // The newswire event frame — a closed band of transitive event verbs
+  // (NEWSWIRE_RELATION_VERBS) read in a much tighter frame than the lexicon
+  // arm's. The lexicon's own verbs keep their loose scans; a verb only this
+  // band knows has to earn its triple:
+  //
+  //   - wink must have tagged the token VERB, and its LEMMA must be in the
+  //     band, so a past tense ("released", "adopted") reads where the
+  //     lexicon's -s-only fold cannot;
+  //   - the verb complex must not open with a be-form, so a passive or a
+  //     progressive never mints its own reverse;
+  //   - it must not sit in a relative clause, which has no subject of its own
+  //     here;
+  //   - subject and object are each the NEAREST noun run on their side with
+  //     the copula frame's blockers applied, so neither scan crosses a verb, a
+  //     preposition or a conjunction into another clause. "resigned from
+  //     Cambridge" yields no object at all rather than "resign Cambridge".
+  //     The subject scan starts left of the verb's OWN modal chain ("will
+  //     completely block"), which is one verb complex rather than a crossing.
+  //     A quantity of-chain on either side reads through to what the event
+  //     really touched ("hundreds of ancient amphorae" → amphorae).
+  //
+  // A lemma the lexicon itself declares keeps the lexicon's predicate, so
+  // "releases" (the lexicon arm) and "released" (this one) land on one edge.
+  const verbComplexStart = (i) => {
+    let k = i - 1;
+    while (k >= 0 && (pos[k] === "ADV" || pos[k] === "AUX" || pos[k] === "PART")) k -= 1;
+    return k + 1;
+  };
+  const quantityChainEntity = (idx, step) => {
+    let at = nearestEntityIndex(idx, step, COPULA_FRAME_BLOCKERS);
+    for (let hop = 0; at !== null && hop < 2; hop += 1) {
+      let hi = at;
+      while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
+      if (values[hi + 1]?.toLowerCase() !== "of") break;
+      const inner = nearestEntityIndex(hi + 1, +1);
+      if (inner === null) break;
+      at = inner;
+    }
+    return at === null ? null : entityRunAt(at);
+  };
+  const readNewswireFrame = () => {
+    for (let i = 1; i < values.length - 1; i += 1) {
+      if (pos[i] !== "VERB") continue;
+      if (lookupVerb(lexicon, String(values[i]).toLowerCase())) continue;
+      const lemma = String(lemmas?.[i] ?? values[i]).toLowerCase();
+      if (!NEWSWIRE_RELATION_VERBS.has(lemma)) continue;
+      if (beAuxiliaryBefore(i) || relativePronounBefore(i) >= 0) continue;
+      const subject = quantityChainEntity(verbComplexStart(i), -1);
+      const object = quantityChainEntity(i, +1);
+      if (!subject || !object) continue;
+      const declared = lookupVerb(lexicon, lemma);
+      push(subject, declared ? predicateOf(declared) : `mgx:${lemma}`, object);
+    }
+  };
 
   // Pass 1 — the first clean copula frame yields the isa (all guards unchanged);
   // its subject and object-run end anchor the relative-clause continuation.
@@ -494,6 +606,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
       if (subject === null) continue;
       push(subject, predicateOf(verb), nearestEntity(i, +1));
     }
+    readNewswireFrame();
     return { triples, declined, minted };
   }
 
@@ -516,6 +629,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     if (subject === null) continue;
     push(subject, predicateOf(verb), nearestEntity(i, +1));
   }
+  readNewswireFrame();
   return { triples, declined, minted };
 }
 
