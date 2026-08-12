@@ -86,7 +86,9 @@ One iteration is:
    project's own bias. The proposal names the metric it should move and any metric it
    might hurt.
 3. The lever lands (worktree sub-agent, blast-radius tests), the bench re-runs, and the
-   report pair goes in the commit message's account.
+   report pair goes in the commit message's account. The operator sees each
+   iteration's results in chat as they land: sample generated cards quoted verbatim
+   from the articles log, plus the full score table against the prior iteration.
 4. A landed improvement ratchets: the smoke test's floor for that metric rises to just
    under the new number, so the gain is locked in.
 
