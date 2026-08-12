@@ -63,6 +63,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     (`textShownRowsForCard` in `scripts/news-bench/metrics.mjs` doesn't see
     them); chat.mjs's read-time BFS still walks asserted edges across senses
     (same gate would fix it, 322 KB file, deferred);
+  - engine speed remainders from the perf pass: seed re-assembly on any removal
+    (~2 s each; a mid-implementation exploration is preserved on branch
+    `worktree-agent-add917bc647f82f46`, unmerged), `migrateStoredMemory`
+    re-running per memory-handle load, `buildMemoryIndex` rebuilt per write;
   - then bulk knowledge only on §5.5 evidence.
   Harness note: `run-live-cycle.mjs` starts fresh state each run, so the
   negative cache resets and the same misses re-burn lookup slots every run —
