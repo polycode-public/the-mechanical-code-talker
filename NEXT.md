@@ -29,16 +29,14 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **Wikidata dump download — operator-run, outside any session** — run
-  `bash scripts/resume-wikidata-dump.sh` from the repo root (re-run after any
-  interruption; it resumes, prints a progress line per minute, and verifies the final
-  byte count). File: `~/tmct-dumps/wikidata-latest-all.json.gz` (155.3 GB; ~85% on
-  2026-08-12). When it reports done, the operator's sequence is (extraction tooling
-  merged, `29d7549c`, streaming and per-phase resumable):
-  `node scripts/corpus-bands/extract-wikidata-slice.mjs`, then
+- [ ] **Wikidata slice — dump downloaded, extraction running** — the download
+  finished 2026-08-12 (155,457,882,747 bytes, verified). The slice extraction
+  (`extract-wikidata-slice.mjs`, streaming, per-phase resumable) is running in the
+  coordinator's background; on its completion:
   `node scripts/corpus-bands/build-wikidata-slice.mjs --source ~/tmct-dumps/wikidata-slice.jsonl`,
   then the operator-gated `tmct corpus load wikidata-slice` per
-  `PLAN_MEMORY_ROLLOUT.md` section 4.
+  `PLAN_MEMORY_ROLLOUT.md` section 4, then the `bandStatus` + `queryBandTerm`
+  read-back closes this item.
 
 - [ ] **News feed quality — the local bench and its loop** — plan of record is
   `PLAN_NEWS_FEED_QUALITY.md` (operator-commissioned 2026-08-12): frozen live-feed
