@@ -17,11 +17,11 @@
 //              (the same invalidation convention chat.mjs's own caches use).
 //   lexicon    a loaded lexicon (loadLexicon() when absent).
 //   config     resolveNewsConfig()'s shape.
-//   state      the news-store shape (news-store.mjs): { items, ledger
-//              (ledgerPayload form), health, requestLog, metrics, lastPollAt,
-//              lastEnrichAt } — always JSON-plain; a live term ledger is
-//              built from state.ledger via ledgerFromPayload only for the
-//              span of one call, then folded back with ledgerPayload.
+//   state      the news-store shape (news-store.mjs): { items, seenItemKeys,
+//              ledger (ledgerPayload form), health, requestLog, metrics,
+//              lastPollAt, lastEnrichAt } — always JSON-plain; a live term
+//              ledger is built from state.ledger via ledgerFromPayload only
+//              for the span of one call, then folded back with ledgerPayload.
 //   providers  { newsFetchers: Map<sourceId, { id, fetchItems }>,
 //              getResearchProvider({ source }), preflightNewsUrl?(url) } —
 //              every fetcher and provider this session may call, already
@@ -44,7 +44,7 @@
 import { normFactTerm, normFactPredicate, factIdFor } from "../domain/hash.mjs";
 import {
   newsWindowRows, renderNewsParagraph, buildNewsItems, evictNewsFacts,
-  conceptTerms, isQuantityTerm,
+  conceptTerms, isQuantityTerm, newsItemKeys,
 } from "../domain/news-feed.mjs";
 import {
   createTermLedger, bumpTerms, rankedTerms, markTerm, groundedSweep, ledgerPayload, ledgerFromPayload,
@@ -473,37 +473,89 @@ function recordSuccess(health, nowVal, status) {
   health.autoDisabled = false;
 }
 
-/** Merges `incoming` snapshots into `existing` by id (an already-seen id is
- *  never re-added or re-ingested), then enforces `cap` by dropping the
- *  oldest-by-fetchedAt entries. Returns the merged list and the genuinely
- *  new snapshots the caller still needs to ingest. */
-function mergeSnapshotsById(existing, incoming, cap) {
-  const byIdMap = new Map((existing || []).map((s) => [s.id, s]));
-  const added = [];
-  for (const snap of incoming || []) {
-    if (byIdMap.has(snap.id)) continue;
-    byIdMap.set(snap.id, snap);
-    added.push(snap);
-  }
-  let items = [...byIdMap.values()];
-  if (items.length > cap) {
-    items = items
-      .slice()
-      .sort((a, b) => (toMs(a.fetchedAt) - toMs(b.fetchedAt)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-      .slice(items.length - cap);
-  }
-  return { items, added };
-}
-
 const fetchedAtMs = (snapshot) => {
   const ms = toMs(snapshot?.fetchedAt);
   return Number.isFinite(ms) ? ms : 0;
 };
 
-/** True once a snapshot has been through a grounding round. `mergeSnapshotsById`
- *  files a snapshot the moment it arrives, so "known" and "grounded" are two
- *  different states and only this one means the facts landed. */
+/** True once a snapshot has been through a grounding round. A snapshot is
+ *  filed the moment it arrives, so "known" and "grounded" are two different
+ *  states and only this one means the facts landed. */
 const isGroundedSnapshot = (snapshot) => (snapshot?.processedRounds || 0) > 0;
+
+const byIdAscending = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+const byFetchedAtThenId = (a, b) => (fetchedAtMs(a) - fetchedAtMs(b)) || byIdAscending(a, b);
+// The item cap's drop order: a snapshot already read is the first to go, since
+// its facts are in the graph and its keys are remembered, while one still
+// waiting to be read would lose its facts for good.
+const alreadyReadFirst = (a, b) => (isGroundedSnapshot(b) - isGroundedSnapshot(a)) || byFetchedAtThenId(a, b);
+
+// How many item keys the de-dupe memory carries. Each grounded item files two
+// (its source id and its content key), so this remembers roughly a thousand
+// articles — many times the item window itself, which is the point: the window
+// forgets an article as soon as newer ones crowd it out, and without this the
+// next poll would read that same article as brand new.
+const SEEN_ITEM_KEY_CAP = 2000;
+
+const seenEntries = (seen) => (Array.isArray(seen) ? seen : []);
+
+/** Every key `snapshots` and `seen` between them name, newest first and capped
+ *  — an entry's `at` is the snapshot's own fetchedAt, never a fresh clock
+ *  reading. Ordered off the entries themselves, so the same items produce the
+ *  same memory whatever order they arrived in. */
+function rememberItemKeys(seen, snapshots) {
+  const atByKey = new Map();
+  const remember = (key, at) => {
+    if (!key) return;
+    const previous = atByKey.get(key);
+    atByKey.set(key, previous === undefined ? at : Math.max(previous, at));
+  };
+  for (const entry of seenEntries(seen)) {
+    const at = Number(entry?.at);
+    remember(String(entry?.key ?? ""), Number.isFinite(at) ? at : 0);
+  }
+  for (const snap of snapshots || []) {
+    for (const key of newsItemKeys(snap)) remember(key, fetchedAtMs(snap));
+  }
+  return [...atByKey.entries()]
+    .map(([key, at]) => ({ key, at }))
+    .sort((a, b) => (b.at - a.at) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .slice(0, SEEN_ITEM_KEY_CAP);
+}
+
+/** Merges `incoming` snapshots into `existing` by item identity: a snapshot
+ *  whose id or content key already sits in the window, or in the `seen` memory
+ *  of what has been grounded, is neither re-added nor re-ingested. Two
+ *  incoming snapshots naming one item collapse to the lower id, so the same
+ *  fetch read in two orders admits the same snapshot. The merged list sorts by
+ *  fetchedAt then id, so the window is a function of which items are in it
+ *  rather than of when each arrived, and `cap` then drops the snapshots that
+ *  have already been read before any that still have facts to contribute.
+ *  Returns the merged list and the genuinely new snapshots the caller still
+ *  needs to ingest. */
+function mergeSnapshots(existing, incoming, { cap, seen } = {}) {
+  const known = new Set();
+  for (const snap of existing || []) for (const key of newsItemKeys(snap)) known.add(key);
+  for (const entry of seenEntries(seen)) if (entry?.key) known.add(String(entry.key));
+
+  const claimed = new Set();
+  const admitted = new Set();
+  for (const snap of [...(incoming || [])].sort(byIdAscending)) {
+    const keys = newsItemKeys(snap);
+    if (!keys.length) continue;
+    if (keys.some((key) => known.has(key) || claimed.has(key))) continue;
+    for (const key of keys) claimed.add(key);
+    admitted.add(snap);
+  }
+
+  const added = (incoming || []).filter((snap) => admitted.has(snap));
+  const items = [...(existing || []), ...added].sort(byFetchedAtThenId);
+  if (items.length <= cap) return { items, added };
+  const dropped = new Set(
+    items.slice().sort(alreadyReadFirst).slice(0, items.length - cap).map((snap) => snap.id),
+  );
+  return { items: items.filter((snap) => !dropped.has(snap.id)), added };
+}
 
 /** One source's fetched-but-not-yet-grounded snapshots, oldest first. A cycle
  *  that ran out of time leaves its backlog here, so the next cycle works
@@ -513,7 +565,7 @@ const isGroundedSnapshot = (snapshot) => (snapshot?.processedRounds || 0) > 0;
 function pendingSnapshotsFor(items, sourceId) {
   return (items || [])
     .filter((snap) => snap?.sourceId === sourceId && !isGroundedSnapshot(snap))
-    .sort((a, b) => (fetchedAtMs(a) - fetchedAtMs(b)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    .sort(byFetchedAtThenId);
 }
 
 function emptyCycleAccumulator(at) {
@@ -575,7 +627,9 @@ export async function pollNewsSources(ctx) {
       recordSuccess(health, nowVal, "not-modified");
     } else {
       recordSuccess(health, nowVal, "ok");
-      const merged = mergeSnapshotsById(state.items, result.items, config.itemCap);
+      const merged = mergeSnapshots(state.items, result.items, {
+        cap: config.itemCap, seen: state.seenItemKeys,
+      });
       state.items = merged.items;
       added = merged.added;
       newItemsTotal += added.length;
@@ -613,6 +667,15 @@ export async function pollNewsSources(ctx) {
     });
     if (aborted) break;
   }
+
+  // Only a GROUNDED snapshot is remembered. One the item cap dropped before it
+  // was ever read still has its facts to contribute, so the next poll is meant
+  // to pick it up again; one whose facts already landed must never be read a
+  // second time, however long ago the window forgot it.
+  state.seenItemKeys = rememberItemKeys(
+    state.seenItemKeys,
+    (state.items || []).filter(isGroundedSnapshot),
+  );
 
   const memory = await store.loadMemory(memoryDir);
   const rows = store.readFactRows(memory);
@@ -998,7 +1061,7 @@ export function cycleMetrics(before, after, { source } = {}) {
 
 export function createNewsState() {
   return {
-    items: [], ledger: ledgerPayload(createTermLedger()), health: [], requestLog: [], metrics: [],
-    lastPollAt: "", lastEnrichAt: "",
+    items: [], seenItemKeys: [], ledger: ledgerPayload(createTermLedger()), health: [],
+    requestLog: [], metrics: [], lastPollAt: "", lastEnrichAt: "",
   };
 }

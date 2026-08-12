@@ -166,6 +166,29 @@ test("a source answering nothing-new still finishes the backlog an earlier cycle
   }
 });
 
+test("a second cycle over a feed that has not moved on grounds nothing again", async () => {
+  const seed = await buildSeed();
+  const backend = createRowMemoryBackend();
+  try {
+    await runPoll(pollWorker({ seedStore: seed.store, backend, budgetMs: 1_000_000 }), "first");
+    const factsAfterFirst = await factCount(backend, seed.store);
+
+    await runPoll(pollWorker({ seedStore: seed.store, backend, budgetMs: 1_000_000 }), "second");
+    const marker = JSON.parse(await backend.readMeta("cycle"));
+    assert.equal(marker.sources[SOURCE].newItems, 0, "every item on offer was already known");
+    assert.equal(marker.sources[SOURCE].grounded, 0, "nothing was read a second time");
+
+    const state = await newsStateOf(backend);
+    assert.equal(state.items.length, 5, "the window holds one snapshot per article, not two");
+    for (const snap of state.items) {
+      assert.equal(snap.processedRounds, 1, `${snap.id} was grounded once, never twice`);
+    }
+    assert.equal(await factCount(backend, seed.store), factsAfterFirst, "the second cycle added no fact");
+  } finally {
+    await seed.cleanup();
+  }
+});
+
 test("the cycle marker says what each source grounded and what it left behind", async () => {
   const seed = await buildSeed();
   const backend = createRowMemoryBackend();

@@ -17,6 +17,8 @@ import {
   splitCardRows,
   priorTerms,
   isNovelTerm,
+  newsItemKeys,
+  newsItemContentKey,
 } from "../../src/domain/news-feed.mjs";
 
 const NOW = "2026-08-08T12:00:00.000Z";
@@ -646,4 +648,54 @@ test("a stubbed Wikidata Q-id row anchors a fresh assertion about a known entity
   const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
   const hubs = newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR });
   assert.ok(hubs.some((h) => h.term === "acme corp"), "a stubbed enrichment Q-id row anchors the fresh assertion");
+});
+
+// ---------------------------------------------------------------------------
+// item identity
+// ---------------------------------------------------------------------------
+
+const snapshot = (extra = {}) => ({
+  id: "news-item:aaaaaaaaaaaaaaaa",
+  sourceId: "usgs-quakes",
+  title: "M 4.4 - 25 km ENE of Wana, Pakistan",
+  summary: "An earthquake struck near Wana, Pakistan.",
+  publishedAt: "2026-08-08T11:59:00.000Z",
+  fetchedAt: NOW,
+  ...extra,
+});
+
+test("an item's keys are its source id and its content key, and nothing about when it arrived", () => {
+  const first = snapshot();
+  const second = snapshot({ fetchedAt: "2026-08-09T04:00:00.000Z", processedRounds: 3, factIds: ["fact:1"] });
+  assert.deepEqual(newsItemKeys(first), newsItemKeys(second));
+  assert.equal(newsItemKeys(first).length, 2, "an item with words files both a source key and a content key");
+  assert.equal(newsItemKeys(first)[0], first.id);
+});
+
+test("an item with no words at all falls back to its source id alone", () => {
+  assert.equal(newsItemContentKey(snapshot({ title: "", summary: "" })), "");
+  assert.deepEqual(newsItemKeys(snapshot({ title: "", summary: "" })), ["news-item:aaaaaaaaaaaaaaaa"]);
+  assert.deepEqual(newsItemKeys({ title: "", summary: "" }), []);
+});
+
+test("the content key reads through punctuation, case and spacing a source respells between readings", () => {
+  const plain = snapshot();
+  const respelled = snapshot({
+    id: "news-item:bbbbbbbbbbbbbbbb",
+    title: "M 4.4 — 25 km ENE of  wana,  pakistan!",
+    summary: "An earthquake struck near wana, Pakistan",
+  });
+  assert.equal(newsItemContentKey(plain), newsItemContentKey(respelled));
+});
+
+test("two events sharing a headline keep separate content keys when their own stamps differ", () => {
+  const first = snapshot({ publishedAt: "2026-08-08T11:59:00.000Z" });
+  const second = snapshot({ id: "news-item:cccccccccccccccc", publishedAt: "2026-08-08T18:22:00.000Z" });
+  assert.notEqual(newsItemContentKey(first), newsItemContentKey(second));
+});
+
+test("the same words from two different sources are two different items", () => {
+  const usgs = snapshot();
+  const nyt = snapshot({ id: "news-item:dddddddddddddddd", sourceId: "nyt-world" });
+  assert.notEqual(newsItemContentKey(usgs), newsItemContentKey(nyt));
 });
