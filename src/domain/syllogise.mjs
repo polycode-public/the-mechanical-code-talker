@@ -20,11 +20,17 @@
 // `entailed:*` Source, prior 0.3, so it never outranks a stated fact and is
 // retractable by provenance).
 //
+// The two isa rules take a fifth: the SENSE gate (sense-gate.mjs), which
+// refuses a conclusion that only holds because a corpus band flattened two
+// word senses onto one label — russia ⊑ … ⊑ region ⊑ body part. It screens
+// derivations only; a stated fact is never blocked.
+//
 // Two further capabilities below are LIVE-CHASE ONLY, never part of the
 // batch pass: cardinality monotonicity (`proveCardinalityAtLeast`) and
 // max-cardinality-0 as encoded negation (`proveMaxCardinalityZeroDenial`).
 
 import { normFactTerm, factIdForTriple } from "./hash.mjs";
+import { buildSenseGate } from "./sense-gate.mjs";
 
 /** The two persisting entry points (syllogise, retractSubClassOf) take the
  *  memory store's read/write functions through a required `store` option —
@@ -122,8 +128,14 @@ function normalizeFocus(focus) {
  * (not already present), each `{ subject, object, via }`, bounded by `budget`
  * and `depth`, focus-filtered, tautology- and dedup-screened, in a deterministic
  * order. No I/O — this is the whole inference kernel, unit-testable in isolation.
+ *
+ * `gate` (sense-gate.mjs's `buildSenseGate`, or null) is the SENSE screen: a
+ * candidate a⊑c is dropped when the gate places a and c under top classes the
+ * ontology declares disjoint, so a band that flattens two word senses onto one
+ * label cannot license a walk across the join. Null (the default) leaves the
+ * kernel's behaviour exactly as it was.
  */
-export function deriveSubClassClosure(edges, { depth = 32, budget = 50, focus = null } = {}) {
+export function deriveSubClassClosure(edges, { depth = 32, budget = 50, focus = null, gate = null } = {}) {
   const present = new Set();      // "a\0b" for every edge already known
   const succ = new Map();         // a -> Set(b): the live successor relation
   for (const [a, b] of edges || []) {
@@ -150,6 +162,7 @@ export function deriveSubClassClosure(edges, { depth = 32, budget = 50, focus = 
           const key = `${a}${SEP}${c}`;
           if (present.has(key) || derivedKeys.has(key)) continue; // dedup / novelty screen
           if (!inFocus(a, b, c)) continue;             // focus-connection screen
+          if (gate?.declines(a, c)) continue;       // sense screen
           additions.push([a, b, c, key]);
         }
       }
@@ -183,7 +196,7 @@ export function deriveSubClassClosure(edges, { depth = 32, budget = 50, focus = 
  * `allEdges` is already closed (a prior pass ran to fixpoint), the output
  * equals the full kernel's novel output, order included.
  */
-export function deriveSubClassClosureDelta(allEdges, deltaEdges, { depth = 32, budget = 50, focus = null } = {}) {
+export function deriveSubClassClosureDelta(allEdges, deltaEdges, { depth = 32, budget = 50, focus = null, gate = null } = {}) {
   const present = new Set();      // "a\0b" for every edge already known
   const succ = new Map();         // a -> Set(b): the live successor relation
   const pred = new Map();         // b -> Set(a): its inverse, for the R∘Δ join
@@ -216,6 +229,7 @@ export function deriveSubClassClosureDelta(allEdges, deltaEdges, { depth = 32, b
       const key = `${a}${SEP}${c}`;
       if (present.has(key) || derivedKeys.has(key)) return;   // dedup / novelty screen
       if (!inFocus(a, b, c)) return;                          // focus-connection screen
+      if (gate?.declines(a, c)) return;                    // sense screen
       additions.push([a, b, c, key]);
     };
     for (const [a, b] of delta) {
@@ -336,8 +350,13 @@ export function buildRelevanceFrontier(rows, seedTerms) {
  * a delta caller that pre-filters `typeEdges` to the relevant slice passes the
  * FULL list here, so an already-stored conclusion outside the slice is still
  * recognized as known rather than re-derived.
+ *
+ * `gate` is the same SENSE screen `deriveSubClassClosure` takes, read over the
+ * individual and the class it would inherit: an entity placed under one top
+ * never picks up a type from a disjoint one because a band flattened two
+ * senses onto a class somewhere in its chain.
  */
-export function deriveTypePropagation(typeEdges, subClassEdges, { budget = 50, focus = null, presentTypeEdges = typeEdges } = {}) {
+export function deriveTypePropagation(typeEdges, subClassEdges, { budget = 50, focus = null, presentTypeEdges = typeEdges, gate = null } = {}) {
   const ancestorsOf = buildAncestorCloser(subClassEdges);
 
   const present = new Set(); // "x\0C" for every rdf:type edge already known
@@ -357,6 +376,7 @@ export function deriveTypePropagation(typeEdges, subClassEdges, { budget = 50, f
       const key = `${x}${SEP}${d}`;
       if (present.has(key)) continue;                // dedup / novelty screen
       if (!inFocus(x, c, d)) continue;                // focus-connection screen
+      if (gate?.declines(x, d)) continue;          // sense screen
       candidates.push([x, c, d, key]);
     }
   }
@@ -820,7 +840,9 @@ export function findConsistencyViolations(typeEdges, subClassEdges, disjointEdge
  * even when none of its own three terms was named), `maxEnvironments`
  * (per-fact environment cap,
  * default DEFAULT_MAX_ENVIRONMENTS), `full` (force full evaluation even with
- * a valid watermark), `store` (REQUIRED — the memory store's
+ * a valid watermark), `senseGate` (default true: screen scm-sco and cax-sco
+ * conclusions through sense-gate.mjs so a two-sense band word can't licence a
+ * walk across the join; false runs the kernels raw), `store` (REQUIRED — the memory store's
  * { loadMemory, readFactRows, appendFacts } read/write functions, injected so
  * this inference module never imports the store itself; optional
  * loadSyllogiseState/saveSyllogiseState enable delta mode).
@@ -830,7 +852,7 @@ export function findConsistencyViolations(typeEdges, subClassEdges, disjointEdge
  */
 export async function syllogise(repoDir, {
   depth = 32, budget = 50, focus = null, expandFocus = false,
-  maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, full = false, store,
+  maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, full = false, store, senseGate = true,
 } = {}) {
   const { loadMemory, readFactRows, appendFacts } = requireStore(store, ["loadMemory", "readFactRows", "appendFacts"], "syllogise");
   const stateFnsPresent = typeof store?.loadSyllogiseState === "function" && typeof store?.saveSyllogiseState === "function";
@@ -857,6 +879,15 @@ export async function syllogise(repoDir, {
     const target = someValuesFromOf.get(restriction);
     if (target) restrictionEdges.push({ restriction, property, target });
   }
+  // The sense gate reads STATED isa rows only. Feeding it a previous pass's
+  // own conclusions would let one crossing licence the next, which is the
+  // failure it exists to stop.
+  const gate = senseGate
+    ? buildSenseGate({
+      subClassEdges: rows.filter((r) => isSubClassOf(r.predicate) && !isPurelyEntailed(r.provenance)).map((r) => [r.subject, r.object]),
+      typeEdges: rows.filter((r) => isType(r.predicate) && !isPurelyEntailed(r.provenance)).map((r) => [r.subject, r.object]),
+    })
+    : null;
   const callerFocus = normalizeFocus(focus);
   // An expanded focus is the same relevance walk a delta pass runs, seeded by
   // the caller's terms instead of a change set — still a focus (never reads
@@ -898,8 +929,8 @@ export async function syllogise(repoDir, {
     ? deltaRows.filter((r) => isSubClassOf(r.predicate)).map((r) => [r.subject, r.object])
     : [];
   const scmDerived = mode === "delta"
-    ? (deltaSubEdges.length ? deriveSubClassClosureDelta(subClassEdges, deltaSubEdges, { depth, budget, focus: normalizedFocus }) : [])
-    : deriveSubClassClosure(subClassEdges, { depth, budget, focus: normalizedFocus });
+    ? (deltaSubEdges.length ? deriveSubClassClosureDelta(subClassEdges, deltaSubEdges, { depth, budget, focus: normalizedFocus, gate }) : [])
+    : deriveSubClassClosure(subClassEdges, { depth, budget, focus: normalizedFocus, gate });
   // cax-sco sees the ENLARGED subClassOf edge set (stated ∪ this pass's own
   // scm-sco conclusions) so both rules complete in one `tmct syllogise` call.
   const enlargedSubClassEdges = subClassEdges.concat(scmDerived.map((d) => [d.subject, d.object]));
@@ -954,7 +985,7 @@ export async function syllogise(repoDir, {
 
   const remainingBudget = Math.max(0, budget - scmDerived.length);
   const caxDerived = remainingBudget > 0 && !deltaEmpty
-    ? deriveTypePropagation(caxTypeEdges, enlargedSubClassEdges, { budget: remainingBudget, focus: kernelFocus, presentTypeEdges: typeEdges })
+    ? deriveTypePropagation(caxTypeEdges, enlargedSubClassEdges, { budget: remainingBudget, focus: kernelFocus, presentTypeEdges: typeEdges, gate })
     : [];
   // cax-dw sees the SAME enlarged subClassOf set (so its own ⊑-lift reaches a
   // chain scm-sco just grew this pass) — it doesn't need the enlarged TYPE
