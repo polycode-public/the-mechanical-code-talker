@@ -76,28 +76,62 @@ baseline run fixes the starting numbers before any lever is pulled.
 8. **Size** — stored rows and bytes per article, and the materialized feed document's
    size against `MAX_FEED_DOCUMENT_BYTES`.
 
-## 4. The loop: mechanical execution, investigated between runs
+## 4. The loop: poll, measure, share, design, apply, repeat
 
 One iteration is:
 
-1. `npm run bench:news` — mechanical, emits the dated report.
-2. A session reads the newest report against the previous one, investigates the worst
-   metric, and proposes ONE lever — closed-set/template changes preferred, per the
-   project's own bias. The proposal names the metric it should move and any metric it
-   might hurt.
-3. The lever lands (worktree sub-agent, blast-radius tests), the bench re-runs, and the
-   report pair goes in the commit message's account. The operator sees each
-   iteration's results in chat as they land: sample generated cards quoted verbatim
-   from the articles log, plus the full score table against the prior iteration.
-4. A landed improvement ratchets: the smoke test's floor for that metric rises to just
-   under the new number, so the gain is locked in.
-
-The live page stays the human check after each deploy batch, never the measurement.
+1. **Poll + measure + share, one command**: `node scripts/news-bench/iterate.mjs
+   --label=<iteration>` captures today's fixtures, runs the xl bench, and prints the
+   score-table delta against the newest committed report. The coordinator pastes the
+   results in chat as they land: sample cards quoted verbatim and complete from the
+   articles log (including the worst-scoring one), plus the full score table against
+   the prior iteration.
+2. **Design**: the coordinator reads the worst number and names ONE lever —
+   closed-set/template changes preferred, per the project's own bias. The proposal
+   names the metric it should move and any metric it might hurt.
+3. **Apply**: the lever lands (worktree sub-agent, blast-radius tests), one after-run
+   measures it, and the report pair goes in the commit message's account.
+4. **Ratchet**: a landed improvement raises the smoke test's floor for that metric to
+   just under the new number, so the gain is locked in.
+5. **Repeat immediately.**
 
 The loop never waits. The next iteration's lever dispatches as soon as the previous
 lever is merged and its report pair is committed — CI pipelines and deploys are
 shipping, not gates, and a measurement correction runs beside the loop, not in
-front of it.
+front of it. The live page stays the human check after each deploy batch, never the
+measurement.
+
+### Cycle-time budget
+
+The loop's target is a 30–40 minute iteration. Where the first day's ~60-minute
+iterations actually spent their time, and what removes each sink:
+
+| sink | cost | removal |
+| --- | --: | --- |
+| a "before" xl re-run per lever agent | 12–15 min | dead: the previous iteration's committed after-report IS the before, verified by seed-digest equality, not by re-running |
+| per-worktree artifact rebuild (worlds pack, sprite facts, ask bundle, chat-seed) | 3–6 min | `scripts/news-bench/ensure-bench-inputs.mjs` builds only what is missing or stale, and `--from <path>` links a sibling checkout's already-built artifacts in seconds |
+| coordinator-invented waits between iterations | unbounded | banned above |
+| the one xl bench run | 12–15 min | stays — it drives the full engine over the whole seed; this is the measurement itself |
+| the lever agent's design/code/tests | 15–35 min | stays — this is the work |
+
+### Report comparability: digests, not re-runs
+
+Every report carries a `provenance` block: the sha256 and row count of the chat-seed
+actually loaded, the fixture dates, and the git HEAD of the run. Two reports are
+directly comparable when their seed digests and fixture dates match. A run whose
+digest differs from the newest committed report's prints a drift warning naming the
+mismatch — the seed-drift case that used to force re-runs now names itself instead
+of silently producing an incomparable pair. A lever that needs fresh fixtures
+captures them at its own iteration's start, so its pair is captured-together by
+construction.
+
+### Bench operational rules
+
+- Run labels are `--label=<x>` (the space form is silently ignored) and must be
+  distinct per run — same-day runs collide on the report filename otherwise.
+- The articles log (`<run>-articles.md`) is a standard artifact of every run: every
+  card in full, its per-card scores, the admitted-but-cardless items, and the
+  rejected items per source.
 
 ## 5. Phases
 
