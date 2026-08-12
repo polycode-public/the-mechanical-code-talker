@@ -439,6 +439,72 @@ test("NEWS_HUB_HOPS is fixed at 2", () => {
   assert.equal(NEWS_HUB_HOPS, 2);
 });
 
+// A prisoner-release card whose hub the seed already places under `country`,
+// beside the corpus rows that share a class node with it in another sense.
+// `russia is a kind of passage` is the closure's own shortcut: sound as
+// inference (a cathedral is an artifact and a place, so those two tops are
+// declared to overlap), and the one edge that lets a walk out of russia land
+// on the anatomy side of `passage`.
+function releaseRows() {
+  const held = (id, subject, predicate, object, provenance = "corpus:conceptnet") => row(id, subject, predicate, object, {
+    provenance, trust: 0.5, sourceTypes: ["corpus"],
+  });
+  return [
+    row("fact:report", "russia", "tmct:releases", "robert gilman"),
+    row("fact:battery-report", "country", "mgx:buys", "battery"),
+    held("fact:russia-country", "russia", "rdfs:subClassOf", "country"),
+    held("fact:country-place", "country", "rdfs:subClassOf", "place"),
+    held("fact:israel", "israel", "rdfs:subClassOf", "country"),
+    held("fact:turkey", "turkey", "rdfs:subClassOf", "country"),
+    held("fact:australia", "australia", "rdfs:subClassOf", "country"),
+    held("fact:passage-structure", "passage", "rdfs:subClassOf", "structure"),
+    held("fact:structure-artifact", "structure", "rdfs:subClassOf", "artifact"),
+    held("fact:orifice", "orifice", "rdfs:subClassOf", "passage", "corpus:human-large"),
+    held("fact:duct", "duct", "rdfs:subClassOf", "passage", "corpus:human-large"),
+    held("fact:battery-message", "battery", "rdfs:subClassOf", "message"),
+    held("fact:russia-passage", "russia", "rdfs:subClassOf", "passage", "entailed:subClassOf"),
+  ];
+}
+
+test("a card keeps the class siblings in its hub's own sense and drops the ones reached through a class node it shares with another sense", () => {
+  const items = buildNewsItems(releaseRows(), { now: NOW, windowMs: 6 * HOUR, limit: 10 });
+  const card = items.find((item) => item.hub === "russia");
+  assert.ok(card, "russia heads a card");
+
+  for (const kept of ["fact:israel", "fact:turkey", "fact:australia"]) {
+    assert.ok(card.factIds.includes(kept), `${kept} stays: it is a country, the sense russia is read in`);
+  }
+  for (const dropped of ["fact:orifice", "fact:duct", "fact:russia-passage"]) {
+    assert.ok(!card.factIds.includes(dropped), `${dropped} goes: it sits on the anatomy side of "passage"`);
+  }
+});
+
+test("a neighbourhood the walk never enters spends no sentence: the drifted \"Around it\" clause goes with the rows behind it", () => {
+  const items = buildNewsItems(releaseRows(), { now: NOW, windowMs: 6 * HOUR, limit: 10 });
+  const card = items.find((item) => item.hub === "russia");
+  assert.equal(card.paragraph, "russia releases robert gilman. russia is a country.");
+  assert.ok(!card.factIds.includes("fact:battery-report"), "another card's report about a class node is not this card's neighbourhood");
+});
+
+test("a card never drops its own report to keep a sense tidy, whatever sense the reported far side reads in", () => {
+  const rows = [...releaseRows(), row("fact:treaty", "russia", "tmct:signs", "battery")];
+  const items = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 10 });
+  const card = items.find((item) => item.hub === "russia");
+  assert.ok(card.factIds.includes("fact:treaty"), "what a source said about the hub survives the sense scope");
+  assert.match(card.paragraph, /russia signs battery/);
+});
+
+test("subgraphAround's inSense test bounds both what it collects and what it walks on through", () => {
+  const rows = releaseRows();
+  const openWalk = subgraphAround(rows, "russia", { hops: 2 });
+  assert.ok(openWalk.some((r) => r.id === "fact:orifice"), "the ungated walk is what reaches the far sense");
+
+  const scoped = subgraphAround(rows, "russia", { hops: 2, inSense: (term) => term !== "passage" });
+  assert.ok(!scoped.some((r) => r.id === "fact:russia-passage"), "a refused term collects no row of its own");
+  assert.ok(!scoped.some((r) => r.id === "fact:orifice"), "and the walk does not carry on through it");
+  assert.ok(scoped.some((r) => r.id === "fact:israel"), "the terms it admits still walk to their own neighbours");
+});
+
 test("evictNewsFacts never selects a non-news row", () => {
   const rows = [
     row("fact:1", "a", "rdf:type", "x", { provenance: "news:hacker-news@i1", observedAt: "2026-08-01T00:00:00Z" }),
