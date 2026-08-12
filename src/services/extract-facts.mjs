@@ -230,6 +230,9 @@ const stripSentenceFinalStop = (word) => {
  *  the way the strict teach lane already mints "redis"). */
 function foldEntity(word, lexicon) {
   const surface = stripSentenceFinalStop(word);
+  // A multi-word name is stored exactly as it reads. "United States" is the
+  // name; "united state" is a lemma fold of a word that was never on its own.
+  if (surface.includes(" ")) return normFactTerm(surface);
   const noun = lookupNoun(lexicon, surface.toLowerCase());
   return normFactTerm(noun ? noun.lemma : surface);
 }
@@ -239,10 +242,40 @@ function foldEntity(word, lexicon) {
 // lexical fallback's stopword set doesn't already carry.
 const CANDIDATE_TERM_MIN_LENGTH = 3;
 
+// An abbreviated personal title carries a trailing stop, which is why wink
+// tags it PROPN and glues it to the surname ("Mr./PROPN Gilman/PROPN"). A
+// title addresses a person; it never names one, so it comes off the front of a
+// name run however short the run is.
+const HONORIFIC_NAME_PREFIXES = new Set([
+  "mr", "mrs", "ms", "mx", "dr", "prof", "rev",
+  "sen", "rep", "gov", "gen", "capt", "col", "lt", "sgt", "maj",
+]);
+
+/** The name a run of capitalized tokens states, front-trimmed. A run of three
+ *  or more sheds a leading role noun the lexicon knows ("Prime Minister Keir
+ *  Starmer" → "Keir Starmer") or a hyphenated compound that only Title Case
+ *  lifted to a proper noun ("Ex-Marine Robert Gilman" → "Robert Gilman"). The
+ *  trim stops at two tokens, so "Count Binface" and "Lake Kariba" keep the word
+ *  that belongs to the name. An honorific comes off at any length. */
+function trimNameRun(words, lexicon) {
+  const bare = (word) => stripSentenceFinalStop(word).toLowerCase();
+  let start = 0;
+  while (start < words.length - 1 && HONORIFIC_NAME_PREFIXES.has(bare(words[start]))) start += 1;
+  while (words.length - start >= 3) {
+    const first = bare(words[start]);
+    if (!first.includes("-") && !lookupNoun(lexicon, first)) break;
+    start += 1;
+  }
+  return words.slice(start);
+}
+
 /** Every NOUN/PROPN token `sentences` names, surface-form occurrence-counted —
  *  a POS tagger reads unknown words by context, so an unlisted noun ("wombat")
- *  counts exactly like a lexicon-known one. */
-function candidateTermOccurrencesPos(sentences, nlp) {
+ *  counts exactly like a lexicon-known one. A contiguous run of two or more
+ *  PROPN tokens counts ONCE, as the whole name it spells ("Robert Gilman",
+ *  "United States"); the run's own words never count beside it, because half a
+ *  name is half a lookup. */
+function candidateTermOccurrencesPos(sentences, nlp, lexicon) {
   const counts = new Map();
   for (const sentence of sentences) {
     let values;
@@ -254,21 +287,61 @@ function candidateTermOccurrencesPos(sentences, nlp) {
     } catch { continue; }
     for (let i = 0; i < values.length; i += 1) {
       if (pos[i] !== "NOUN" && pos[i] !== "PROPN") continue;
+      let hi = i;
+      if (pos[i] === "PROPN") while (hi + 1 < values.length && pos[hi + 1] === "PROPN") hi += 1;
+      if (hi > i) {
+        const name = trimNameRun(values.slice(i, hi + 1), lexicon).join(" ");
+        counts.set(name, (counts.get(name) || 0) + 1);
+        i = hi;
+        continue;
+      }
       counts.set(values[i], (counts.get(values[i]) || 0) + 1);
     }
   }
   return counts;
 }
 
+/** A sentence whose substantial words are nearly all capitalized is a headline
+ *  set in Title Case, where a capital says nothing about which words spell a
+ *  name. The POS tier reads such a sentence by tag and is unaffected; the
+ *  lexical fallback has only the capitals, so it reads no name runs there. */
+function readsAsTitleCase(words) {
+  const substantial = words.filter((word) => word.length >= 4);
+  if (substantial.length < 4) return false;
+  const capitalized = substantial.filter((word) => /^[A-Z]/.test(word)).length;
+  return capitalized / substantial.length >= 0.8;
+}
+
 /** The no-wink-model fallback: every word that is neither a closed-class
  *  scaffolding token nor a lexicon-known verb/adjective counts as a candidate
  *  noun — narrower than the POS tier (no context to lean on), but the same
- *  "an unlisted word can still be a content noun" posture. */
+ *  "an unlisted word can still be a content noun" posture. Capitalization
+ *  stands in for the missing tags when it carries information: two or more
+ *  capitalized words separated by nothing but spaces count once, as one name. */
 function candidateTermOccurrencesLexical(sentences, lexicon) {
   const counts = new Map();
   for (const sentence of sentences) {
-    const words = String(sentence || "").match(/[A-Za-z][A-Za-z'-]*/g) || [];
-    for (const word of words) {
+    const text = String(sentence || "");
+    const matches = [...text.matchAll(/[A-Za-z][A-Za-z'-]*/g)];
+    const words = matches.map((match) => match[0]);
+    const titleCase = readsAsTitleCase(words);
+    const spacedRunEnd = (start) => {
+      let hi = start;
+      while (hi + 1 < matches.length && /^[A-Z]/.test(words[hi + 1])
+        && !text.slice(matches[hi].index + words[hi].length, matches[hi + 1].index).trim()) hi += 1;
+      return hi;
+    };
+    for (let i = 0; i < words.length; i += 1) {
+      const word = words[i];
+      if (!titleCase && /^[A-Z]/.test(word)) {
+        const hi = spacedRunEnd(i);
+        if (hi > i) {
+          const name = trimNameRun(words.slice(i, hi + 1), lexicon).join(" ");
+          counts.set(name, (counts.get(name) || 0) + 1);
+          i = hi;
+          continue;
+        }
+      }
       const lower = word.toLowerCase();
       if (lower.length < CANDIDATE_TERM_MIN_LENGTH) continue;
       if (OPTIMISTIC_SKIP.has(lower)) continue;
@@ -279,14 +352,47 @@ function candidateTermOccurrencesLexical(sentences, lexicon) {
   return counts;
 }
 
+/** A single-word term that is one word of exactly one multi-word name the same
+ *  text captured is that name's fragment, not a term of its own: "Gilman"
+ *  beside "Robert Gilman" is the same person, and only the whole name is a
+ *  question a reference lookup can answer. Its occurrences move onto the name.
+ *  A word no captured name holds ("Russia", standing alone) is left where it
+ *  is, and a word two names share is dropped rather than guessed onto one. */
+function foldNameFragments(counts) {
+  const namesByWord = new Map();
+  for (const term of counts.keys()) {
+    if (!term.includes(" ")) continue;
+    for (const word of term.split(" ")) {
+      if (!namesByWord.has(word)) namesByWord.set(word, new Set());
+      namesByWord.get(word).add(term);
+    }
+  }
+  for (const [term, occurrences] of [...counts]) {
+    if (term.includes(" ")) continue;
+    const names = namesByWord.get(term);
+    if (!names) continue;
+    counts.delete(term);
+    if (names.size !== 1) continue;
+    const [name] = names;
+    counts.set(name, (counts.get(name) || 0) + occurrences);
+  }
+  return counts;
+}
+
 /** Every fact-ungrounded term `sentences` names: a candidate noun folded to
  *  its stored term key (`foldEntity`, so a ledger entry and a stored fact key
  *  the same term identically) that `rows` holds zero fact rows for — the
  *  fact-degree rule an ungrounded-term ledger admits by, independent of
  *  whether the lexicon happens to know the word. Occurrence-counted, so a
- *  term named three times outranks one named once. */
-function ungroundedTermOccurrences(sentences, rows, { lexicon, nlp }) {
-  const raw = nlp ? candidateTermOccurrencesPos(sentences, nlp) : candidateTermOccurrencesLexical(sentences, lexicon);
+ *  term named three times outranks one named once.
+ *
+ *  `nlp` follows this module's own convention: absent means the shared wink
+ *  instance, and an explicit null forces the lexical fallback. */
+export function ungroundedTermOccurrences(sentences, rows, { lexicon = loadLexicon(), nlp } = {}) {
+  const engine = nlp === undefined ? winkInstance() : nlp;
+  const raw = engine
+    ? candidateTermOccurrencesPos(sentences, engine, lexicon)
+    : candidateTermOccurrencesLexical(sentences, lexicon);
   const grounded = new Set();
   for (const row of rows) {
     grounded.add(normFactTerm(row.subject));
@@ -295,9 +401,13 @@ function ungroundedTermOccurrences(sentences, rows, { lexicon, nlp }) {
   const counts = new Map();
   for (const [word, n] of raw) {
     const term = foldEntity(word, lexicon);
-    if (!term || grounded.has(term)) continue;
+    if (!term) continue;
     counts.set(term, (counts.get(term) || 0) + n);
   }
+  // Fragments fold onto their whole name BEFORE the fact-degree filter, so a
+  // name a fact already grounds takes its own fragments out with it.
+  foldNameFragments(counts);
+  for (const term of [...counts.keys()]) if (grounded.has(term)) counts.delete(term);
   return counts;
 }
 
@@ -1229,6 +1339,9 @@ export async function ingestText(text, {
       const key = normFactTerm(term);
       if (key && !ungroundedCounts.has(key)) ungroundedCounts.set(key, 1);
     }
+    // A decline names the word it tripped over, so the legacy set carries name
+    // fragments too ("Gilman" out of "Robert Gilman"). Same fold, same reason.
+    foldNameFragments(ungroundedCounts);
 
     const result = {
       sentences: sentenceCount,

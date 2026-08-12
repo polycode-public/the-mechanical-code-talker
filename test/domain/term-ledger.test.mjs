@@ -250,6 +250,27 @@ test("bumpTerms still admits u.s. as a real place, not a suppressed particle", (
   assert.equal(ledger.terms.get("u.s.").count, 4);
 });
 
+test("bumpTerms never admits the digit shrapnel a version string breaks into", () => {
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map([["4t", 9], ["8-2", 7], ["3.8", 5], ["qwen3", 1]]), "item-1", "2026-08-08T09:00:00Z");
+  assert.deepEqual([...ledger.terms.keys()], ["qwen3"], "only the token that reads as a name survives");
+});
+
+test("bumpTerms keeps a term whose letters outnumber its digits and punctuation", () => {
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map([["covid-19", 3], ["u.s.", 2], ["robert gilman", 1]]), "item-1", "2026-08-08T09:00:00Z");
+  assert.deepEqual([...ledger.terms.keys()].sort(), ["covid-19", "robert gilman", "u.s."]);
+});
+
+test("ledgerFromPayload drops digit shrapnel already sitting in a persisted payload", () => {
+  const entry = (term) => ({
+    term, count: 3, vocabGrounded: false, itemIds: [],
+    firstSeen: "2026-08-08T09:00:00Z", lastSeen: "2026-08-08T09:00:00Z", status: "pending", missedAt: "",
+  });
+  const ledger = ledgerFromPayload({ terms: [entry("4t"), entry("8-2"), entry("qwen3")] });
+  assert.deepEqual([...ledger.terms.keys()], ["qwen3"]);
+});
+
 test("ledgerFromPayload drops persisted units, compass abbreviations and foreign particles, but keeps u.s.", () => {
   const payload = {
     terms: [

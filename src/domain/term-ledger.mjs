@@ -65,8 +65,23 @@ const NOISE_TERM_SETS = [
   FOREIGN_PARTICLE_TERMS,
 ];
 
+/** A version or model string shatters into pieces that are mostly digits and
+ *  punctuation — "Qwen3.8-2.4T" leaves "8-2" and "4t" behind. A term with no
+ *  letter at all, or one carrying a digit whose digits and punctuation match or
+ *  outnumber its letters, states a quantity or a version; it never names a
+ *  subject a reference lookup could define. A letter-only term with interior
+ *  stops ("u.s.") carries no digit, so it stays. */
+function isShapeNoiseTerm(term) {
+  const letters = (term.match(/[a-z]/g) || []).length;
+  if (!letters) return true;
+  const digits = (term.match(/\d/g) || []).length;
+  if (!digits) return false;
+  const punctuation = (term.match(/[^a-z0-9\s]/g) || []).length;
+  return digits + punctuation >= letters;
+}
+
 function isNoiseTerm(term) {
-  return NOISE_TERM_SETS.some((set) => set.has(term));
+  return NOISE_TERM_SETS.some((set) => set.has(term)) || isShapeNoiseTerm(term);
 }
 
 /** Ledger entry field order fixed once here so `ledgerPayload` serializes
