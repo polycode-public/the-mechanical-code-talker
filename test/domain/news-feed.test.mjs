@@ -19,6 +19,8 @@ import {
   isNovelTerm,
   newsItemKeys,
   newsItemContentKey,
+  hubReportRows,
+  neighbourRows,
 } from "../../src/domain/news-feed.mjs";
 
 const NOW = "2026-08-08T12:00:00.000Z";
@@ -256,6 +258,101 @@ test("buildNewsItems carries a source's publishedAt onto the card, and leaves it
   ]);
   const [undatedItem] = buildNewsItems(undated, { now: NOW, windowMs: 6 * HOUR, limit: 6, sourcesByFactId: undatedSources });
   assert.ok(!Object.hasOwn(undatedItem.sources[0], "publishedAt"), "a source with no publication timestamp carries no key for it, never a blank one");
+});
+
+// Two reports from one source share a subject node ("earthquake"), which the
+// two-hop walk crosses in one step — the shape that gave every quake card all
+// 44 of the day's quake headlines.
+const QUAKE_PLACES = ["mina, nevada", "atka, alaska", "niland, ca", "wana, pakistan", "tobelo, indonesia"];
+
+function quakeRows(places = QUAKE_PLACES) {
+  return places.map((place, i) => row(`fact:quake-${i}`, "earthquake", "mgx:strike-near", place, {
+    provenance: `news:usgs-quakes@item-${i}`,
+  }));
+}
+
+function quakeSources(places = QUAKE_PLACES) {
+  return new Map(places.map((place, i) => [
+    `fact:quake-${i}`,
+    { title: `M 4.${i} - near ${place}`, url: `https://earthquake.example/${i}`, name: "USGS" },
+  ]));
+}
+
+test("each card cites the item behind its own report, and the shared subject's card cites them all", () => {
+  const items = buildNewsItems(quakeRows(), {
+    now: NOW, windowMs: 6 * HOUR, limit: 10, sourcesByFactId: quakeSources(),
+  });
+  const byHub = new Map(items.map((item) => [item.hub, item]));
+
+  assert.deepEqual(byHub.get("mina, nevada").sources.map((s) => s.title), ["M 4.0 - near mina, nevada"]);
+  assert.deepEqual(byHub.get("wana, pakistan").sources.map((s) => s.title), ["M 4.3 - near wana, pakistan"]);
+  // "earthquake" is the subject of every report, so its own card reports them
+  // all and cites them all.
+  assert.equal(byHub.get("earthquake").sources.length, QUAKE_PLACES.length);
+});
+
+test("a term shared by more reports than the closing sentence can name is a category node, so it leaks neither a source nor an \"Around it\"", () => {
+  const items = buildNewsItems(quakeRows(), {
+    now: NOW, windowMs: 6 * HOUR, limit: 10, sourcesByFactId: quakeSources(),
+  });
+  const placeCards = items.filter((item) => QUAKE_PLACES.includes(item.hub));
+  assert.equal(placeCards.length, QUAKE_PLACES.length);
+
+  for (const card of placeCards) {
+    assert.equal(card.sources.length, 1, `${card.hub} cites one item`);
+    assert.ok(!card.paragraph.includes("Around it"), `${card.hub} names no neighbourhood`);
+  }
+  const paragraphs = new Set(placeCards.map((card) => card.paragraph));
+  assert.equal(paragraphs.size, placeCards.length, "no two sibling cards read the same");
+});
+
+test("a link term the closing sentence can name in full still yields neighbours, and each card names its own", () => {
+  const rows = [
+    row("fact:1", "hackernews", "mgx:discuss", "a recipe builder"),
+    row("fact:2", "hackernews", "mgx:discuss", "an eclipse webcam"),
+  ];
+  const items = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR, limit: 10 });
+  const byHub = new Map(items.map((item) => [item.hub, item]));
+
+  assert.match(byHub.get("recipe builder").paragraph, /Around it: hackernews discuss an eclipse webcam/);
+  assert.match(byHub.get("eclipse webcam").paragraph, /Around it: hackernews discuss a recipe builder/);
+});
+
+test("neighbourRows ranks by a predicate the hub's own report used, then observation time, then id", () => {
+  const rows = [
+    row("fact:hub", "storm alba", "mgx:hit", "the coast"),
+    row("fact:late-match", "a rescue crew", "mgx:hit", "the coast", { observedAt: "2026-08-08T11:00:00.000Z" }),
+    row("fact:early-match", "a relief convoy", "mgx:hit", "the coast", { observedAt: "2026-08-08T09:00:00.000Z" }),
+    row("fact:other-predicate", "a ferry", "mgx:atLocation", "the coast", { observedAt: "2026-08-08T11:30:00.000Z" }),
+  ];
+  const reportedIds = new Set(reportedRows(rows, { now: NOW, windowMs: 6 * HOUR }).map((r) => r.id));
+  const neighbours = neighbourRows("storm alba", rows, { reportedIds });
+  assert.deepEqual(neighbours.map((r) => r.id), ["fact:late-match", "fact:early-match", "fact:other-predicate"]);
+});
+
+test("hubReportRows keeps the reported rows touching the hub and drops the rest of the walk", () => {
+  const rows = [
+    row("fact:1", "earthquake", "mgx:strike-near", "mina, nevada"),
+    row("fact:2", "earthquake", "mgx:strike-near", "atka, alaska"),
+    row("fact:3", "earthquake", "rdf:type", "event", { provenance: "corpus:wordnet" }),
+  ];
+  const reportedIds = new Set(reportedRows(rows, { now: NOW, windowMs: 6 * HOUR }).map((r) => r.id));
+  assert.deepEqual(hubReportRows("mina, nevada", rows, { reportedIds }).map((r) => r.id), ["fact:1"]);
+  assert.deepEqual(hubReportRows("earthquake", rows, { reportedIds }).map((r) => r.id), ["fact:1", "fact:2"]);
+});
+
+test("a card's sources and its \"Around it\" survive the rows arriving in a different order", () => {
+  const rows = [
+    ...quakeRows(),
+    row("fact:hn-1", "hackernews", "mgx:discuss", "a recipe builder"),
+    row("fact:hn-2", "hackernews", "mgx:discuss", "an eclipse webcam"),
+  ];
+  const sourcesByFactId = quakeSources();
+  const opts = { now: NOW, windowMs: 6 * HOUR, limit: 12, sourcesByFactId };
+  const forward = buildNewsItems(rows, opts);
+  const backward = buildNewsItems([...rows].reverse(), opts);
+  assert.equal(JSON.stringify(forward), JSON.stringify(backward));
+  assert.ok(forward.some((item) => item.paragraph.includes("Around it")), "the ordering check covers a card that has neighbours");
 });
 
 test("NEWS_HUB_HOPS is fixed at 2", () => {

@@ -749,10 +749,11 @@ export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = 
  *  so a card's paragraph draws from what was reported and its collapsed
  *  `backgroundParagraph` draws from what the graph already knew.
  *
- *  A card attributes a source only to the rows it reports (hubReportRows) and
- *  the neighbours it names (neighbourRows), never to its whole sub-graph. The
- *  walk reaches every row a shared class node touches, so attributing the
- *  sub-graph gave one quake's card all 44 of the day's quake headlines. */
+ *  A card attributes a source to the rows it reports (hubReportRows) and to
+ *  nothing else. The two-hop walk reaches every row a shared class node
+ *  touches, so attributing the whole sub-graph gave one quake's card all 44 of
+ *  the day's quake headlines. An "Around it" neighbour is context the card
+ *  borrows, and it carries its own citation on its own card. */
 export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId = new Map(), readsAsEntityTerm } = {}) {
   const reported = reportedRows(rows, { now, windowMs });
   const reportedIds = new Set(reported.map((r) => r.id));
@@ -765,10 +766,6 @@ export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId
     const subgraphRows = subgraphAround(rows, term, { adjacency, priorityIds: reportedIds });
     const factIds = subgraphRows.map((r) => r.id).sort();
     const { background } = splitCardRows(subgraphRows, reportedIds);
-    const citedRows = [
-      ...hubReportRows(term, subgraphRows, { reportedIds }),
-      ...neighbourRows(term, subgraphRows, { reportedIds }),
-    ];
     return {
       id: `news-feed:${sha256HexPrefix(`${term}\0${factIds.join(",")}`, 8)}`,
       hub: term,
@@ -777,7 +774,7 @@ export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId
       builtAt: now,
       paragraph: renderNewsParagraph(term, subgraphRows, { reportedIds }),
       tier: tierOf(subgraphRows),
-      sources: collectSources(citedRows, sourcesByFactId),
+      sources: collectSources(hubReportRows(term, subgraphRows, { reportedIds }), sourcesByFactId),
       background: background.map((r) => r.id).sort(),
       backgroundParagraph: renderNewsParagraph(term, background),
     };
