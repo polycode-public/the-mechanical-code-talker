@@ -295,40 +295,40 @@ test("enrichTopTerms caps at enrich_terms_per_cycle, walks kb sources in config 
   const { ctx } = await makeCtx({ config });
 
   const ledger = createTermLedger();
-  bumpTerms(ledger, new Map([["alpha", 3], ["beta", 2], ["gamma", 1]]), "item1", FIXED_NOW, new Map());
+  bumpTerms(ledger, new Map([["alphax", 3], ["betax", 2], ["gammax", 1]]), "item1", FIXED_NOW, new Map());
   ctx.state.ledger = ledgerPayload(ledger);
 
   const calls = { "simple-wikipedia": [], wikidata: [] };
-  const alphaArticle = { term: "alpha", title: "Alpha", text: "Alpha is a thing.", summary: "Alpha is a thing.", url: "https://x/alpha", revid: 1, isa: "thing" };
+  const alphaArticle = { term: "alphax", title: "Alphax", text: "Alphax is a thing.", summary: "Alphax is a thing.", url: "https://x/alphax", revid: 1, isa: "thing" };
   ctx.providers.getResearchProvider = ({ source }) => ({
     name: source,
     origin: "https://example.org",
     provenanceTag: (term) => `research:${source}:${term}`,
     async lookup(term) {
       calls[source].push(term);
-      return source === "wikidata" && term === "alpha" ? alphaArticle : null;
+      return source === "wikidata" && term === "alphax" ? alphaArticle : null;
     },
   });
 
   const result = await enrichTopTerms(ctx);
-  assert.deepEqual(result.enriched, ["alpha"]);
-  assert.deepEqual(result.missed, ["beta"], "gamma never gets a turn — the cycle cap is 2");
-  assert.deepEqual(calls["simple-wikipedia"], ["alpha", "beta"], "config order: simple-wikipedia first, for every candidate this cycle");
-  assert.deepEqual(calls.wikidata, ["alpha", "beta"], "wikidata only runs for a term simple-wikipedia missed");
+  assert.deepEqual(result.enriched, ["alphax"]);
+  assert.deepEqual(result.missed, ["betax"], "gammax never gets a turn — the cycle cap is 2");
+  assert.deepEqual(calls["simple-wikipedia"], ["alphax", "betax"], "config order: simple-wikipedia first, for every candidate this cycle");
+  assert.deepEqual(calls.wikidata, ["alphax", "betax"], "wikidata only runs for a term simple-wikipedia missed");
 
   const rows = readFactRows(await loadMemory(ctx.memoryDir));
-  assert.ok(rows.some((r) => r.subject === "alpha" && r.object === "thing" && r.provenance === "research:wikidata:alpha"));
+  assert.ok(rows.some((r) => r.subject === "alphax" && r.object === "thing" && r.provenance === "research:wikidata:alphax"));
 
   const afterLedger = ledgerFromPayload(ctx.state.ledger);
-  assert.equal(afterLedger.terms.get("alpha").status, "grounded");
-  assert.equal(afterLedger.terms.get("beta").status, "missed");
-  assert.equal(afterLedger.terms.get("gamma").status, "pending");
+  assert.equal(afterLedger.terms.get("alphax").status, "grounded");
+  assert.equal(afterLedger.terms.get("betax").status, "missed");
+  assert.equal(afterLedger.terms.get("gammax").status, "pending");
 
-  // A second cycle, same `now`: beta stays inside its negative-cache TTL and
-  // is never retried; alpha is no longer pending (already grounded); only
-  // gamma gets a turn.
+  // A second cycle, same `now`: betax stays inside its negative-cache TTL and
+  // is never retried; alphax is no longer pending (already grounded); only
+  // gammax gets a turn.
   await enrichTopTerms(ctx);
-  assert.deepEqual(calls["simple-wikipedia"], ["alpha", "beta", "gamma"], "beta was not retried inside the TTL");
+  assert.deepEqual(calls["simple-wikipedia"], ["alphax", "betax", "gammax"], "betax was not retried inside the TTL");
 });
 
 test("an enriched term arrives with the relations its article states, and reads back through the same paraphrase a polled item gets", async () => {
@@ -391,7 +391,7 @@ function ledgerWith(counts) {
 
 test("a KB source that keeps failing is skipped for the rest of the session, and the term it never reached waits instead of entering the negative cache", async () => {
   const threshold = SOURCE_BREAKER_DEFAULTS.failureThreshold;
-  const terms = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"].slice(0, threshold);
+  const terms = ["alphax", "betax", "gammax", "deltax", "epsilonx", "zetax"].slice(0, threshold);
   const config = clampNewsConfig({ kbSources: ["wikidata"], enrichTermsPerCycle: threshold });
   const state = { ...createNewsState(), ledger: ledgerWith(terms.map((t, i) => [t, terms.length - i])) };
   const { ctx } = await makeCtx({ config, state });
@@ -404,7 +404,7 @@ test("a KB source that keeps failing is skipped for the rest of the session, and
   assert.equal(seen.lookups, threshold, "each term cost one lookup");
 
   const ledger = ledgerFromPayload(ctx.state.ledger);
-  bumpTerms(ledger, new Map([["omega", 9]]), "item-2", FIXED_NOW, new Map());
+  bumpTerms(ledger, new Map([["omegax", 9]]), "item-2", FIXED_NOW, new Map());
   ctx.state.ledger = ledgerPayload(ledger);
 
   const second = await enrichTopTerms(ctx);
@@ -412,7 +412,7 @@ test("a KB source that keeps failing is skipped for the rest of the session, and
   assert.deepEqual(second.skippedSources, ["wikidata"]);
   assert.deepEqual(second.missed, [], "a term nobody asked about is not a term nobody knows");
   assert.equal(
-    ledgerFromPayload(ctx.state.ledger).terms.get("omega").status,
+    ledgerFromPayload(ctx.state.ledger).terms.get("omegax").status,
     "pending",
     "the term waits for a cycle that can actually reach a source",
   );
@@ -446,7 +446,7 @@ test("an enrich turn says which source it stopped asking", async () => {
 
   await enrichTopTerms(ctx);
   const ledger = ledgerFromPayload(ctx.state.ledger);
-  bumpTerms(ledger, new Map([["omega", 9]]), "item-2", FIXED_NOW, new Map());
+  bumpTerms(ledger, new Map([["omegax", 9]]), "item-2", FIXED_NOW, new Map());
   ctx.state.ledger = ledgerPayload(ledger);
 
   const turn = await newsTurn("/news enrich", ctx);
@@ -809,4 +809,30 @@ test("pollNewsSources appends one cycle metric per source that returned items", 
   assert.equal(ctx.state.metrics.length, 1);
   assert.equal(ctx.state.metrics[0].sourceId, "hacker-news");
   assert.ok(ctx.state.metrics[0].sentences > 0);
+});
+
+test("a vocabulary word never spends an enrichment lookup; the unknown name behind it does", async () => {
+  const config = clampNewsConfig({ enrichTermsPerCycle: 1, kbSources: ["simple-wikipedia"] });
+  const { ctx } = await makeCtx({ config });
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map([["person", 9], ["gilmanov", 2]]), "item1", FIXED_NOW, new Map());
+  ctx.state.ledger = ledgerPayload(ledger);
+
+  const looked = [];
+  ctx.providers.getResearchProvider = ({ source }) => ({
+    name: source,
+    origin: "https://example.org",
+    provenanceTag: (term) => `research:${source}:${term}`,
+    async lookup(term) {
+      looked.push(term);
+      return { term, title: term, text: `${term} is a diver.`, summary: `${term} is a diver.`, url: `https://x/${term}`, revid: 1, isa: "diver" };
+    },
+  });
+
+  const result = await enrichTopTerms(ctx);
+  assert.deepEqual(looked, ["gilmanov"], "the lexicon word is skipped, the name gets the slot");
+  assert.deepEqual(result.enriched, ["gilmanov"]);
+  const after = ledgerFromPayload(ctx.state.ledger);
+  assert.equal(after.terms.get("person").status, "grounded", "the vocabulary word grounds without a lookup");
+  assert.equal(after.terms.get("gilmanov").status, "grounded");
 });
