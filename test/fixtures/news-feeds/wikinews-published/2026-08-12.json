@@ -1,0 +1,19 @@
+{
+  "sourceId": "wikinews-published",
+  "capturedAt": "2026-08-12T14:02:18.573Z",
+  "originUrl": "https://en.wikinews.org/w/api.php",
+  "licence": "CC BY 2.5",
+  "calls": [
+    {
+      "url": "https://en.wikinews.org/w/api.php?action=query&list=recentchanges&rcnamespace=0&rctype=new&rclimit=20&format=json&formatversion=2&origin=*",
+      "status": 200,
+      "kind": "json",
+      "body": {
+        "batchcomplete": true,
+        "query": {
+          "recentchanges": []
+        }
+      }
+    }
+  ]
+}
