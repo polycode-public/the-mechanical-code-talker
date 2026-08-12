@@ -246,18 +246,19 @@ function abortSignalOf(ctx) {
   return typeof ctx?.shouldAbort === "function" ? ctx.shouldAbort : () => false;
 }
 
-// A feed title rarely carries its own terminal punctuation ("Scientists
-// Discover New Species"); a fixture built from a full sentence ("A module is
-// a component.") already does. Joining unconditionally with ". " doubles the
-// period in the second case and corrupts sentence splitting downstream — so
-// the separator is a bare space when the title already ends the sentence.
-const SENTENCE_END_RE = /[.!?]["')\]]*$/;
+// The headline and the item's own description are two separate texts, so they
+// reach the ingest as two PARAGRAPHS. Run together on one line they merge into
+// one sentence whenever the headline ends on something the sentence splitter
+// will not break after — an abbreviation ("… Arrives in the U.S." + "Russia
+// released …" reads as one 26-word sentence, and the fact that falls out of it
+// has "u.s. russia" for a subject) or a description that opens on a quotation.
+// A blank line between them is the boundary ingestText already splits on.
 function joinTitleAndSummary(title, summary) {
   const t = String(title || "").trim();
   const s = String(summary || "").trim();
   if (!t) return s;
   if (!s) return t;
-  return `${t}${SENTENCE_END_RE.test(t) ? " " : ". "}${s}`;
+  return `${t}\n\n${s}`;
 }
 
 function toMs(value) {

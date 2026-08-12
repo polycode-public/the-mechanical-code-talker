@@ -18,10 +18,11 @@
 // full NLU: nothing here ever paraphrases or invents a fact the recognizer
 // itself didn't produce.
 //
-// --optimistic  ALSO run a bounded, lexicon-gated fuzzy tier over the sentences
-//               the strict recognizer skipped (optimisticTriples below): a
-//               copula or a known relation verb flanked by two resolvable
-//               entities becomes a candidate triple, stored under its OWN
+// --optimistic  ALSO run a bounded fuzzy tier over the sentences the strict
+//               recognizer skipped (optimisticTriples below): a copula, a
+//               lexicon relation verb, or one of the closed newswire event
+//               verbs read in a tighter frame, flanked by two resolvable
+//               entities, becomes a candidate triple, stored under its OWN
 //               low-trust source kind (optimistic-extract:<source>, prior 0.35 —
 //               below every curated pack, memory/trust.mjs) with NO operator or
 //               teach tag riding alongside, so a fuzzy candidate can never
@@ -198,6 +199,14 @@ const NEWSWIRE_RELATION_VERBS = new Set([
   "discover", "uncover", "rescue", "evacuate",
   "spark", "trigger", "cause", "force", "deploy", "restore", "expand",
 ]);
+// The of-frame heads a newswire event reads THROUGH to what it really touched:
+// "discovers hundreds of ancient amphorae" is a fact about the amphorae, and
+// "charged a group of Cuban men" about the men. Only counting and container
+// heads qualify (OF_PARTITIVE_HEADS and the bare numerals below, plus the
+// classifier heads a class rewrite already reads through) — every other of-
+// chain names its own head, so "restore the sacred glow of fireflies" restores
+// the glow, not the fireflies.
+const OF_COUNT_HEADS = new Set(["hundred", "hundreds", "thousand", "thousands", "million", "millions", "dozen", "dozens", "score", "scores", "handful"]);
 // A verb whose own auxiliary is a be-form heads a passive or a progressive
 // ("was arrested by ICE", "are disappearing"), and there the noun on the
 // subject side is what the event happened TO, not who did it — an active read
@@ -508,7 +517,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
   //     Cambridge" yields no object at all rather than "resign Cambridge".
   //     The subject scan starts left of the verb's OWN modal chain ("will
   //     completely block"), which is one verb complex rather than a crossing.
-  //     A quantity of-chain on either side reads through to what the event
+  //     A counting of-chain on either side reads through to what the event
   //     really touched ("hundreds of ancient amphorae" → amphorae).
   //
   // A lemma the lexicon itself declares keeps the lexicon's predicate, so
@@ -518,12 +527,16 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     while (k >= 0 && (pos[k] === "ADV" || pos[k] === "AUX" || pos[k] === "PART")) k -= 1;
     return k + 1;
   };
-  const quantityChainEntity = (idx, step) => {
+  const readsThroughOf = (word) => {
+    const w = String(word ?? "").toLowerCase();
+    return OF_COUNT_HEADS.has(w) || OF_PARTITIVE_HEADS.has(w) || OF_CLASSIFIER_HEADS.has(w);
+  };
+  const countChainEntity = (idx, step) => {
     let at = nearestEntityIndex(idx, step, COPULA_FRAME_BLOCKERS);
     for (let hop = 0; at !== null && hop < 2; hop += 1) {
       let hi = at;
       while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
-      if (values[hi + 1]?.toLowerCase() !== "of") break;
+      if (values[hi + 1]?.toLowerCase() !== "of" || !readsThroughOf(values[hi])) break;
       const inner = nearestEntityIndex(hi + 1, +1);
       if (inner === null) break;
       at = inner;
@@ -537,8 +550,8 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
       const lemma = String(lemmas?.[i] ?? values[i]).toLowerCase();
       if (!NEWSWIRE_RELATION_VERBS.has(lemma)) continue;
       if (beAuxiliaryBefore(i) || relativePronounBefore(i) >= 0) continue;
-      const subject = quantityChainEntity(verbComplexStart(i), -1);
-      const object = quantityChainEntity(i, +1);
+      const subject = countChainEntity(verbComplexStart(i), -1);
+      const object = countChainEntity(i, +1);
       if (!subject || !object) continue;
       const declared = lookupVerb(lexicon, lemma);
       push(subject, declared ? predicateOf(declared) : `mgx:${lemma}`, object);
@@ -673,8 +686,9 @@ function optimisticTriplesLexical(sentence, lexicon) {
 
 /**
  * The bounded triple candidates from a sentence the strict recognizer skipped:
- * a copula (→ rdfs:subClassOf) and, past its object, the relation verbs it
- * grounds (→ their predicates), so one sentence contributes every fact it holds
+ * a copula (→ rdfs:subClassOf), past its object the relation verbs it grounds
+ * (→ their predicates), and the closed newswire event band in its own tighter
+ * frame, so one sentence contributes every fact it holds
  * ("a volcano is a mountain that has lava" → volcano ⊑ mountain AND volcano has
  * lava). Every triple passes the same entity/guard checks on its own, deduped,
  * capped at MAX_TRIPLES_PER_SENTENCE so a run-on never shatters into noise; []
