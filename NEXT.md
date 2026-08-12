@@ -69,6 +69,17 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   and Wikimedia items carry the feed's own named UTC day. Article logs landed:
   every bench run writes `<run>-articles.md`, and both completed iterations have
   retroactive logs (baseline reproduction matched committed metrics exactly).
+  Iteration 4 (rich-paragraph composition) merged, 7 commits through `71018582`:
+  cards lead with the report as filed (headline + original summary + source +
+  date, 52/53 present, floor 0.90), derived rows never speak (the wrong-sense
+  identity dumps gone), background comes from the card's own subjects with
+  region seeding ("mina, nevada" → nevada), sentences/card 1.11 → 1.36. In
+  flight: the noisy metric's denominator moves to printed-lines-only (worktree
+  `.claude/worktrees/agent-aca0ff54cbcd867bc`) — it currently overstates by
+  counting unprinted entailed rows. Open question for the operator: region facts
+  recur across same-region cards (repeated sentences 6.8% → 6.9%) — cross-card
+  variety would trade a card's self-containedness for it. Bench note: the run
+  label flag must be `--label=x`, the space form is ignored.
   What the logs exposed, in lever order:
   - **Attribution conflation — fixed and merged** (3 commits through `383be97e`):
     a card cites the items behind its own report ("mina, nevada" 44 sources → 1;
