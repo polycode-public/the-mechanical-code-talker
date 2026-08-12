@@ -50,8 +50,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     `.claude/worktrees/agent-adf57b832d79a72ca`
   - "scientists reports" agreement fix (N4 wart) — worktree
     `.claude/worktrees/agent-a9e4ad9cff12c83ff`
-  - units/compass/particle noise out of ranked terms (N3 leg) — worktree
-    `.claude/worktrees/agent-a5ee2df55964811b7`
+  - units/compass/particle noise out of ranked terms (N3 leg) — merged to local
+    `main` (`84ea852e`); "u.s." kept ranking by design, borderlines ("la", "van",
+    "di") recorded in the commit's agent report
   Remaining after these: N2 context quality (incl. the junk-hub over-read), the rest
   of N3/N4, N5 floors into CI.
 
