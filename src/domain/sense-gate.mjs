@@ -2,16 +2,16 @@
 //
 // WordNet-derived bands flatten every sense of a word onto one label. "region"
 // carries a geographic sense (region ⊑ location) and an anatomical one
-// (region ⊑ body part), and both rows land under the same three characters.
-// Each row is true of its own sense, so the corpus is right to hold both.
-// subClassOf transitivity then walks straight across the join:
+// (region ⊑ body part), and both rows store the same six characters. Each row
+// is true of its own sense, so the corpus is right to hold both. subClassOf
+// transitivity then walks straight across the join:
 // russia ⊑ country ⊑ geographical area ⊑ region ⊑ body part.
 //
 // This module refuses that step, and only that step. It answers one question,
 // `declines(subject, object)`, for a candidate DERIVED isa edge. An asserted
 // row never reaches it: the gate constrains what the closure concludes, never
-// what a corpus or a teacher records. What a refusal costs is the MATERIALISED
-// shortcut row, never the knowledge — the stated chain stays whole, and every
+// what a corpus or a teacher records. A refusal costs the MATERIALISED
+// shortcut row and nothing else. The stated chain stays whole, and every
 // walker over it (findIsaChain, the ancestor closers) still reaches what it
 // reached before.
 //
@@ -19,17 +19,18 @@
 // sits under, by an upward breadth-first walk over the ASSERTED isa edges,
 // stopping at the FIRST level where any top appears and returning every top
 // found at that level. Nearest-level, not full reachability: the graph these
-// bands build is cyclic (place ⊑ cognition ⊑ … ⊑ place), so "every top above
-// x" resolves to nearly all of them for nearly every x and discriminates
-// nothing. The nearest level is the sense the term's own short chain commits
-// to — russia reaches `place` in two hops and `body part` in four.
+// bands build is cyclic (place ⊑ passage ⊑ section ⊑ area ⊑ place is one of
+// many), so "every top above x" resolves to nearly all of them for nearly
+// every x and discriminates nothing. The nearest level is the sense the
+// term's own short chain commits to. Russia reaches `place` in two hops and
+// `body part` in four.
 //
 // When it declines. Both ends must resolve, the two top sets must not share a
 // member, and EVERY cross pair must be a declared disjoint pair. One
 // unresolved end, one shared top, or one pair the table does not separate,
 // and the derivation goes through. A term genuinely sitting under two tops
-// therefore keeps both branches — the gate cuts a crossing only when the
-// evidence on both sides is unambiguous.
+// keeps both branches, so the gate cuts a crossing only when the evidence on
+// both sides is unambiguous.
 //
 // Pure over the fact set. One memo per gate, no clock, no arrival order; the
 // walk sorts every frontier by codepoint, so two ingestion orders of the same

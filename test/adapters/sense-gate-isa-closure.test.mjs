@@ -13,8 +13,8 @@ import {
   appendFact, appendFacts, loadMemory, readFactRows, removeFacts,
 } from "../../src/adapters/memory/core.mjs";
 import {
-  deriveSubClassClosure, deriveTypePropagation, syllogise as syllogiseSeam,
-  SUBCLASS_PREDICATE, TYPE_PREDICATE,
+  deriveSubClassClosure, deriveSubClassClosureDelta, deriveTypePropagation,
+  syllogise as syllogiseSeam, SUBCLASS_PREDICATE, TYPE_PREDICATE,
 } from "../../src/domain/syllogise.mjs";
 import {
   buildSenseGate, disjointTopPairs, TOP_CLASSES, OVERLAPPING_TOP_PAIRS,
@@ -126,6 +126,23 @@ test("cax-sco: an individual typed under one top never inherits a disjoint one",
   const rows = deriveTypePropagation(typeEdges, chained, { budget: 10000, gate: gateOver(chained, typeEdges) });
   assert.equal(has(rows, "moscow", "body part"), false);
   assert.equal(has(rows, "moscow", "place"), true, "the place lineage still propagates");
+});
+
+test("the delta kernel screens the same crossing as the full one, conclusion for conclusion", () => {
+  // Everything but russia's own edge is the closed base; russia arriving is
+  // the delta, which is how a news cycle's ingest actually reaches the kernel.
+  const base = SPECIMEN_EDGES.filter(([s]) => s !== "russia");
+  const delta = [["russia", "country"]];
+  const all = base.concat(delta);
+  const gate = gateOver(all);
+  const closedBase = base.concat(deriveSubClassClosure(base, { budget: 10000, gate }).map((d) => [d.subject, d.object]));
+  const deltaRows = deriveSubClassClosureDelta(closedBase.concat(delta), delta, { budget: 10000, gate });
+  assert.equal(has(deltaRows, "russia", "body part"), false);
+  assert.equal(has(deltaRows, "russia", "place"), true);
+
+  const fullRows = deriveSubClassClosure(closedBase.concat(delta), { budget: 10000, gate });
+  const sortKeys = (list) => list.map((d) => `${d.subject}|${d.object}`).sort();
+  assert.deepEqual(sortKeys(deltaRows), sortKeys(fullRows), "delta and full agree under the gate");
 });
 
 // ---- what the gate must never touch ----------------------------------------
