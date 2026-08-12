@@ -122,9 +122,13 @@ function cardArticle(card, allCards, items, rowsById, perItemGrounded) {
     noisyContextLines: { count: noisy.length, objects: noisy },
     repeatsSentencesOf: repeat.repeatsSentencesOf,
     repeatsAroundItOf: repeat.repeatsAroundItOf,
+    sentenceCount: splitSentences(card.paragraph).length,
     headlinePresent: (card.sources || []).some((s) => s.title),
     linkPresent: (card.sources || []).some((s) => s.url),
     datePresent: date !== null,
+    // The report a card was built from, in the source's own words, is the one
+    // thing a reader can check the graph's sentences against.
+    summaryPresent: (card.sources || []).some((s) => s.summary),
   };
 }
 
@@ -168,6 +172,21 @@ export function buildArticlesReport({ feed, state, rows }) {
 const pct = (rate) => (rate === null || rate === undefined ? "n/a" : `${(rate * 100).toFixed(2)}%`);
 const num = (n) => (n === null || n === undefined ? "n/a" : (Number.isInteger(n) ? String(n) : n.toFixed(2)));
 
+/** Each cited report as the source filed it — headline, description, byline.
+ *  Indented as a markdown quote so it reads apart from the graph's own
+ *  sentences above it. */
+function renderReportBlock(sources) {
+  const blocks = (sources || []).map((s) => {
+    const cite = [s.name, s.publishedAt ? String(s.publishedAt).slice(0, 10) : ""].filter(Boolean).join(", ");
+    const lines = [];
+    if (s.title) lines.push(`> **${s.title}**`);
+    if (s.summary) lines.push(`> ${s.summary}`);
+    if (cite) lines.push(`> — ${cite}`);
+    return lines.join("\n>\n");
+  }).filter(Boolean);
+  return blocks.length ? blocks.join("\n\n") : "> (none)";
+}
+
 function renderCardSection(article, index) {
   const sourceNames = article.sources.map((s) => s.title || s.url).filter(Boolean).join(", ") || "none";
   const backing = article.backingItems.length
@@ -178,6 +197,10 @@ function renderCardSection(article, index) {
   return `### ${index + 1}. ${article.hub}
 
 **paragraph:** ${article.paragraph || "(empty)"}
+
+**the report as filed:**
+
+${renderReportBlock(article.sources)}
 
 **what the graph already knew:** ${article.backgroundParagraph || "none"}
 
@@ -190,10 +213,11 @@ ${backing}
 
 **scores:**
 - grounded-term proportion: ${article.groundedTermProportion.grounded}/${article.groundedTermProportion.extracted} (${pct(article.groundedTermProportion.microAverage)}) over ${article.groundedTermProportion.articles} article(s)
+- sentences in the paragraph: ${article.sentenceCount}
 - noisy context lines: ${article.noisyContextLines.count} (${noisyList})
 - repeats another card's sentence: ${article.repeatsSentencesOf || "no"}
 - repeats another card's "Around it": ${article.repeatsAroundItOf || "no"}
-- headline present: ${article.headlinePresent ? "yes" : "no"}, link present: ${article.linkPresent ? "yes" : "no"}, date present: ${article.datePresent ? "yes" : "no"}
+- headline present: ${article.headlinePresent ? "yes" : "no"}, link present: ${article.linkPresent ? "yes" : "no"}, date present: ${article.datePresent ? "yes" : "no"}, raw summary present: ${article.summaryPresent ? "yes" : "no"}
 `;
 }
 

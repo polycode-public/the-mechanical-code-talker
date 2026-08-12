@@ -150,6 +150,12 @@ ${THEME_TOKENS_CSS}
   .item .tier { font-family: ${MONO_STACK}; font-size: .64rem; padding: .05rem .5rem; border-radius: 99px; border: 1px solid var(--line); margin-left: .5rem; }
   .item .newtag { font-family: ${MONO_STACK}; font-size: .64rem; color: var(--taught); margin-left: .5rem; }
   .item .paragraph { margin: .4rem 0; }
+  .item .report { margin: .5rem 0; padding: .35rem 0 .35rem .7rem; border-left: 2px solid var(--line); }
+  .item .report + .report { margin-top: .35rem; }
+  .item .reportheadline { display: block; font-weight: 600; font-size: .88rem; }
+  .item .reportsummary { margin: .2rem 0 0; font-size: .84rem; color: var(--ink); }
+  .item .reportcite { display: block; margin-top: .2rem; font-family: ${MONO_STACK}; font-size: .64rem; color: var(--muted); font-style: normal; }
+  .item .reportmore { font-size: .74rem; color: var(--muted); }
   .item .sources-links { font-size: .74rem; color: var(--muted); }
   .item .sourcedate { font-family: ${MONO_STACK}; }
   .item details.facts summary { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--corpus); cursor: pointer; }
@@ -498,6 +504,30 @@ ${NEWS_STYLE}
     return earliest;
   }
 
+  // How many backing reports a card sets out in full before it counts the
+  // rest. After the per-card attribution cut a card cites one or two items;
+  // the shared-subject card ("earthquake") still cites dozens, and quoting
+  // every one of them buries its own paragraph.
+  var REPORTS_SHOWN_PER_CARD = 3;
+
+  // The report a card was built from, in the source's own framing: its
+  // headline, its description, and who filed it when. Set off from the
+  // graph's own sentences so a reader can always tell which is which.
+  function reportBlockHtml(sources) {
+    const shown = (sources || []).slice(0, REPORTS_SHOWN_PER_CARD);
+    var html = shown.map(function (s) {
+      const headline = s.title ? '<span class="reportheadline">' + esc(s.title) + "</span>" : "";
+      const summary = s.summary ? '<p class="reportsummary">' + esc(s.summary) + "</p>" : "";
+      if (!headline && !summary) return "";
+      const cite = [s.name, s.publishedAt ? String(s.publishedAt).slice(0, 10) : ""].filter(Boolean).join(", ");
+      return '<blockquote class="report">' + headline + summary
+        + (cite ? '<cite class="reportcite">' + esc(cite) + "</cite>" : "") + "</blockquote>";
+    }).join("");
+    const more = (sources || []).length - shown.length;
+    if (more > 0) html += '<p class="reportmore">&hellip;and ' + more + ' more report' + (more === 1 ? "" : "s") + "</p>";
+    return html;
+  }
+
   function cardHtml(item) {
     const factLines = item.factLines || [];
     const factsHtml = factLines.map(function (line) { return '<div class="factrow">' + esc(line) + '</div>'; }).join("");
@@ -513,6 +543,7 @@ ${NEWS_STYLE}
     return '<div class="item" data-item-id="' + esc(item.id) + '">'
       + '<span class="hub">' + esc(item.hub) + '</span><span class="tier">' + esc(item.tier || "unranked") + '</span>' + newTag
       + '<p class="paragraph">' + esc(item.paragraph) + '</p>'
+      + reportBlockHtml(item.sources)
       + background
       + (sourcesText ? '<p class="sources-links">sources: ' + sourcesText + dateText + '</p>' : "")
       + '<details class="facts"><summary>' + (item.factCount || 0) + ' fact' + (item.factCount === 1 ? "" : "s") + '</summary>' + factsHtml + moreHtml + '</details>'

@@ -679,7 +679,7 @@ test("buildFeed's gate: a research-tagged definition and an identity-only report
   const kumamotoItem = feed.items.find((it) => it.hub === "kumamoto");
   assert.ok(kumamotoItem.sources.some((s) => s.url), "the Kumamoto item carries its source link");
   assert.ok(kumamotoItem.background.length > 0, "the identity fact rides along as background, not as its own card");
-  assert.match(kumamotoItem.backgroundParagraph, /city/, "the collapsed line carries what the paragraph dropped");
+  assert.equal(kumamotoItem.paragraph, "kumamoto has population of 1738000. kumamoto is a city.", "the report leads and the identity clause follows it");
   assert.ok(!kumamotoItem.paragraph.includes("tariff"), "an unrelated identity-only report never leaks into another card's background");
 });
 
@@ -705,6 +705,41 @@ test("buildFeed's card carries its source's publication date when the snapshot h
   if (widgetItem) {
     assert.ok(!Object.hasOwn(widgetItem.sources[0], "publishedAt"), "an undated snapshot's source carries no publishedAt key");
   }
+});
+
+test("buildFeed's card carries the item's own headline and description, so a reader can check the graph's sentences against the report", async () => {
+  const { ctx } = await makeCtx({ now: () => FIXED_NOW });
+  const snapshot = normalizeFeedItems("usgs-quakes", [{
+    guid: "eq1", title: "M 4.6 - 14 km NE of Wana, Pakistan", url: "https://example.com/usgs/eq1",
+    summary: "An earthquake struck near Wana.", publishedAt: "2026-08-07T09:00:00.000Z",
+  }], { now: FIXED_NOW })[0];
+
+  ctx.state.items = [snapshot];
+  await ingestNewsSnapshot(ctx, snapshot);
+
+  const feed = await buildFeed(ctx);
+  const wanaItem = feed.items.find((it) => it.hub === "wana");
+  assert.equal(wanaItem.sources[0].title, "M 4.6 - 14 km NE of Wana, Pakistan");
+  assert.equal(wanaItem.sources[0].summary, "An earthquake struck near Wana.");
+});
+
+test("buildFeed's card cuts an over-long description at a word boundary rather than carrying a whole article into the feed document", async () => {
+  const { ctx } = await makeCtx({ now: () => FIXED_NOW });
+  const longSummary = `An earthquake struck near Wana. ${"The tremor was felt widely across the district. ".repeat(20)}`;
+  const snapshot = normalizeFeedItems("usgs-quakes", [{
+    guid: "eq1", title: "M 4.6 - 14 km NE of Wana, Pakistan", url: "https://example.com/usgs/eq1",
+    summary: longSummary, publishedAt: "2026-08-07T09:00:00.000Z",
+  }], { now: FIXED_NOW })[0];
+
+  ctx.state.items = [snapshot];
+  await ingestNewsSnapshot(ctx, snapshot);
+
+  const wanaItem = (await buildFeed(ctx)).items.find((it) => it.hub === "wana");
+  const carried = wanaItem.sources[0].summary;
+  assert.ok(carried.length <= 401, `the carried description is bounded: ${carried.length}`);
+  assert.ok(carried.endsWith("…"), "a cut description says it was cut");
+  assert.ok(!/\s…$/.test(carried), "the cut lands on a word, not a trailing space");
+  assert.ok(longSummary.startsWith(carried.slice(0, -1)), "what is carried is the report's own opening words, unrewritten");
 });
 
 test("buildFeed's gate: a card the optimistic tier only reached off an identifier-shaped token never heads, while a clean report from the same poll still does", async () => {
