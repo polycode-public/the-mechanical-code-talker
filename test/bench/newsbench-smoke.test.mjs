@@ -13,7 +13,7 @@ import { runBench } from "../../scripts/news-bench/run.mjs";
 // offered, 69 admitted, 66 cards.
 const ADMISSION_RATE_FLOOR = 0.50; // baseline 0.5702
 const GROUNDED_TERM_PROPORTION_FLOOR = 0.10; // baseline 0.1318
-const DEDUPE_RATIO_FLOOR = 0.85; // baseline 0.9565
+const DEDUPE_RATIO_FLOOR = 0.70; // baseline 0.764: one card per story; every hubbable item has exactly one card, and a ratio above 1 is the duplication this floor exists to catch
 // A second poll over the identical fixtures must mint nothing new — the
 // plan's own target for this metric, not a margin-relaxed floor.
 const SECOND_PASS_NEW_ITEMS_MAX = 0;
@@ -23,7 +23,7 @@ const SECOND_PASS_NEW_CARDS_MAX = 0;
 // companion reading alike) — the ceiling stays loose rather than pretend a
 // single-line sample locks a rate tightly.
 const NOISY_HUB_RELATION_RATE_CEILING = 0.5;
-const REPEATED_SENTENCE_RATE_CEILING = 0.30; // baseline 0.2418: richer paragraphs legitimately share region background across sibling cards; ratchets back down when cross-card variety lands
+const REPEATED_SENTENCE_RATE_CEILING = 0.05; // baseline 0: one card per story removed the shared-sentence siblings outright
 // Two cards share an "Around it" only where their neighbourhoods genuinely
 // overlap, and each names its own — the plan's target for this metric, held at
 // the measured zero rather than a margin-relaxed ceiling.
