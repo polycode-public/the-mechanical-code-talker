@@ -50,8 +50,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
     `.claude/worktrees/agent-a0ca9e417e6cb8e76`
   - N1 de-dupe (one card per newsworthy item) — worktree
     `.claude/worktrees/agent-adf57b832d79a72ca`
-  - "scientists reports" agreement fix (N4 wart) — worktree
-    `.claude/worktrees/agent-a9e4ad9cff12c83ff`
+  - "scientists reports" agreement fix (N4 wart) — merged to local `main`
+    (`695490e6`); one line still owed once N1's merge frees the file:
+    `news-feed.mjs` line ~583 passes `hub` as `predicatePhrase`'s subject so the
+    live feed's own call site agrees too (coordinator's edit, on record here)
   - units/compass/particle noise out of ranked terms (N3 leg) — merged to local
     `main` (`84ea852e`); "u.s." kept ranking by design, borderlines ("la", "van",
     "di") recorded in the commit's agent report
