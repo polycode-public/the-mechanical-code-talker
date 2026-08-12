@@ -1,5 +1,5 @@
-// corpus/wikidata-live.mjs — the live Wikidata research source. Three small
-// GET round trips against www.wikidata.org's Action API, mapped onto tmct's
+// corpus/wikidata-live.mjs — the live Wikidata research source. Small GET
+// round trips against www.wikidata.org's Action API, mapped onto tmct's
 // seed-ontology relations at THIS boundary and nowhere else: everything
 // downstream reads ordinary tmct facts and never learns the word "Wikidata".
 //
@@ -11,12 +11,17 @@
 // own rate policy and a SPARQL string built per term.
 //
 // The round trips:
-//   1. wbsearchentities — the item whose English label matches the term.
-//   2. wbgetentities    — that item's label, description, revision, claims.
-//   3. wbgetentities    — the English labels of the mapped claims' object
-//                         items, batched into ONE request. A claim's value is
-//                         a Q-id, and a stored fact's object has to be a human
-//                         term. Skipped when nothing mapped.
+//   1. wbsearchentities — every candidate item whose English label matches
+//                         the term, best fold first.
+//   2. wbgetentities    — a candidate's label, description, revision, claims.
+//   3. wbgetentities    — the English labels of that candidate's mapped
+//                         claims' object items, batched into ONE request. A
+//                         claim's value is a Q-id, and a stored fact's object
+//                         has to be a human term. Skipped when nothing
+//                         mapped.
+// Steps 2 and 3 repeat, candidate by candidate, only while the current one
+// turns out to be a media or document work sharing the term's name rather
+// than the term itself — the common case still costs three round trips.
 //
 // Courtesy is structural, mirroring wikipedia-live.mjs: one in-flight lookup
 // at a time, a minimum interval between round trips, a 429/maxlag cool-off
@@ -72,6 +77,29 @@ export const WIKIDATA_PROPERTY_RELATIONS = Object.freeze({
 // it would store from a prose lead sentence.
 const ISA_PROPERTIES = ["P279", "P31"];
 
+// A closed list of Wikidata item classes that name a media or document work,
+// not the everyday concept a term search asked for. A search on "canadian
+// companies" or "continents" can land on a paper or an album that merely
+// SHARES the term's name — Wikidata's own title match, not a definition.
+// Folded through normFactTerm the same way every isa term is, so the check
+// compares like with like. Each class is a Wikidata English label read
+// straight off the item, not a guess at one — refine this list from what
+// Wikidata actually returns, keep it named and small.
+const MEDIA_WORK_CLASSES = new Set([
+  "scholarly article",
+  "album",
+  "song",
+  "single",
+  "film",
+  "television series",
+  "television series episode",
+  "band",
+  "musical group",
+  "video game",
+  "book",
+  "novel",
+]);
+
 // How much of one item a single lookup reads: at most this many object values
 // per property, and this many facts in total. A busy item like "human" carries
 // hundreds of statements, and a research lookup wants the shape of the thing,
@@ -81,23 +109,27 @@ const MAX_FACTS_PER_ITEM = 12;
 
 const ITEM_ID_RE = /^Q[1-9][0-9]*$/;
 
-/** The searched item whose English label folds onto the key, or null — the
+/** Every candidate item whose English label folds onto the key, exact folds
+ *  first then prefix folds, each group in the search result's own order — the
  *  topic-drift guard, matching wikipedia-live.mjs's: "quasar" may resolve to
  *  "quasar" or "quasars", never to the first suggestion about something else.
  *  An exact fold beats a prefix fold wherever it appears in the result list,
  *  so a search that ranks "Quasars (album)" above "quasar" still lands on the
- *  term the caller asked for. */
-function matchingItemId(key, body) {
+ *  term the caller asked for first. Returning every candidate, not just the
+ *  best one, lets the caller step to the next title match when the best one
+ *  turns out to be a media work sharing the name. */
+function candidateItemIds(key, body) {
   const results = Array.isArray(body?.search) ? body.search : [];
-  let prefixMatch = null;
+  const exact = [];
+  const prefix = [];
   for (const hit of results) {
     const id = String(hit?.id ?? "");
     if (!ITEM_ID_RE.test(id)) continue;
     const folded = normFactTerm(hit?.label ?? "");
-    if (folded === key) return id;
-    if (prefixMatch === null && folded.startsWith(key)) prefixMatch = id;
+    if (folded === key) exact.push(id);
+    else if (folded.startsWith(key)) prefix.push(id);
   }
-  return prefixMatch;
+  return [...exact, ...prefix];
 }
 
 /** Every mapped claim on an entity as {predicate, id} pairs, capped per
@@ -178,6 +210,11 @@ export function createWikidataLiveProvider({
     return termById;
   }
 
+  /** The looked-up item, or null when every candidate that matched the
+   *  search either has no readable entity or turns out to be a media/document
+   *  work sharing the term's name — a media-class isa is a wrong identity, not
+   *  a definition, so the caller steps to the next title match instead of
+   *  accepting it. Exhausting every candidate this way is the term missing. */
   async function roundTrips(key) {
     const search = await gate.fetchJson(actionUrl({
       action: "wbsearchentities",
@@ -187,45 +224,49 @@ export function createWikidataLiveProvider({
       limit: "5",
       search: key,
     }));
-    const id = search ? matchingItemId(key, search) : null;
-    if (!id) return null;
+    const candidateIds = search ? candidateItemIds(key, search) : [];
 
-    const read = await gate.fetchJson(actionUrl({
-      action: "wbgetentities",
-      languages: "en",
-      props: "labels|descriptions|claims|info",
-      ids: id,
-    }));
-    const entity = read?.entities?.[id];
-    if (!entity) return null;
+    for (const id of candidateIds) {
+      const read = await gate.fetchJson(actionUrl({
+        action: "wbgetentities",
+        languages: "en",
+        props: "labels|descriptions|claims|info",
+        ids: id,
+      }));
+      const entity = read?.entities?.[id];
+      if (!entity) continue;
 
-    const claims = mappedClaims(entity);
-    const termById = await termsForIds(claims.map((c) => c.id));
-    const provenance = researchSourceTag(sourceName, key);
-    const facts = [];
-    const seen = new Set();
-    for (const claim of claims) {
-      const object = termById.get(claim.id);
-      if (!object || object === key || seen.has(`${claim.predicate}\0${object}`)) continue;
-      seen.add(`${claim.predicate}\0${object}`);
-      facts.push({ subject: key, predicate: claim.predicate, object, provenance });
+      const claims = mappedClaims(entity);
+      const termById = await termsForIds(claims.map((c) => c.id));
+      const isa = isaFrom(claims, termById, key);
+      if (isa && MEDIA_WORK_CLASSES.has(isa)) continue;
+
+      const provenance = researchSourceTag(sourceName, key);
+      const facts = [];
+      const seen = new Set();
+      for (const claim of claims) {
+        const object = termById.get(claim.id);
+        if (!object || object === key || seen.has(`${claim.predicate}\0${object}`)) continue;
+        seen.add(`${claim.predicate}\0${object}`);
+        facts.push({ subject: key, predicate: claim.predicate, object, provenance });
+      }
+
+      const description = String(entity.descriptions?.en?.value ?? "");
+      const row = {
+        term: key,
+        title: String(entity.labels?.en?.value ?? ""),
+        text: description,
+        summary: sentencesUpTo(description, SUMMARY_CHAR_CAP),
+        url: `${origin}/wiki/${id}`,
+        revid: Number(entity.lastrevid),
+        source: WIKIDATA_SOURCE_LABEL,
+        licence: WIKIDATA_LICENCE,
+      };
+      if (isa) row.isa = isa;
+      if (facts.length) row.facts = facts;
+      if (isResearchSourceRow(row)) return row;
     }
-
-    const description = String(entity.descriptions?.en?.value ?? "");
-    const row = {
-      term: key,
-      title: String(entity.labels?.en?.value ?? ""),
-      text: description,
-      summary: sentencesUpTo(description, SUMMARY_CHAR_CAP),
-      url: `${origin}/wiki/${id}`,
-      revid: Number(entity.lastrevid),
-      source: WIKIDATA_SOURCE_LABEL,
-      licence: WIKIDATA_LICENCE,
-    };
-    const isa = isaFrom(claims, termById, key);
-    if (isa) row.isa = isa;
-    if (facts.length) row.facts = facts;
-    return isResearchSourceRow(row) ? row : null;
+    return null;
   }
 
   return {

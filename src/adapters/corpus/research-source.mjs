@@ -77,9 +77,13 @@ export function isResearchSource(source) {
  *  `research:<source>:<folded term>`. memory/trust.mjs reads the `research:`
  *  prefix back as a referenceLive Source, so a live-fetched fact scores below
  *  every curated pack, and the source segment keeps which adapter fetched it
- *  readable off the fact itself. */
+ *  readable off the fact itself. A multi-word term's internal spaces fold to
+ *  underscores (ConceptNet's own /c/en/foo_bar convention, which normFactTerm
+ *  already unwinds on the way in) so the tag stays one whitespace-free token —
+ *  the same shape every other single-segment provenance tag carries, and safe
+ *  under a caller that reads only the tag's first whitespace-split word. */
 export function researchSourceTag(sourceName, term) {
-  return `research:${sourceName}:${normFactTerm(term)}`;
+  return `research:${sourceName}:${normFactTerm(term).replace(/ /g, "_")}`;
 }
 
 /** The facts a looked-up row licenses, each stamped with the source's own tag.
