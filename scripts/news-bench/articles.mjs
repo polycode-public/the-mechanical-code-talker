@@ -7,7 +7,9 @@
 // expose (PLAN_NEWS_FEED_QUALITY.md section 1's own named gap) is computed
 // here from the poll state rather than touching src.
 import { ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
-import { groundedTermPerItem, noisyHubIndex, cardIdentityLineClassifications } from "./metrics.mjs";
+import {
+  groundedTermPerItem, noisyHubIndex, cardIdentityLineClassifications, citedRowsForCard,
+} from "./metrics.mjs";
 
 function splitSentences(paragraph) {
   const trimmed = String(paragraph || "").trim().replace(/\.$/, "");
@@ -23,14 +25,17 @@ function byFetchedAtThenId(a, b) {
   return String(a.fetchedAt).localeCompare(String(b.fetchedAt)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
-/** Items whose own extracted facts intersect a card's factIds set — the
- *  source item(s) a card's paragraph was built from, its own two-hop
- *  background included. Sorted by fetchedAt then id so the same run always
- *  lists them in the same order. */
-function backingItemsFor(card, items) {
-  const cardFactIds = new Set(card.factIds || []);
+/** Items whose own extracted facts intersect what the card actually CITES
+ *  (`citedRowsForCard` — its own reported rows plus the neighbours its
+ *  "Around it" clause names), never its whole two-hop subgraph: a quake
+ *  card's two-hop walk reaches all 44 of the day's quakes through the
+ *  shared "earthquake" node, but only the quakes it actually reports and
+ *  names are its own article. Sorted by fetchedAt then id so the same run
+ *  always lists them in the same order. */
+function backingItemsFor(card, items, rows) {
+  const citedIds = new Set(citedRowsForCard(card, rows).map((row) => row.id));
   return items
-    .filter((item) => (item.factIds || []).some((id) => cardFactIds.has(id)))
+    .filter((item) => (item.factIds || []).some((id) => citedIds.has(id)))
     .sort(byFetchedAtThenId);
 }
 
@@ -44,8 +49,8 @@ function cardDate(backingItems) {
  *  read out per card instead of pooled across the feed — the same
  *  classification `noisyHubRelationRate` counts, so a card's own display
  *  can never drift from the feed-wide rate. */
-function cardNoisyContextLines(card, rowsById, index) {
-  return cardIdentityLineClassifications(card, rowsById, index)
+function cardNoisyContextLines(card, index) {
+  return cardIdentityLineClassifications(card, index)
     .filter((c) => c.noisy)
     .map((c) => c.row.object);
 }
@@ -86,9 +91,9 @@ function rejectionStage(item, ledgerEntries) {
   return touched ? "parsed; term(s) never grounded" : "no recognizable claim in the text";
 }
 
-function cardArticle(card, allCards, items, rowsById, perItemGrounded, index) {
-  const backingItems = backingItemsFor(card, items);
-  const noisy = cardNoisyContextLines(card, rowsById, index);
+function cardArticle(card, allCards, items, rows, perItemGrounded, index) {
+  const backingItems = backingItemsFor(card, items, rows);
+  const noisy = cardNoisyContextLines(card, index);
   const repeat = cardRepeat(card, allCards);
   const date = cardDate(backingItems);
   const backingGrounded = backingItems.map((item) => perItemGrounded.get(item.id)).filter(Boolean);
@@ -128,20 +133,19 @@ function cardArticle(card, allCards, items, rowsById, perItemGrounded, index) {
  *  the two ways an article failed to happen, all in the same machine-
  *  readable shape. */
 export function buildArticlesReport({ feed, state, rows }) {
-  const rowsById = new Map(rows.map((r) => [r.id, r]));
   const items = state.items || [];
   const cards = feed.items;
   const perItemGrounded = new Map(groundedTermPerItem(state, rows).map((r) => [r.itemId, r]));
   const ledgerEntries = [...ledgerFromPayload(state.ledger).terms.values()];
   const index = noisyHubIndex(rows, state);
 
-  const cardFactIdUnion = new Set();
-  for (const card of cards) for (const id of card.factIds || []) cardFactIdUnion.add(id);
+  const citedIdUnion = new Set();
+  for (const card of cards) for (const row of citedRowsForCard(card, rows)) citedIdUnion.add(row.id);
 
-  const cardEntries = cards.map((card) => cardArticle(card, cards, items, rowsById, perItemGrounded, index));
+  const cardEntries = cards.map((card) => cardArticle(card, cards, items, rows, perItemGrounded, index));
 
   const cardlessEntries = items
-    .filter((item) => (item.factIds || []).length > 0 && !(item.factIds || []).some((id) => cardFactIdUnion.has(id)))
+    .filter((item) => (item.factIds || []).length > 0 && !(item.factIds || []).some((id) => citedIdUnion.has(id)))
     .map((item) => ({
       kind: "cardless-admitted", id: item.id, sourceId: item.sourceId, title: item.title, factCount: item.factIds.length,
     }));

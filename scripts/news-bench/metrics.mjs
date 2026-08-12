@@ -9,7 +9,9 @@
 // wording a later run is compared against.
 
 import { normFactTerm } from "../../src/domain/hash.mjs";
-import { isNewsProvenance, buildTermAdjacency } from "../../src/domain/news-feed.mjs";
+import {
+  isNewsProvenance, buildTermAdjacency, hubReportRows, neighbourRows,
+} from "../../src/domain/news-feed.mjs";
 import { ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
 import { tokenizeProse } from "../../src/domain/prose.mjs";
 import { STOP_SET as ABSTRACT_ROOT_TERMS } from "../../src/domain/hub-terms.mjs";
@@ -317,13 +319,46 @@ const IDENTITY_PREDICATES = new Set(["rdf:type", "rdfs:subClassOf"]);
  *  electrical device" two hops from a "mina, nevada" hub), so this counts
  *  every identity row the card's subgraph reaches, not only the ones whose
  *  subject is literally the hub. */
-function identityLinesForCard(card, rowsById) {
+/** Every row a card actually CITES — what it reports about its own hub plus
+ *  the neighbours its "Around it" clause names (news-feed.mjs's own
+ *  `hubReportRows`/`neighbourRows`, read out the same way `buildNewsItems`
+ *  builds `card.sources`), run twice the same way the card's own two
+ *  paragraphs are: once over the reported subgraph for the main paragraph,
+ *  once over the background-only rows for `backgroundParagraph`. A hub that
+ *  only ever appears as an OBJECT (a place a quake struck) has no report row
+ *  of its own; its class-membership noise sits on the SUBJECT of a
+ *  background neighbour instead ("earthquake is a kind of X" two hops from a
+ *  place hub), which is exactly why the background pass runs too. */
+export function citedRowsForCard(card, rows) {
+  const factIds = card.factIds || [];
+  const rowsById = new Map(rows.map((r) => [r.id, r]));
+  const subgraphRows = factIds.map((id) => rowsById.get(id)).filter(Boolean);
+  const backgroundIds = new Set(card.background || []);
+  const backgroundRows = subgraphRows.filter((r) => backgroundIds.has(r.id));
+  const reportedIds = new Set(factIds.filter((id) => !backgroundIds.has(id)));
+
+  const cited = [
+    ...hubReportRows(card.hub, subgraphRows, { reportedIds }),
+    ...neighbourRows(card.hub, subgraphRows, { reportedIds }),
+    ...hubReportRows(card.hub, backgroundRows, { reportedIds: null }),
+    ...neighbourRows(card.hub, backgroundRows, { reportedIds: null }),
+  ];
+
+  const seen = new Set();
   const out = [];
-  for (const factId of card.factIds || []) {
-    const row = rowsById.get(factId);
-    if (row && IDENTITY_PREDICATES.has(row.predicate)) out.push(row);
+  for (const row of cited) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    out.push(row);
   }
   return out;
+}
+
+/** The identity-predicate rows among what a card actually cites (see
+ *  `citedRowsForCard`) — every context line a reader can genuinely see,
+ *  never the wider two-hop subgraph a card merely reaches. */
+function identityLinesForCard(card, rows) {
+  return citedRowsForCard(card, rows).filter((row) => IDENTITY_PREDICATES.has(row.predicate));
 }
 
 /** A term's own one-hop content-word cloud: every OTHER term touching it
@@ -423,22 +458,21 @@ export function noisyHubIndex(rows, state) {
  *  per-card "noisy context lines" and the aggregate rate below both read
  *  off this same list, so a card's own display can never drift from what
  *  the feed-wide rate counted it as. */
-export function cardIdentityLineClassifications(card, rowsById, index) {
+export function cardIdentityLineClassifications(card, index) {
   const newsSentenceTokens = newsSentenceTokensForCard(card, index.itemsByFactId);
-  return identityLinesForCard(card, rowsById).map((row) => ({
+  return identityLinesForCard(card, index.rows).map((row) => ({
     row,
     ...classifyIdentityLine(row, { newsSentenceTokens, rows: index.rows, adjacency: index.adjacency }),
   }));
 }
 
 export function noisyHubRelationRate(feed, rows, state) {
-  const rowsById = new Map(rows.map((r) => [r.id, r]));
   const index = noisyHubIndex(rows, state);
   let total = 0;
   let noisy = 0;
   let noisyClosedListTotal = 0;
   for (const card of feed.items) {
-    for (const c of cardIdentityLineClassifications(card, rowsById, index)) {
+    for (const c of cardIdentityLineClassifications(card, index)) {
       total += 1;
       if (c.noisy) noisy += 1;
       if (c.noisyClosedList) noisyClosedListTotal += 1;
