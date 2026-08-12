@@ -567,6 +567,32 @@ export function subgraphAround(rows, hub, {
     .slice(0, cap);
 }
 
+// How far the walk goes from an entity the ARTICLE names rather than a fact,
+// and how many rows it may bring back. One hop: what the graph says about that
+// entity itself, never what it says about everything that entity touches. The
+// hub's own two-hop walk is unchanged; this one runs beside it.
+const ARTICLE_ENTITY_HOPS = 1;
+const ARTICLE_ENTITY_ROW_CAP = 24;
+
+/** The rows sitting one hop from an entity the card's article names. Seeded
+ *  from `terms` rather than the hub, so a definition the graph holds about a
+ *  name inside the headline reaches the card even when no fact of the card's
+ *  own touches that name — "amigados is a disk operating system" beside a
+ *  report whose only fact is that a site discussed the headline.
+ *
+ *  `excludeIds` carries the card's reported rows as well as the ones another
+ *  card claimed, so this walk returns background and nothing else: what a
+ *  source reported is the hub walk's business. */
+export function articleEntityRows(rows, terms, {
+  adjacency = null, excludeIds = null, cap = ARTICLE_ENTITY_ROW_CAP,
+} = {}) {
+  const seedTerms = (terms || []).map((term) => normFactTerm(term)).filter(Boolean);
+  if (!seedTerms.length) return [];
+  return subgraphAround(rows, seedTerms[0], {
+    hops: ARTICLE_ENTITY_HOPS, cap, adjacency, seedTerms, excludeIds,
+  });
+}
+
 /** The strongest prior kind among `rows`, for the item's trust chip — read
  *  off each row's own `trust` (a number) and `sourceTypes` (the kind array
  *  readFactRows already computes), never a re-derivation of SOURCE_PRIOR. */
@@ -774,40 +800,58 @@ function identityFans(subgraphRows) {
   return { senseFan, sourcedSenseFan, categoryFan };
 }
 
-/** What this card is ABOUT: its hub, the region of a hub the source spelled
- *  "settlement, region", and the other terms its own report sentences name —
- *  minus any of those that reads across senses. A quake card's report
+// Where a background row's anchor term came from, and so which rows the
+// disclosure names first: the card's own hub, then a term its report names,
+// then an entity its article names that no fact of the card's own touches.
+const ANCHOR_RANK_HUB = 0;
+const ANCHOR_RANK_REPORT = 1;
+const ANCHOR_RANK_ARTICLE = 2;
+
+/** What this card is ABOUT, each term mapped to its anchor rank: its hub, the
+ *  region of a hub the source spelled "settlement, region", the other terms its
+ *  own report sentences name, and the entities its article names (`articleTerms`)
+ *  — minus any of those that reads across senses. A quake card's report
  *  names "earthquake" and a place; the class term is where the graph's
  *  knowledge is thinnest and its senses widest, so background drawn through it
  *  is background about earthquakes in general, never about this quake. The hub
- *  itself is always in, whatever its sense count — the card is about it. */
-function cardSubjectTerms(hub, subgraphRows, { reportedIds = null, senseFan }) {
+ *  itself is always in, whatever its sense count — the card is about it.
+ *
+ *  An article entity earns the same reading a report term gets, one rank
+ *  behind it: the story's own words name it, but no fact the card reports
+ *  does. */
+function cardSubjectTerms(hub, subgraphRows, { reportedIds = null, senseFan, articleTerms = [] }) {
   const hubTerm = normFactTerm(hub);
   const isReported = idMembership(reportedIds);
-  const terms = new Set(hubSeedTerms(hubTerm));
+  const terms = new Map();
+  for (const seed of hubSeedTerms(hubTerm)) terms.set(seed, ANCHOR_RANK_HUB);
+  const admit = (raw, rank) => {
+    const term = normFactTerm(raw);
+    if (!term || terms.has(term) || STOP_SET.has(term)) return;
+    if ((senseFan.get(term) || 0) > IDENTITY_MAX_CLASSES) return;
+    terms.set(term, rank);
+  };
   for (const row of hubReportRows(hubTerm, subgraphRows, { reportedIds })) {
     if (!isReported(row.id)) continue;
-    for (const raw of [row.subject, row.object]) {
-      const term = normFactTerm(raw);
-      if (!term || terms.has(term) || STOP_SET.has(term)) continue;
-      if ((senseFan.get(term) || 0) > IDENTITY_MAX_CLASSES) continue;
-      terms.add(term);
-    }
+    for (const raw of [row.subject, row.object]) admit(raw, ANCHOR_RANK_REPORT);
   }
+  for (const raw of articleTerms) admit(raw, ANCHOR_RANK_ARTICLE);
   return terms;
 }
 
 /** The background rows worth telling a reader about, ranked: a row touching
  *  one of this card's own subject terms, whose other side is not a category
  *  node, and — for an identity row — whose subject is not read across senses.
- *  Ranks the hub's own rows first, then by how specific the other side is,
- *  then by content-addressed id, so the same fact set always yields the same
- *  lines in the same order. */
-export function knownFactRows(hub, subgraphRows, { reportedIds = null, limit = KNOWN_FACT_ROW_LIMIT } = {}) {
+ *  Ranks the hub's own rows first, then the ones its report names, then the
+ *  ones an entity in its article names, then by how specific the other side
+ *  is, then by content-addressed id, so the same fact set always yields the
+ *  same lines in the same order. */
+export function knownFactRows(hub, subgraphRows, {
+  reportedIds = null, limit = KNOWN_FACT_ROW_LIMIT, articleTerms = [],
+} = {}) {
   const hubTerm = normFactTerm(hub);
   const isReported = idMembership(reportedIds);
   const { senseFan, sourcedSenseFan, categoryFan } = identityFans(subgraphRows);
-  const subjects = cardSubjectTerms(hub, subgraphRows, { reportedIds, senseFan });
+  const subjects = cardSubjectTerms(hub, subgraphRows, { reportedIds, senseFan, articleTerms });
   const neighbourIds = new Set(neighbourRows(hub, subgraphRows, { reportedIds }).map((r) => r.id));
 
   const scored = [];
@@ -828,14 +872,14 @@ export function knownFactRows(hub, subgraphRows, { reportedIds = null, limit = K
     if ((categoryFan.get(other) || 0) > CATEGORY_FAN_MAX) continue;
     scored.push({
       row,
-      anchorIsHub: anchor === hubTerm,
+      anchorRank: subjects.get(anchor),
       otherCategoryFan: categoryFan.get(other) || 0,
       otherSenseFan: senseFan.get(other) || 0,
     });
   }
 
   return scored
-    .sort((a, b) => (Number(b.anchorIsHub) - Number(a.anchorIsHub))
+    .sort((a, b) => (a.anchorRank - b.anchorRank)
       || (a.otherCategoryFan - b.otherCategoryFan)
       || (a.otherSenseFan - b.otherSenseFan)
       || byId(a.row, b.row))
@@ -878,10 +922,16 @@ function groupedFactSentenceEntries(rows) {
   }
   return [...groups.values()].map(({ subject, predicate, objects, rows: groupRows }) => {
     const sorted = [...objects].sort();
-    const rendered = IDENTITY_PREDICATES.has(predicate)
-      ? sorted.map((object) => `${articleFor(object)} ${object}`)
-      : sorted;
-    return { text: `${subject} ${predicatePhrase(predicate, subject)} ${joinObjects(rendered)}`, rows: groupRows };
+    // "rdf:type" reads "is a" from the curated phrase table, which is the wrong
+    // article before a vowel and a second one in front of an object articleFor
+    // has already spelled. The identity clause the paragraph opens with says a
+    // bare "is" and lets articleFor choose; a background line says it the same
+    // way. Every other predicate, "is a kind of" included, carries whatever
+    // article it needs inside its own phrase and takes the object bare.
+    const text = predicate === "rdf:type"
+      ? `${subject} is ${joinObjects(sorted.map((object) => `${articleFor(object)} ${object}`))}`
+      : `${subject} ${predicatePhrase(predicate, subject)} ${joinObjects(sorted)}`;
+    return { text, rows: groupRows };
   });
 }
 
@@ -898,7 +948,7 @@ function groupedFactSentences(rows) {
  *  `renderNewsParagraph` itself slices, never a second derivation of it.
  *  Callers that render only one block — the "what the graph already knew"
  *  disclosure — read the block they want instead of re-deriving it. */
-function paragraphBlocks(hub, subgraphRows, { reportedIds = null } = {}) {
+function paragraphBlocks(hub, subgraphRows, { reportedIds = null, articleTerms = [] } = {}) {
   const hubTerm = normFactTerm(hub);
   const isReported = idMembership(reportedIds);
   const hubRows = subgraphRows.filter((r) => normFactTerm(r.subject) === hubTerm);
@@ -941,7 +991,7 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null } = {}) {
     });
   }
 
-  const known = groupedFactSentenceEntries(knownFactRows(hub, subgraphRows, { reportedIds }));
+  const known = groupedFactSentenceEntries(knownFactRows(hub, subgraphRows, { reportedIds, articleTerms }));
 
   const neighbours = neighbourRows(hub, subgraphRows, { reportedIds });
   const around = neighbours.length
@@ -956,8 +1006,8 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null } = {}) {
  *  (identity, known) and the paragraph-wide `SENTENCE_CAP` both applied.
  *  Shared by `renderNewsParagraph` and `printedParagraphRows` so the two can
  *  never drift: one reads `.text`, the other reads `.rows`. */
-function paragraphSentenceEntries(hub, subgraphRows, { reportedIds = null } = {}) {
-  const { report, identity, known, around } = paragraphBlocks(hub, subgraphRows, { reportedIds });
+function paragraphSentenceEntries(hub, subgraphRows, { reportedIds = null, articleTerms = [] } = {}) {
+  const { report, identity, known, around } = paragraphBlocks(hub, subgraphRows, { reportedIds, articleTerms });
   return [
     ...report,
     ...identity.slice(0, IDENTITY_SENTENCE_CAP),
@@ -976,8 +1026,8 @@ function paragraphSentenceEntries(hub, subgraphRows, { reportedIds = null } = {}
  *  into what was reported (the lead sentences) and what the graph already held
  *  (the background ones). Defaults to null, meaning every row counts as
  *  reported. */
-export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = {}) {
-  const sentences = paragraphSentenceEntries(hub, subgraphRows, { reportedIds }).map((entry) => entry.text);
+export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null, articleTerms = [] } = {}) {
+  const sentences = paragraphSentenceEntries(hub, subgraphRows, { reportedIds, articleTerms }).map((entry) => entry.text);
   return sentences.length ? `${sentences.join(". ")}.` : "";
 }
 
@@ -987,8 +1037,8 @@ export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null } = 
  *  computed but sliced away before render (an "Around it" clause cut by the
  *  overall cap, an identity class beyond `IDENTITY_MAX_CLASSES`) never
  *  appears here, because it never appears on the card either. */
-export function printedParagraphRows(hub, subgraphRows, { reportedIds = null } = {}) {
-  return paragraphSentenceEntries(hub, subgraphRows, { reportedIds }).flatMap((entry) => entry.rows);
+export function printedParagraphRows(hub, subgraphRows, { reportedIds = null, articleTerms = [] } = {}) {
+  return paragraphSentenceEntries(hub, subgraphRows, { reportedIds, articleTerms }).flatMap((entry) => entry.rows);
 }
 
 /** The "what the graph already knew" disclosure: the same related facts the
@@ -996,8 +1046,8 @@ export function printedParagraphRows(hub, subgraphRows, { reportedIds = null } =
  *  card already reported. Empty when the graph held nothing about this card's
  *  own subjects — a card with no background says so rather than filling the
  *  space with whatever the two-hop walk happened to reach. */
-export function renderKnownFactsParagraph(hub, subgraphRows, { reportedIds = null } = {}) {
-  const sentences = groupedFactSentences(knownFactRows(hub, subgraphRows, { reportedIds }));
+export function renderKnownFactsParagraph(hub, subgraphRows, { reportedIds = null, articleTerms = [] } = {}) {
+  const sentences = groupedFactSentences(knownFactRows(hub, subgraphRows, { reportedIds, articleTerms }));
   return sentences.length ? `${sentences.join(". ")}.` : "";
 }
 
@@ -1253,6 +1303,30 @@ export function storyCoverage(hubs, rowsByTerm) {
   return coverage;
 }
 
+/** The entities this card's own article names, as terms the graph could hold
+ *  facts about. `articleEntityNames` reads them out of the text the card
+ *  already shows — each source's headline and the description beneath it — and
+ *  the same discipline the hub gate applies then filters them: no stop word, no
+ *  quantity, no class the graph's own identity rows name, nothing that reads as
+ *  a clause rather than a name. Sorted, so a card's background never depends on
+ *  the order the names came back in. */
+function cardArticleTerms(sources, articleEntityNames, { concepts, readsAsEntityTerm }) {
+  const texts = [];
+  for (const source of sources) {
+    if (source.title) texts.push(source.title);
+    if (source.summary) texts.push(source.summary);
+  }
+  if (!texts.length) return [];
+  const terms = new Set();
+  for (const name of articleEntityNames(texts) || []) {
+    const term = normFactTerm(name);
+    if (!term || STOP_SET.has(term) || isQuantityTerm(term) || concepts.has(term)) continue;
+    if (!readsAsEntityTerm(term)) continue;
+    terms.add(term);
+  }
+  return [...terms].sort();
+}
+
 /** newsworthyHubs -> one item per hub (PLAN_NEWS_FEED.md section 6.6),
  *  paragraph included, sorted builtAt desc then id asc. `sourcesByFactId`
  *  maps fact ids to snapshot source links ({ title, url, name, publishedAt?
@@ -1276,8 +1350,19 @@ export function storyCoverage(hubs, rowsByTerm) {
  *  rather than a clause the report threw off, and `storyCoverage` leaves a
  *  publication with only the stories no other card tells. Both are pure over
  *  the fact set, so a feed built from the same rows in two orders still comes
- *  back byte for byte. */
-export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId = new Map(), readsAsEntityTerm } = {}) {
+ *  back byte for byte.
+ *
+ *  `articleEntityNames`, when the caller supplies one, reads the entity names
+ *  out of the text of the sources a card shows (news.mjs wires the services
+ *  layer's own capture, the same one the enrichment ledger admits terms by).
+ *  Those entities widen the card's background: what the graph holds about a
+ *  name inside the headline now reaches the card, where before only the
+ *  endpoints of its own facts did. They never widen its report — the walk they
+ *  seed excludes every reported row — so what a card claims a source said is
+ *  untouched. */
+export function buildNewsItems(rows, {
+  now, windowMs, limit = 6, sourcesByFactId = new Map(), readsAsEntityTerm, articleEntityNames = null,
+} = {}) {
   const reported = reportedRows(rows, { now, windowMs });
   const reportedIds = new Set(reported.map((r) => r.id));
   const adjacency = buildTermAdjacency(rows);
@@ -1287,13 +1372,28 @@ export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId
   const rowsByTerm = reportedRowsByTerm(reported);
   const hubs = titledHubs(newsworthyHubs(rows, reported, hubOptions), rows, reported, rowsByTerm);
   const coverage = storyCoverage(hubs, rowsByTerm);
+  const concepts = conceptTerms(rows);
+  const namesEntities = readsAsEntityTerm || looksLikeEntityTerm;
   const items = hubs.filter(({ term }) => coverage.get(term).mints).map(({ term, changed }) => {
-    const subgraphRows = subgraphAround(rows, term, {
+    const coveredRowIds = coverage.get(term).coveredRowIds;
+    const hubRows = subgraphAround(rows, term, {
       adjacency,
       priorityIds: reportedIds,
       seedTerms: hubSeedTerms(term),
-      excludeIds: coverage.get(term).coveredRowIds,
+      excludeIds: coveredRowIds,
     });
+    const sources = collectSources(hubReportRows(term, hubRows, { reportedIds }), sourcesByFactId);
+    const articleTerms = articleEntityNames
+      ? cardArticleTerms(sources, articleEntityNames, { concepts, readsAsEntityTerm: namesEntities })
+      : [];
+    const heldIds = new Set(hubRows.map((r) => r.id));
+    const articleRows = articleTerms.length
+      ? articleEntityRows(rows, articleTerms, {
+        adjacency,
+        excludeIds: new Set([...coveredRowIds, ...reportedIds]),
+      }).filter((r) => !heldIds.has(r.id))
+      : [];
+    const subgraphRows = articleRows.length ? [...hubRows, ...articleRows] : hubRows;
     const factIds = subgraphRows.map((r) => r.id).sort();
     const { background } = splitCardRows(subgraphRows, reportedIds);
     return {
@@ -1302,11 +1402,11 @@ export function buildNewsItems(rows, { now, windowMs, limit = 6, sourcesByFactId
       factIds,
       changedCount: changed,
       builtAt: now,
-      paragraph: renderNewsParagraph(term, subgraphRows, { reportedIds }),
+      paragraph: renderNewsParagraph(term, subgraphRows, { reportedIds, articleTerms }),
       tier: tierOf(subgraphRows),
-      sources: collectSources(hubReportRows(term, subgraphRows, { reportedIds }), sourcesByFactId),
+      sources,
       background: background.map((r) => r.id).sort(),
-      backgroundParagraph: renderKnownFactsParagraph(term, subgraphRows, { reportedIds }),
+      backgroundParagraph: renderKnownFactsParagraph(term, subgraphRows, { reportedIds, articleTerms }),
     };
   });
   return items.sort((a, b) => (toMs(b.builtAt) - toMs(a.builtAt)) || byId(a, b));
