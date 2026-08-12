@@ -72,18 +72,32 @@ in flight as worktree sub-agents; each names its own branch.
    RELATED FACTS keeps israel/turkey/australia-are-countries, drops the anatomy
    strays, and the filler sentences starve. Effort: one Opus agent, same-sense
    discipline applied to neighbourhood selection.
-4. [ ] **chat.mjs read-time BFS gate** — in flight on
-   `worktree-agent-a89e24fb164e45624`. The chat surface still walks asserted
-   cross-sense edges live (russia can reach body part in a two-hop chase; the
-   loop's own bound is 8 hops). Same gate, different reader. Effort: one careful
-   Opus agent, 1.1 MB file.
+4. [~] **chat.mjs read-time sense screen** — CODE COMPLETE, merged as `b83d058b`,
+   awaiting the full suite at the next push. Four walks were leaking, not one:
+   the 8-hop subtype BFS, the rendered superclass chain, the cax-sco/scm-sco
+   proof chases, and the deep-chain probe that offers `/syllogise`. A strictly
+   two-hop crossing is not screenable by construction — `topsOf` puts a term at
+   its nearest level, so a subject two hops from `body part` reaches `place` and
+   `body part` at the same level and keeps both, which is the deliberate "a term
+   genuinely under two tops keeps both branches" rule. The leak was always the
+   multi-hop walk.
 5. [ ] **Engine speed remainders** — in flight on
    `worktree-agent-a8524b7876375a001`. Seed re-assembly on any removal (~2 s
    each; 15 lines of unwired slot-structure scaffolding preserved on branch
    `worktree-agent-add917bc647f82f46`, unmerged), `migrateStoredMemory`
    re-running per memory-handle load, `buildMemoryIndex` rebuilt per write.
    Expected: more articles ground per 60 s press; faster runs.
-6. [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
+6. [ ] **Fact-listing line order tracks arrival order** — the repo invariant says
+   any read-time resolver over the fact store is a pure function of the fact
+   set, and the listing reader is not yet one in its ordering.
+   `rankByBiasThenTrust` is a stable sort, so equal-trust rows keep ingestion
+   order: feed the same facts forward and reversed and "what do you know about
+   X" gives the same fact SET in a different line order. Measured on both sides
+   of the sense-screen change, so it predates it. The fix is a
+   content-addressed tiebreak on every fact listing, which redraws pinned
+   outputs across the estate — that width is why it is its own item rather than
+   a remainder of item 4.
+7. [ ] **Wikidata** — the pinned dated dump (`wikidata-20260810-all.json.gz`)
    downloads in the operator's terminal; when the loop's evidence says live
    lookups are too thin (plan §5.5), build the bulk band with row count and
    DynamoDB write cost printed before any load. Until then: nothing. The
