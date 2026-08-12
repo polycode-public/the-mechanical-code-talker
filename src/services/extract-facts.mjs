@@ -378,7 +378,12 @@ function candidateTermOccurrencesPos(sentences, nlp, lexicon) {
       lemmas = doc.tokens().out(nlp.its.lemma);
     } catch { continue; }
     const headline = readsAsHeadline(values);
+    const taggedPos = pos;
     pos = headlineReadPos(values, pos, lemmas, lexicon);
+    // A headline read demotes an unlisted verb to a noun so a run can span it
+    // ("Mass Shooting"). That much is right for a run, and wrong for a term of
+    // its own: "Arrives" belongs inside no name and names nothing on its own.
+    const namesOnlyInsideARun = (k) => taggedPos[k] === "VERB" && pos[k] !== "VERB";
     // A headline's capitals say nothing about which words spell a name, so its
     // runs read over every noun; ordinary prose keeps the capital as the tell
     // and runs over proper nouns alone.
@@ -401,6 +406,7 @@ function candidateTermOccurrencesPos(sentences, nlp, lexicon) {
         i = hi;
         continue;
       }
+      if (namesOnlyInsideARun(i)) continue;
       counts.set(values[i], (counts.get(values[i]) || 0) + 1);
     }
   }

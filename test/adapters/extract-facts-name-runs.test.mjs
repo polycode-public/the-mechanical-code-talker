@@ -90,6 +90,12 @@ test("a headline's noun pile queues as the phrase it spells, never as the fragme
   assert.ok(terms.includes("thailand"), `the subject queues on its own: ${terms.join(", ")}`);
   assert.ok(terms.includes("new gun permits"), `the object phrase queues whole: ${terms.join(", ")}`);
   assert.equal(terms.includes("new gun"), false, "a tagger calling the head noun a verb never cuts the phrase short");
+  assert.ok(terms.includes("mass shooting"), `a demoted verb still stands inside a phrase: ${terms.join(", ")}`);
+});
+
+test("a verb a headline read demoted to a noun never queues as a term of its own", () => {
+  const counts = ungroundedTermOccurrences([GILMAN_HEADLINE], []);
+  assert.equal(counts.has("arrives"), false, `a verb names nothing on its own: ${[...counts.keys()].join(", ")}`);
 });
 
 test("a role noun standing in front of a name is a title on it, not a term of its own", () => {
