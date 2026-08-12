@@ -33,10 +33,12 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   `bash scripts/resume-wikidata-dump.sh` from the repo root (re-run after any
   interruption; it resumes, prints a progress line per minute, and verifies the final
   byte count). File: `~/tmct-dumps/wikidata-latest-all.json.gz` (155.3 GB; ~85% on
-  2026-08-12). When it reports done, the next steps are `PLAN_MEMORY_ROLLOUT.md`
-  section 4; the slice-extraction agent (worktree
-  `.claude/worktrees/agent-a7fd69026eddc4bd5`) is building the one-command
-  pass-A/pass-B extractor now so completion has a ready command.
+  2026-08-12). When it reports done, the operator's sequence is (extraction tooling
+  merged, `29d7549c`, streaming and per-phase resumable):
+  `node scripts/corpus-bands/extract-wikidata-slice.mjs`, then
+  `node scripts/corpus-bands/build-wikidata-slice.mjs --source ~/tmct-dumps/wikidata-slice.jsonl`,
+  then the operator-gated `tmct corpus load wikidata-slice` per
+  `PLAN_MEMORY_ROLLOUT.md` section 4.
 
 - [ ] **News feed quality — the local bench and its loop** — plan of record is
   `PLAN_NEWS_FEED_QUALITY.md` (operator-commissioned 2026-08-12): frozen live-feed
