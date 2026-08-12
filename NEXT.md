@@ -68,15 +68,25 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   ranked noise 30% → 5%, grounded terms 26% → 30%. Second lever merged to local
   `main` (4 commits through `f530db53`): card dates flow fetcher → feed → DOM,
   presence 0% → 100%, floor ratcheted; a card with no dated source shows none,
-  and Wikimedia items carry the feed's own named UTC day. In flight: the bench
-  articles log + retroactive per-iteration article files (worktree
-  `.claude/worktrees/agent-ac803c63199fa2985`). Remaining: N2 context quality
-  (incl. the junk-hub over-read and the 79% "Around it" repeat), NYT admission
-  26%, the global item cap, N5 floors into CI. Bench operational notes: pass a
-  distinct `--label` per run (same-day runs collide on the report filename), and
-  xl metrics drift with freshly regenerated corpus artifacts (chat-seed inputs) —
-  the run that measures a lever must rebuild its seed the same way its baseline
-  did, or the pair lies.
+  and Wikimedia items carry the feed's own named UTC day. Article logs landed:
+  every bench run writes `<run>-articles.md`, and both completed iterations have
+  retroactive logs (baseline reproduction matched committed metrics exactly).
+  What the logs exposed, in lever order:
+  - **Attribution conflation** — every quake card lists all 44 quake items as its
+    sources (card-to-item mapping keys on the shared subject "earthquake"); the
+    same root plausibly drives the 79% "Around it" repeat. Strongest next lever.
+  - **The noisy-context metric under-counts** — "earthquake is a kind of
+    electrical device / good health / flesh" scores zero because the closed
+    abstract-class list can't enumerate sense pollution; the metric needs a
+    same-sense definition (N2, and a metric revision, not a floor ratchet).
+  - Identity dumps lead card paragraphs ("france is … a cognition, a condition …"
+    before the news sentence); clause hubs ("boats hit by mystery attackers")
+    still head cards; "ecuadorean fishings boats" pluralization slip (N2/N4).
+  Also remaining: NYT admission 26%, the global item cap, N5 floors into CI.
+  Bench operational notes: pass a distinct `--label` per run (same-day runs
+  collide on the report filename), and xl metrics drift with freshly regenerated
+  corpus artifacts (chat-seed inputs) — the run that measures a lever must
+  rebuild its seed the same way its baseline did, or the pair lies.
 
 ## Discipline
 
