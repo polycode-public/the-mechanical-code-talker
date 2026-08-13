@@ -25,8 +25,17 @@
 //
 // Unplaced is not out of sense. A term the bands never classify (a person's
 // name, a coined product name, most of what a headline is actually about) has
-// no tops to meet, so it is admitted. So is every neighbour when the anchor
-// itself is unplaced: with no sense to keep to, there is nothing to drift from.
+// no tops to meet, so it is admitted.
+//
+// An unplaced ANCHOR is the harder case: it pools no tops, so by default the
+// scope keeps to nothing and every neighbour walks in as filler. Two ways out,
+// and a caller picks between them. `hasPlacedSense` says whether an anchor set
+// is placed at all, so a caller holding a second, better placed set can anchor
+// there instead. `admitAllWhenUnplaced: false` says these anchors ARE the
+// sense, placed or not: an unplaced anchor set then keeps to the unplaced, so a
+// walk under it goes sparse instead of pulling in the whole placed graph. A
+// graph with no bands at all places nothing, refuses nothing, and reads exactly
+// as it did.
 //
 // Pure over the fact set. The gate underneath sorts every frontier and memoizes
 // per term, and an anchor set is a membership test over the tops it pools, so
@@ -53,12 +62,16 @@ function statesItsIsaEdge(row) {
 
 /** Builds the scope over one fact set, reading only the asserted isa rows.
  *
- *  Returns `{ topsOf, sameSenseAs }`. `topsOf(term)` is the gate's own
- *  placement, exposed so a caller can explain a refusal. `sameSenseAs(anchors)`
- *  takes one term or an iterable of them and answers a `(term) => boolean`
- *  predicate: true when the term may stay in the anchors' neighbourhood.
- *  Several anchors pool their tops, so a walk seeded from more than one term
- *  keeps to the senses of all of them. */
+ *  Returns `{ topsOf, hasPlacedSense, sameSenseAs }`. `topsOf(term)` is the
+ *  gate's own placement, exposed so a caller can explain a refusal.
+ *  `sameSenseAs(anchors)` takes one term or an iterable of them and answers a
+ *  `(term) => boolean` predicate: true when the term may stay in the anchors'
+ *  neighbourhood. Several anchors pool their tops, so a walk seeded from more
+ *  than one term keeps to the senses of all of them. `hasPlacedSense(anchors)`
+ *  says whether that pool holds anything, which is whether the scope those
+ *  anchors build refuses any term at all. Pass `admitAllWhenUnplaced: false`
+ *  and an unplaced anchor set refuses every placed term instead of admitting
+ *  everything. */
 export function buildSenseScope(rows) {
   const subClassEdges = [];
   const typeEdges = [];
@@ -74,11 +87,20 @@ export function buildSenseScope(rows) {
 
   const topsOf = (term) => gate.topsOf(normFactTerm(term));
 
-  function sameSenseAs(anchors) {
-    const list = typeof anchors === "string" ? [anchors] : [...(anchors || [])];
-    const anchorTops = new Set();
-    for (const anchor of list) for (const top of topsOf(anchor)) anchorTops.add(top);
-    if (!anchorTops.size) return () => true;
+  const anchorList = (anchors) => (typeof anchors === "string" ? [anchors] : [...(anchors || [])]);
+
+  function topsAcross(list) {
+    const tops = new Set();
+    for (const anchor of list) for (const top of topsOf(anchor)) tops.add(top);
+    return tops;
+  }
+
+  const hasPlacedSense = (anchors) => topsAcross(anchorList(anchors)).size > 0;
+
+  function sameSenseAs(anchors, { admitAllWhenUnplaced = true } = {}) {
+    const list = anchorList(anchors);
+    const anchorTops = topsAcross(list);
+    if (!anchorTops.size && admitAllWhenUnplaced) return () => true;
     const anchorTerms = new Set(list.map((a) => normFactTerm(a)).filter(Boolean));
     return (term) => {
       const norm = normFactTerm(term);
@@ -90,5 +112,5 @@ export function buildSenseScope(rows) {
     };
   }
 
-  return { topsOf, sameSenseAs };
+  return { topsOf, hasPlacedSense, sameSenseAs };
 }

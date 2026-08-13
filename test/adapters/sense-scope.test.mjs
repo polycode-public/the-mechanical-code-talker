@@ -58,6 +58,28 @@ test("a term the bands never classify is admitted, and an anchor they never clas
   }
 });
 
+test("an anchor set says whether the bands place it, so a caller can anchor somewhere better", () => {
+  const scope = buildSenseScope(geographyAndAnatomyRows());
+  assert.equal(scope.hasPlacedSense("russia"), true);
+  assert.equal(scope.hasPlacedSense(["robert gilman", "syrian holdout province"]), false);
+  assert.equal(scope.hasPlacedSense([]), false);
+  assert.equal(scope.hasPlacedSense(["robert gilman", "duct"]), true, "one placed anchor is enough");
+});
+
+test("anchors taken as the sense itself keep to the unplaced when the bands never place them", () => {
+  const scope = buildSenseScope(geographyAndAnatomyRows());
+  const keptToAName = scope.sameSenseAs(["robert gilman"], { admitAllWhenUnplaced: false });
+  assert.equal(keptToAName("robert gilman"), true, "an anchor is always in its own scope");
+  assert.equal(keptToAName("sweida"), true, "another term the bands never place rides along");
+  for (const placed of ["country", "russia", "duct", "battery"]) {
+    assert.equal(keptToAName(placed), false, `${placed} has a sense this anchor cannot meet`);
+  }
+
+  const keptToRussia = scope.sameSenseAs("russia", { admitAllWhenUnplaced: false });
+  assert.equal(keptToRussia("country"), true, "a placed anchor set reads the same either way");
+  assert.equal(keptToRussia("duct"), false);
+});
+
 test("several anchors pool their tops, and each anchor stays in its own scope", () => {
   const scope = buildSenseScope(geographyAndAnatomyRows());
   const inBothSenses = scope.sameSenseAs(["russia", "duct"]);
@@ -67,9 +89,10 @@ test("several anchors pool their tops, and each anchor stays in its own scope", 
   assert.equal(scope.sameSenseAs("russia")("russia"), true);
 });
 
-test("the same facts in two orders admit the same terms", () => {
-  const forward = buildSenseScope(geographyAndAnatomyRows()).sameSenseAs("russia");
-  const backward = buildSenseScope(geographyAndAnatomyRows().reverse()).sameSenseAs("russia");
+test("the same facts in two orders admit the same terms and place the same anchors", () => {
+  const forwardScope = buildSenseScope(geographyAndAnatomyRows());
+  const backwardScope = buildSenseScope(geographyAndAnatomyRows().reverse());
   const terms = ["country", "israel", "turkey", "australia", "passage", "orifice", "duct", "battery", "robert gilman"];
-  assert.deepEqual(terms.map(forward), terms.map(backward));
+  assert.deepEqual(terms.map(forwardScope.sameSenseAs("russia")), terms.map(backwardScope.sameSenseAs("russia")));
+  assert.deepEqual(terms.map(forwardScope.hasPlacedSense), terms.map(backwardScope.hasPlacedSense));
 });
