@@ -12,6 +12,10 @@ import DEFAULT_CONFIG from "./config.json" with { type: "json" };
 
 const DESCRIPTION_FAMILIES = FAMILY_PRIORITY.filter((f) => f !== "isa" && f !== "other");
 
+/** Codepoint order, never localeCompare — an ontology root is a class name
+ *  read off stored facts, so two locales have to name the same roots. */
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** Group the selector's `selected` items by family, preserving each item's
  *  ranked order, and return `{ family -> rows[] }` over the fact rows. */
 function rowsByFamily(selected) {
@@ -82,7 +86,7 @@ export function closerRootsFor(chains, usedRows, count) {
     rootRows.get(root).push(row);
   }
   const roots = [...rootCount.keys()]
-    .sort((a, b) => (rootCount.get(b) - rootCount.get(a)) || a.localeCompare(b))
+    .sort((a, b) => (rootCount.get(b) - rootCount.get(a)) || byCodepoint(a, b))
     .slice(0, Math.max(0, count));
   const rows = [];
   const seen = new Set();

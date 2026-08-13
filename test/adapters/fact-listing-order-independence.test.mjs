@@ -16,6 +16,9 @@ import { factOrderKey, compareFactsByContent } from "../../src/domain/memory/fac
 import { rankByBiasThenTrust } from "../../src/domain/memory/bias.mjs";
 import { buildNewsItems } from "../../src/domain/news-feed.mjs";
 import { renderMemory } from "../../src/adapters/memory/inspect.mjs";
+import { selectFacts } from "../../src/domain/digest/select.mjs";
+import { closerRootsFor } from "../../src/domain/digest/compose.mjs";
+import { computeLedgerDataFromPayload, computeLedgerStats } from "../../src/services/ledger-viz.mjs";
 
 const EMPTY_GRAPH = parseEntities({ individuals: [], objectProperties: [] });
 const fact = (subject, predicate, object) => ({ subject, predicate, object });
@@ -189,4 +192,74 @@ test("the content key cannot be forged by moving a delimiter between fields", ()
     factOrderKey({ subject: "a b", predicate: "c", object: "", provenance: "" }),
     factOrderKey({ subject: "a", predicate: "b c", object: "", provenance: "" }),
   );
+});
+
+// ---- the digest layer's own tiebreaks (select.mjs, compose.mjs) -----------
+// Neither of these reads the fold directly — both take an already-derived
+// list (candidate rows, ancestry chains) and pick among tied entries by
+// label. The tiebreak has to be codepoint order for the same reason as the
+// fold itself: a locale-dependent pick means two readers holding the same
+// graph name a different dominant sense or a different ontology root.
+
+test("selectFacts breaks a tied dominant sense by codepoint order, not locale order", () => {
+  // "Bravo" sorts before "apple" in codepoint order (B is 0x42, a is 0x61)
+  // but after it under locale-aware collation (which folds case) — so this
+  // pair only comes out the same way under both orders by coincidence, and
+  // it doesn't here: a locale-aware tiebreak would pick "apple".
+  const row = (object) => ({
+    id: `isa:${object}`, subject: "critter", predicate: "rdfs:subClassOf", object,
+    provenance: "", sourceTypes: ["reference"], trust: 0.5, environments: [],
+  });
+  const store = {
+    totalSubjects: 20, classSubjectCounts: { Bravo: 1, apple: 1 },
+    // Disjoint two-deep ancestries: enough evidence for each class to count
+    // as real, and no shared ancestor, so the two land in separate clusters
+    // of equal (tied) provenance weight.
+    subClassEdges: [
+      ["Bravo", "topB"], ["topB", "rootB"],
+      ["apple", "topA"], ["topA", "rootA"],
+    ],
+  };
+  const out = selectFacts("critter", [row("Bravo"), row("apple")], store, { budget: 5 });
+  assert.equal(out.senses.dominantLabel, "Bravo");
+});
+
+test("closerRootsFor breaks a tied root count by codepoint order, not locale order", () => {
+  const r = (o) => ({ id: o, object: o });
+  const chains = { a: ["a", "Bravo"], b: ["b", "apple"] };
+  const { roots } = closerRootsFor(chains, [r("a"), r("b")], 1);
+  assert.deepEqual(roots, ["Bravo"]);
+});
+
+// ---- the ledger viz layer's own tiebreaks (ledger-viz.mjs) -----------------
+
+test("the ledger row listing is byte-identical however the facts arrived", async () => {
+  // All three facts share one createdAt so the primary recency sort ties and
+  // the id tiebreak is what's under test — arrival order must not leak into
+  // which id sorts where.
+  const TS = "2026-08-01T00:00:00.000Z";
+  const rows = [
+    { ...fact("widget", "mgx:hasProperty", "blue"), createdAt: TS },
+    { ...fact("widget", "mgx:hasProperty", "green"), createdAt: TS },
+    { ...fact("widget", "mgx:hasProperty", "red"), createdAt: TS },
+  ];
+  const [first, ...rest] = await Promise.all(arrivalOrders(rows).map(async (order) => {
+    const memoryDir = createInMemoryStore();
+    await appendFacts(memoryDir, order);
+    const data = computeLedgerDataFromPayload(await loadMemory(memoryDir), {});
+    return data.rows.map((r) => r.id);
+  }));
+  for (const other of rest) assert.deepEqual(other, first);
+});
+
+test("the ledger's corpus-bundle leaderboard breaks a tied count by codepoint order, not locale order", () => {
+  const row = (src) => ({ src, p: "rdfs:subClassOf", phrase: "is a kind of", prov: "corpus", trustTier: 1, createdAt: "" });
+  const stats = computeLedgerStats([row("corpus:apple"), row("corpus:Bravo")], [], []);
+  assert.deepEqual(stats.bundles.map((b) => b.key), ["corpus:Bravo", "corpus:apple"]);
+});
+
+test("the ledger's predicate leaderboard breaks a tied count by codepoint order, not locale order", () => {
+  const row = (predicate) => ({ p: predicate, phrase: predicate, src: "corpus:x", prov: "corpus", trustTier: 1, createdAt: "" });
+  const stats = computeLedgerStats([row("apple"), row("Bravo")], [], []);
+  assert.deepEqual(stats.predicates.map((p) => p.predicate), ["Bravo", "apple"]);
 });

@@ -27,6 +27,10 @@
 import { SOURCE_PRIOR } from "../memory/trust.mjs";
 import { compareFactsByContent } from "../memory/fact-order.mjs";
 import { clusterSenses } from "../sense-split.mjs";
+
+/** Codepoint order, never localeCompare — a cluster label is a class name read
+ *  off stored facts, so two locales have to land on the same dominant sense. */
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 import DEFAULT_CONFIG from "./config.json" with { type: "json" };
 
 // A relation predicate -> the sentence-family key the digest groups it under.
@@ -149,7 +153,7 @@ export function selectFacts(term, rows, store = {}, opts = {}) {
   }
   let dominantLabel = null;
   let bestWeight = -1;
-  for (const [label, weight] of [...clusterWeight].sort((a, b) => a[0].localeCompare(b[0]))) {
+  for (const [label, weight] of [...clusterWeight].sort((a, b) => byCodepoint(a[0], b[0]))) {
     if (weight > bestWeight) { bestWeight = weight; dominantLabel = label; }
   }
 
