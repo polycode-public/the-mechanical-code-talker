@@ -16,7 +16,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS, SAID_IN_SESSION_PROP,
+  UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS, SAID_IN_SESSION_PROP, STATED_BY_PROP,
   emptyMemory, loadMemory,
   appendUtterance, appendUtterances, appendFact, appendFacts, appendRule,
   findRuleByName, readFactRows, factGroupId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER,
@@ -302,6 +302,181 @@ test("Backend C round trip: loadMemory -> mutate (appendFact, twice) -> loadMemo
   } finally {
     closeSqliteMemoryStore(handle);
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- What the cache mirror owes the tables ---------------------------------
+// persistSqlitePayload keeps `handle.cachedPayload` in step with the rows it
+// writes, and a read is served from it. So the mirror has to reproduce the
+// ORDER the tables would hand back, row for row: an individual SQLite replaces
+// keeps its `ord` and its place, while an edge SQLite deletes-and-reinserts
+// gets the highest rowid and sorts last. A write too big to mirror drops the
+// cache instead, and the rebuild that follows must land in the same place. Both
+// orders are read by resolvers over the fact store, which are pure functions of
+// the fact set only while every reader sees one order.
+
+/** The row order a payload carries: the individuals in theirs, and every edge
+ *  group's examples in theirs. */
+const payloadRowOrder = (m) => ({
+  individuals: (m.individuals || []).map((i) => i.id),
+  groups: (m.objectProperties || []).map((g) => ({
+    prop: g.prop,
+    count: g.count,
+    examples: (g.examples || []).map((e) => `${e.subject} -> ${e.object}`),
+  })),
+});
+
+/** What a fresh connection to the same file reads, with no cache in the way. */
+async function rebuiltFromRows(handle) {
+  const fresh = await createSqliteMemoryStore(handle.dbPath);
+  try {
+    return await loadMemory(fresh);
+  } finally {
+    closeSqliteMemoryStore(fresh);
+  }
+}
+
+const edgeSubjects = (m, prop) =>
+  (m.objectProperties.find((g) => g.prop === prop)?.examples || []).map((e) => e.subject);
+
+const attrValue = (ind, prop) => (ind?.attributes || []).find((a) => a?.prop === prop)?.value;
+
+const seedFacts = (n, tag) => Array.from({ length: n }, (_, i) => ({
+  subject: `${tag}-subj-${i}`, predicate: "rdfs:subClassOf", object: `${tag}-obj-${i}`,
+  provenance: `corpus:${tag}`, createdAt: TS1,
+}));
+
+test("Backend C: the mirror moves a rewritten edge to the END of its group, where the tables put it", async () => {
+  const { dir, handle } = await sqliteHandle();
+  try {
+    const { ids } = await appendUtterances(handle, [
+      { role: "visitor", text: "first thing said", ts: TS1, sessionId: SESSION, sessionStarted: TS1 },
+      { role: "tmct", text: "the reply to it", ts: TS1, sessionId: SESSION },
+      { role: "visitor", text: "second thing said", ts: TS2, sessionId: SESSION },
+    ]);
+    assert.deepEqual(edgeSubjects(await loadMemory(handle), SAID_IN_SESSION_PROP), ids);
+
+    // Same utterance id (session + ts + role), different text — so the edge's
+    // own row changes and SQLite reinserts it at the end of the group.
+    await appendUtterance(handle, { role: "visitor", text: "first thing said, corrected", ts: TS1, sessionId: SESSION });
+
+    const warm = await loadMemory(handle);
+    assert.deepEqual(
+      edgeSubjects(warm, SAID_IN_SESSION_PROP),
+      [ids[1], ids[2], ids[0]],
+      "the rewritten edge left its old position and went to the end",
+    );
+    assert.deepEqual(payloadRowOrder(warm), payloadRowOrder(await rebuiltFromRows(handle)));
+  } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Backend C: the mirror replaces an updated individual IN PLACE, keeping the position the tables keep", async () => {
+  const { dir, handle } = await sqliteHandle();
+  try {
+    const triples = seedFacts(3, "place");
+    await appendFacts(handle, triples);
+    const before = await loadMemory(handle);
+    const idsBefore = before.individuals.map((i) => i.id);
+    const target = before.individuals.find((i) => i.class === FACT_CLASS);
+    assert.equal(idsBefore.indexOf(target.id), 0, "the first fact's record leads the individuals");
+    assert.equal(attrValue(target, "mgx:factQuantifier"), undefined);
+
+    // The same triple from the same source, now quantified: one record rewritten
+    // in place, nothing added, nothing moved.
+    await appendFacts(handle, [{ ...triples[0], quantifier: "every" }]);
+
+    const warm = await loadMemory(handle);
+    assert.deepEqual(warm.individuals.map((i) => i.id), idsBefore, "no record changed place");
+    assert.equal(
+      attrValue(warm.individuals[0], "mgx:factQuantifier"), "every",
+      "and the record at that place is the updated one, not the stale copy",
+    );
+    assert.deepEqual(payloadRowOrder(warm), payloadRowOrder(await rebuiltFromRows(handle)));
+  } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Backend C: a write too big to mirror drops the cache, and the store reads back exactly as one written in mirrored batches", async () => {
+  const facts = seedFacts(2100, "bulk");
+
+  const oneWrite = await sqliteHandle();
+  const inBatches = await sqliteHandle();
+  try {
+    await appendFacts(oneWrite.handle, facts);
+    assert.equal(oneWrite.handle.cachedPayload, null, "a bulk write drops the cache rather than mirroring every row");
+
+    // Batching moves where the shared Source row lands, since a record takes its
+    // `ord` when it arrives — so the two stores hold the same records in
+    // different places, and what must not differ is what a read makes of them.
+    for (let at = 0; at < facts.length; at += 700) await appendFacts(inBatches.handle, facts.slice(at, at + 700));
+    assert.ok(inBatches.handle.cachedPayload, "each batch stayed small enough to mirror");
+
+    const bulkRead = await loadMemory(oneWrite.handle);
+    const batchedRead = await loadMemory(inBatches.handle);
+    assert.equal(bulkRead.individuals.filter((i) => i.class === FACT_CLASS).length, 2100);
+    assert.deepEqual(
+      bulkRead.individuals.map((i) => i.id).sort(),
+      batchedRead.individuals.map((i) => i.id).sort(),
+      "one bulk write and the same facts in mirrored batches hold the same records",
+    );
+    assert.deepEqual(
+      edgeSubjects(bulkRead, STATED_BY_PROP).sort(),
+      edgeSubjects(batchedRead, STATED_BY_PROP).sort(),
+      "and the same statedBy edges",
+    );
+    assert.deepEqual(readFactRows(bulkRead), readFactRows(batchedRead),
+      "so the fold answers the same off either store, whichever way the facts were written");
+
+    // The dropped cache rebuilds from the tables, and the mirror picks up again
+    // on what the rebuild produced.
+    assert.deepEqual(payloadRowOrder(bulkRead), payloadRowOrder(await rebuiltFromRows(oneWrite.handle)));
+    await appendFacts(oneWrite.handle, seedFacts(3, "after"));
+    assert.ok(oneWrite.handle.cachedPayload, "the next ordinary write mirrors into the rebuilt cache");
+    assert.deepEqual(
+      payloadRowOrder(await loadMemory(oneWrite.handle)),
+      payloadRowOrder(await rebuiltFromRows(oneWrite.handle)),
+    );
+  } finally {
+    closeSqliteMemoryStore(oneWrite.handle);
+    closeSqliteMemoryStore(inBatches.handle);
+    await rm(oneWrite.dir, { recursive: true, force: true });
+    await rm(inBatches.dir, { recursive: true, force: true });
+  }
+});
+
+test("Backend C: the fold reads the same rows off a sqlite store however the facts arrived, and whether the write mirrored or rebuilt", async () => {
+  const rows = [
+    { subject: "cache", predicate: "mgx:usedFor", object: "speeding up reads", provenance: "corpus:one", createdAt: TS1 },
+    { subject: "cache", predicate: "rdfs:subClassOf", object: "store", provenance: "corpus:one", createdAt: TS1 },
+    { subject: "cache", predicate: "rdfs:subClassOf", object: "store", provenance: "corpus:two", createdAt: TS1 },
+    { subject: "cache", predicate: "mgx:hasProperty", object: "fast", provenance: "corpus:two", createdAt: TS1 },
+    { subject: "cache", predicate: "mgx:causes", object: "staleness", provenance: "corpus:one", createdAt: TS1 },
+  ];
+  const arrivals = [rows, [...rows].reverse(), [...rows.slice(2), ...rows.slice(0, 2)]];
+  const folds = [];
+  const opened = [];
+  try {
+    for (const order of arrivals) {
+      const { dir, handle } = await sqliteHandle();
+      opened.push({ dir, handle });
+      for (const row of order) await appendFacts(handle, [row]);
+      folds.push(readFactRows(await loadMemory(handle)));
+      folds.push(readFactRows(await rebuiltFromRows(handle)));
+    }
+    const shape = (fold) => fold.map((r) => `${r.subject}|${r.predicate}|${r.object}|${[...r.sourceIds].sort().join(",")}`);
+    const [first, ...rest] = folds.map(shape);
+    assert.equal(first.length, 4, "the corroborated triple folds to one row, so four rows in all");
+    for (const other of rest) assert.deepEqual(other, first);
+  } finally {
+    for (const { dir, handle } of opened) {
+      closeSqliteMemoryStore(handle);
+      await rm(dir, { recursive: true, force: true });
+    }
   }
 });
 

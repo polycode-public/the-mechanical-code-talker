@@ -1398,15 +1398,41 @@ function buildSqlitePayloadFromRows(handle) {
 // ---- handle.cachedPayload mirrors: applied in lockstep with each SQL write
 // so the cache always matches a fresh SQL reconstruction. ----------------
 
+const cacheArrayPositions = new WeakMap();
+
+/** Key -> first position in one of the cache's own arrays, so a mirror finds
+ *  the entry it is about to replace without scanning for it. Every mirror that
+ *  REMOVES entries replaces the array rather than editing it, and the identity
+ *  check here is what stops an index outliving the rows it named. */
+function cachePositionsOf(owner, array, keyOf) {
+  const held = cacheArrayPositions.get(owner);
+  if (held && held.array === array) return held.byKey;
+  const byKey = new Map();
+  for (let i = 0; i < array.length; i += 1) {
+    const key = keyOf(array[i]);
+    if (!byKey.has(key)) byKey.set(key, i);
+  }
+  cacheArrayPositions.set(owner, { array, byKey });
+  return byKey;
+}
+
+const individualIdOf = (ind) => ind?.id;
+
+/** An edge's (subject,object) identity in the cache. NUL-delimited, matching
+ *  the SQL diff beside it — collision-proof, unlike a space. */
+const edgeCacheKey = (e) => `${e?.subject}\u0000${e?.object}`;
+
 /** Mirrors `INSERT OR REPLACE INTO individuals(...)`: an existing id is
  *  replaced IN PLACE (same array position, matching how SQL keeps that row's
  *  `ord` — and so its sort position — unchanged on an update); a new id is
  *  appended (matching a fresh row getting the next `ord`). */
 function cacheUpsertIndividual(cache, ind) {
   const clone = cloneJson(ind);
-  const i = cache.individuals.findIndex((x) => x?.id === ind.id);
-  if (i >= 0) cache.individuals[i] = clone;
-  else cache.individuals.push(clone);
+  const positions = cachePositionsOf(cache, cache.individuals, individualIdOf);
+  const at = positions.get(ind.id);
+  if (at !== undefined) { cache.individuals[at] = clone; return; }
+  positions.set(ind.id, cache.individuals.length);
+  cache.individuals.push(clone);
 }
 
 /** Mirrors `DELETE FROM individuals`: drop every cached individual the write
@@ -1428,23 +1454,31 @@ function cacheGroupFor(cache, prop) {
 
 /** Mirrors `INSERT OR REPLACE INTO edges(...)`: a changed/new row sorts LAST
  *  under `ORDER BY rowid`, so this moves the entry to the end of `examples`
- *  rather than replacing it in place. NUL-delimited (subject,object) key,
- *  matching the SQL diff beside it — collision-proof, unlike a space. */
+ *  rather than replacing it in place. */
 function cacheUpsertEdge(group, edge, extraKeys) {
-  const key = `${edge.subject}\u0000${edge.object}`;
-  group.examples = group.examples.filter((e) => `${e.subject}\u0000${e.object}` !== key);
+  const key = edgeCacheKey(edge);
+  const positions = cachePositionsOf(group, group.examples, edgeCacheKey);
   const cached = {
     subject: edge.subject, object: edge.object,
     subjectLabel: edge.subjectLabel ?? null, objectLabel: edge.objectLabel ?? null,
   };
   if (extraKeys.length) Object.assign(cached, cloneJson(Object.fromEntries(extraKeys.map((k) => [k, edge[k]]))));
+  if (positions.has(key)) {
+    // Rewriting an edge the group already holds moves every position after the
+    // one it vacates, so the array is replaced and the index built again on the
+    // next call rather than patched here.
+    group.examples = group.examples.filter((e) => edgeCacheKey(e) !== key);
+    group.examples.push(cached);
+    return;
+  }
+  positions.set(key, group.examples.length);
   group.examples.push(cached);
 }
 
 /** Mirrors the per-group edge delete loop: drop any cached edge in this group
  *  whose (subject,object) key isn't in the just-persisted group's key set. */
 function cacheDropEdgesExcept(group, newKeys) {
-  group.examples = group.examples.filter((e) => newKeys.has(`${e.subject}\u0000${e.object}`));
+  group.examples = group.examples.filter((e) => newKeys.has(edgeCacheKey(e)));
 }
 
 /** Mirrors `DELETE FROM relations`: drop every cached edge group the write just
@@ -1805,10 +1839,23 @@ function recomputeDerivedTables(ctx, foldSource, headIndex) {
   recordObjectSupersessions(ctx.db, foldCtx, ctx.touchedPairs);
 }
 
+/** How many rows one write may change and still be mirrored into
+ *  `handle.cachedPayload` row by row. Above this the write drops the cache and
+ *  lets the next read rebuild from the tables instead: mirroring clones every
+ *  row it writes into a payload that already holds a copy of the whole store,
+ *  and a corpus import writes tens of thousands of rows in a single call, so
+ *  the mirror costs more than the one rebuild it saves — and holds two copies
+ *  of the seed in memory while it does it. The bar sits well above any
+ *  interactive write (a chat turn, a teach, a world load move rows in the tens
+ *  to low hundreds) so an ordinary session keeps its warm cache. */
+const CACHE_MIRROR_ROW_LIMIT = 2000;
+
 /** Persist a mutated payload into a Backend C handle: the payload projected to
  *  rows, diffed against the rows already stored, and only the difference
- *  written, in one transaction. Patches `handle.cachedPayload` in lockstep; a
- *  rolled-back write invalidates the cache instead of leaving a partial patch.
+ *  written, in one transaction. Patches `handle.cachedPayload` in lockstep,
+ *  unless the write moves more rows than `CACHE_MIRROR_ROW_LIMIT`, where it
+ *  drops the cache instead; a rolled-back write invalidates the cache rather
+ *  than leaving a partial patch.
  *
  *  The 4 KB wire cap the row contract enforces is not applied here: it protects
  *  a network hop, and a local file store holds a seed's whole statedBy group in
@@ -1816,9 +1863,14 @@ function recomputeDerivedTables(ctx, foldSource, headIndex) {
 function persistSqlitePayload(handle, payload) {
   const db = handle.db;
   const empty = emptyMemory();
-  const cache = handle.cachedPayload || null;
   db.exec("BEGIN IMMEDIATE");
   try {
+    const before = sqlitePayloadStoreRows(handle);
+    const { rows: after, partsByKey } = sqlitePayloadRows(payload, before);
+    const { puts, deletes } = diffRows(before, after);
+    const mirrorsIntoCache = puts.length + deletes.length <= CACHE_MIRROR_ROW_LIMIT;
+    const cache = mirrorsIntoCache ? handle.cachedPayload || null : null;
+
     const setMeta = db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)");
     setMeta.run("generated_at", JSON.stringify(payload.generated_at ?? empty.generated_at));
     setMeta.run("memory", JSON.stringify(payload.memory ?? empty.memory));
@@ -1836,14 +1888,15 @@ function persistSqlitePayload(handle, payload) {
     }
 
     const ctx = sqliteWriteContext(handle, { cache });
-    const before = sqlitePayloadStoreRows(handle);
-    const { rows: after, partsByKey } = sqlitePayloadRows(payload, before);
-    const { puts, deletes } = diffRows(before, after);
     writeSqliteRows(ctx, puts, partsByKey);
     deleteSqliteRows(ctx, deletes);
     recomputeDerivedTables(ctx, payload, handle.cachedFactHeads);
 
     db.exec("COMMIT");
+    if (!mirrorsIntoCache) {
+      handle.cachedPayload = null;
+      handle.cachedFactHeads = null;
+    }
   } catch (e) {
     db.exec("ROLLBACK");
     // The cache may hold a partially-applied patch at this point (some of the
