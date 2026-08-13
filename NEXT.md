@@ -82,33 +82,7 @@ The work list, ranked by value against the plan's target card.
      behaviour is untraced (`trust.mjs` was never read), and whether attribution
      rows should count toward the bench's grounded numbers needs
      `scripts/news-bench/metrics.mjs`.
-2. [ ] **One event, two verbs, two rows on the card** — in flight on
-   `worktree-agent-a2ed151e88e6c10f0`, at paragraph assembly where the whole row
-   set is in view. The russia card reads
-   "russia frees robert gilman. russia releases robert gilman." because the
-   headline says "Freed by Russia" and the description says "released". Both
-   rows are true and the graph is right to hold both; the card is wrong to say
-   it twice. A lexical synonym fold was tried and reverted — free/release split
-   on the subject's kind, which is an open set, so folding them called a rescue
-   a jail delivery ("rescuers releases quake victim"). The fix belongs at
-   paragraph assembly, where the whole row set is in view, not at extraction
-   where one row is. Against the plan's §2 target card this is now the most
-   visible defect on the best card.
-3. [ ] **"hackernews discuss" reads as a plural** — in flight on
-   `worktree-agent-a2ed151e88e6c10f0`, same agent as item 2 since both land in
-   paragraph rendering. Live on 6 of 14 cards.
-   `isSubjectPlural` reads a naive `-s` suffix, so a singular site name spelled
-   with a trailing `-s` renders bare. The fix is one entry in the existing
-   `SINGULAR_NOUNS_ENDING_S` closed set, but it moves 5 pinned assertions across
-   `news-feed.test.mjs`, `news-card-article-entities.test.mjs` and
-   `news-card-coverage.test.mjs`. Written and reverted once already because
-   those files belong to the sense-scope track; land it when they are free.
-   The wider version — a plural column on 43 of the curated table's 49 entries,
-   plus a subject-number test that does not read "redis", "socrates" or "mjs"
-   as plural — needs the lexicon's declared plurals, and `fact-phrase.mjs` is
-   deliberately import-free so it can be stringified into the browser. That
-   cost is the real one, and it is bigger than the typing.
-4. [ ] **The news fact cap evicts by content hash, not by age** —
+2. [ ] **The news fact cap evicts by content hash, not by age** —
    `evictNewsFacts` reads `r.observedAt` off the row, but `readFactRows` keeps
    `observedAt` on the assertion records; `rowObservedMs` exists for exactly
    that and eviction does not call it, though three other readers in the same
@@ -119,7 +93,7 @@ The work list, ranked by value against the plan's target card.
    carries — so the test needs fixing alongside the code, or it will keep
    passing over the bug. Found while measuring the attribution write's
    eviction hazard; separate from it, and live today.
-5. [ ] **`localeCompare` over fact rows, in ten places** — a locale-divergence
+3. [ ] **`localeCompare` over fact rows, in ten places** — a locale-divergence
    class rather than an arrival-order one: two readers on machines with
    different locales sort the same rows differently, which breaks the same
    pure-function-of-the-fact-set invariant by another route. `fact-order.mjs`
