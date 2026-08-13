@@ -1109,10 +1109,10 @@ function cardAboutTerms(hub, reports, articleTerms) {
  *  paragraph's own caps cut them, and never another card's report.
  *
  *  A source whose wire format carries no body can only ever mint headline
- *  mentions, so a card off one scores zero unless a lookup attached something
- *  to a name in its headline. Zero-scoring cards sort last. They still build,
- *  still cite their source, and `thin` marks them so a reader or a bench run
- *  can count how many there were.
+ *  mentions, so a card off one lands at zero on both counts unless a lookup
+ *  attached something to a name in its headline. Those cards read last. They
+ *  still build, still cite their source, and `thin` marks them so a reader or
+ *  a bench run can count how many there were.
  *
  *  Pure over the rows and the headline strings. A card with no headlines to
  *  compare against (a caller that wired no sources) counts every report as a

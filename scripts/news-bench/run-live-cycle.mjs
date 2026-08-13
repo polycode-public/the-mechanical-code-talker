@@ -83,8 +83,9 @@ const rowById = new Map(allRows.map((r) => [r.id, r]));
 const snapshotByTitle = new Map((ctx.state.items || []).map((s) => [s.title, s]));
 const rowLine = (r) => `${r.subject} | ${r.predicate} | ${r.object}`;
 for (const item of feed.items) {
-  const s = item.substance || {};
-  const substanceTag = `  [${s.thin ? "thin: " : ""}claims ${s.claims ?? 0}, background ${s.background ?? 0}]`;
+  const substance = item.substance || {};
+  const substanceTag = `  [${substance.thin ? "thin: " : ""}claims ${substance.claims ?? 0},`
+    + ` background ${substance.background ?? 0}]`;
   console.log(`\n### ${item.hub}${item.newName ? "  [new name]" : ""}${substanceTag}`);
   console.log("OUR PARAGRAPH:", item.paragraph);
   const ids = [...new Set([...(item.factIds || []), ...(item.background || [])])];
