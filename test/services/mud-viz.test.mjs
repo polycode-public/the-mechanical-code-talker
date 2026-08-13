@@ -356,6 +356,19 @@ test("carriedItemsFor: only the named character's own carried things, sorted", (
   assert.deepEqual(carried, ["carrot", "seed"]);
 });
 
+test("carriedItemsFor: items sort by codepoint id, not locale order, whichever way the rows arrived", () => {
+  // "zebra-item" sorts BEFORE "élan-item" in codepoint order (z=0x7A < é=0xE9)
+  // but AFTER it under locale-aware collation.
+  const rows = [
+    { subject: "zebra-item", predicate: "mgx:located-in", object: "mole-1" },
+    { subject: "élan-item", predicate: "mgx:located-in", object: "mole-1" },
+  ];
+  const forward = carriedItemsFor(rows, foldWorldState(rows), "mole-1").map((i) => i.subject);
+  const reversed = carriedItemsFor([...rows].reverse(), foldWorldState([...rows].reverse()), "mole-1").map((i) => i.subject);
+  assert.deepEqual(reversed, forward, "row arrival order never changes the carried-item order");
+  assert.deepEqual(forward, ["zebra-item", "élan-item"]);
+});
+
 test("levelsOf: garden is level 0, a down exit is level -1, a lateral exit stays on the same level", () => {
   const state = foldWorldState(BURROW_ROWS);
   const levels = levelsOf(state, "garden");

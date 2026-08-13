@@ -955,6 +955,23 @@ test("propPlacementsFrom: sorted by id, and drops any subject missing a cell or 
   assert.deepEqual(placements.map((p) => p.id), ["a-prop", "b-prop"]);
 });
 
+test("propPlacementsFrom: sorts by codepoint id, not locale order, whichever way the rows arrived", () => {
+  // "zebra-prop" sorts BEFORE "élan-prop" in codepoint order (z=0x7A < é=0xE9)
+  // but AFTER it under locale-aware collation.
+  const rows = [
+    { subject: "zebra-prop", predicate: "rdf:type", object: "prop" },
+    { subject: "zebra-prop", predicate: "mgx:currently-in", object: "cell-2-2" },
+    { subject: "zebra-prop", predicate: "mgx:model", object: "well" },
+    { subject: "élan-prop", predicate: "rdf:type", object: "prop" },
+    { subject: "élan-prop", predicate: "mgx:currently-in", object: "cell-1-1" },
+    { subject: "élan-prop", predicate: "mgx:model", object: "well" },
+  ];
+  const forward = propPlacementsFrom(rows, ASSETS).map((p) => p.id);
+  const reversed = propPlacementsFrom([...rows].reverse(), ASSETS).map((p) => p.id);
+  assert.deepEqual(reversed, forward, "row arrival order never changes the placement order");
+  assert.deepEqual(forward, ["zebra-prop", "élan-prop"]);
+});
+
 // ---- occupiedCells / blockedCellReason ----------------------------------
 
 test("occupiedCells: the union of every agent's and every item's own cell", () => {
@@ -1328,6 +1345,16 @@ test("currentPlacementsFrom: what has been eaten or has starved no longer stands
 test("currentPlacementsFrom: no rows, no placements", () => {
   assert.deepEqual(currentPlacementsFrom([]), []);
   assert.deepEqual(currentPlacementsFrom(null), []);
+});
+
+test("currentPlacementsFrom: sorts by codepoint subject, not locale order, whichever way the rows arrived", () => {
+  // "zebra-1" sorts BEFORE "élan-1" in codepoint order (z=0x7A < é=0xE9) but
+  // AFTER it under locale-aware collation.
+  const rows = [PLACE("zebra-1", "cell-1-1"), PLACE("élan-1", "cell-2-2")];
+  const forward = currentPlacementsFrom(rows).map((p) => p.subject);
+  const reversed = currentPlacementsFrom([...rows].reverse()).map((p) => p.subject);
+  assert.deepEqual(reversed, forward, "row arrival order never changes the placement order");
+  assert.deepEqual(forward, ["zebra-1", "élan-1"]);
 });
 
 test("renderMudiiiHtml: the edit panel folds the tape rather than printing it", () => {

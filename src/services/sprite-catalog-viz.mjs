@@ -64,6 +64,11 @@ import { splitSceneBackdrop } from "../domain/scene-compose.mjs";
 const DEFAULT_TITLE = "tmct — the sprite library";
 const MAX_CHAIN_DISPLAY = 6;
 
+// Codepoint order, never localeCompare — an ancestor/class term walks the
+// same rdfs:subClassOf fact rows the cards' ancestry pills print, and two
+// readers must render the same ontology-tree order regardless of locale.
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** A curated gap-fill for classes wordnet-xl's own prioritized subset
  *  happens to carry NO rdfs:subClassOf row for at all (115 of 198 catalog
  *  classes, checked directly against a build of this page) — every pair
@@ -244,8 +249,8 @@ export function clusterEntriesByAncestor(entries, spritedClasses) {
     if (key && list.length >= 2) clusters.push({ ancestor: key, entries: list });
     else rest.push(...list);
   }
-  clusters.sort((a, b) => b.entries.length - a.entries.length || a.ancestor.localeCompare(b.ancestor));
-  if (rest.length) clusters.push({ ancestor: null, entries: [...rest].sort((a, b) => a.className.localeCompare(b.className)) });
+  clusters.sort((a, b) => b.entries.length - a.entries.length || byCodepoint(a.ancestor, b.ancestor));
+  if (rest.length) clusters.push({ ancestor: null, entries: [...rest].sort((a, b) => byCodepoint(a.className, b.className)) });
   return clusters;
 }
 
@@ -463,12 +468,12 @@ export function buildOntologyTree(section, { index, spritedClasses, entriesByCla
       levels[level].push(nodeFor(term));
     }
     for (let i = 0; i < levels.length; i += 1) {
-      levels[i] = (levels[i] || []).sort((a, b) => a.term.localeCompare(b.term));
+      levels[i] = (levels[i] || []).sort((a, b) => byCodepoint(a.term, b.term));
     }
     branches.push({ size: terms.length, key: terms.slice().sort()[0], levels });
   }
-  branches.sort((a, b) => b.size - a.size || a.key.localeCompare(b.key));
-  apart.sort((a, b) => a.term.localeCompare(b.term));
+  branches.sort((a, b) => b.size - a.size || byCodepoint(a.key, b.key));
+  apart.sort((a, b) => byCodepoint(a.term, b.term));
   return { branches, apart, termCount: allTerms.size, truncated };
 }
 
