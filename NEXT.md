@@ -110,18 +110,21 @@ The work list, ranked by value against the plan's target card.
    them at the call site, exactly as the adventure pair did before the fix. Its
    one production caller stamps correctly, so there is no live break — this is
    symmetry, and the same mechanical change of shape.
-7. [ ] **Wikidata** — the pinned dated dump
-   (`wikidata-20260810-all.json.gz`, 155,457,882,747 bytes) is downloading in
-   the operator's terminal via `bash scripts/resume-wikidata-dump.sh`, which
-   resumes from wherever a break left it — re-run it after any interruption.
-   At 2026-08-13 00:33 BST it stood at 82.7 GB, 53%, holding ~4.1 MB/s with
-   roughly 4.5 hours left. Plan §5.5 gates the bulk band on live lookups proving
-   too thin or slow per term, and iterations 8–11 point the other way: iteration
-   11 resolved 6 of 8 lookups live, and the misses have been phrases and people
-   ("yemeni government says", "canadian companies", "genevieve glatsky") that a
-   dump would not define either. So the case to make is coverage breadth, not
-   rescuing these misses. Row count and DynamoDB write cost print before any
-   load. The 12-QID slice band is a pipeline proof only.
+7. [ ] **Wikidata** — the pinned dated dump is DOWNLOADED and on disk:
+   `/Users/antony/tmct-dumps/wikidata-20260810-all.json.gz`,
+   155,457,882,747 bytes, completed 2026-08-13 05:02 BST.
+   Nothing has been done with it, by instruction. Plan §5.5 gates the bulk band
+   on live lookups proving too thin or slow per term, and thirteen iterations
+   point the other way: 11, 12 and 13 each resolved 6 of 8 live, and every miss
+   across the run has been a phrase or a person a dump would not define either
+   ("yemeni government says", "canadian companies", "genevieve glatsky",
+   "deepseek v4"). So the case to make is coverage breadth, and §5.5's own gate
+   will not open on this evidence. One cheap way to test the hypothesis on data
+   that could falsify it: the loop has only ever run `hacker-news` and
+   `nyt-world`, while `usgs-quakes` and `wikimedia-featured` sit captured and
+   untouched — quake and place terms are exactly what a dump defines. Row count
+   and DynamoDB write cost print before any load. The 12-QID slice band is a
+   pipeline proof only.
 
 ## Discipline
 
