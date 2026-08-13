@@ -108,17 +108,7 @@ The work list, ranked by value against the plan's target card.
    as plural — needs the lexicon's declared plurals, and `fact-phrase.mjs` is
    deliberately import-free so it can be stringified into the browser. That
    cost is the real one, and it is bigger than the typing.
-4. [ ] **The rest of a 300 ms write** — profile before picking targets; the names
-   below are one agent's reading and the tree has moved since.
-   The index was 18% of it and is now
-   carried across writes (appendFact −15.6%, appendUtterance −16.1%,
-   removeFacts −11.7% at 60k facts). The profile puts the remaining ~85% in
-   `cacheUpsertEdge`'s per-edge filter, `sqlitePayloadStoreRows`, and
-   `cloneJson`. The largest single item is `mutablePayloadCopy` copying all 60k
-   individuals; skipping it needs the object-identity work the index change
-   deliberately left alone, since three of the five index maps can't be reused
-   precisely because every individual gets a new identity per mutation.
-5. [ ] **The news fact cap evicts by content hash, not by age** —
+4. [ ] **The news fact cap evicts by content hash, not by age** —
    `evictNewsFacts` reads `r.observedAt` off the row, but `readFactRows` keeps
    `observedAt` on the assertion records; `rowObservedMs` exists for exactly
    that and eviction does not call it, though three other readers in the same
@@ -129,7 +119,7 @@ The work list, ranked by value against the plan's target card.
    carries — so the test needs fixing alongside the code, or it will keep
    passing over the bug. Found while measuring the attribution write's
    eviction hazard; separate from it, and live today.
-6. [ ] **`localeCompare` over fact rows, in ten places** — a locale-divergence
+5. [ ] **`localeCompare` over fact rows, in ten places** — a locale-divergence
    class rather than an arrival-order one: two readers on machines with
    different locales sort the same rows differently, which breaks the same
    pure-function-of-the-fact-set invariant by another route. `fact-order.mjs`
