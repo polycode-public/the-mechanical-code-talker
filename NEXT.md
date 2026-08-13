@@ -90,12 +90,21 @@ The work list, ranked by value against the plan's target card.
    individuals; skipping it needs the object-identity work the index change
    deliberately left alone, since three of the five index maps can't be reused
    precisely because every individual gets a new identity per mutation.
-5. [ ] **`mud-editor.mjs` has the adventure editor's old loose contract** —
+5. [ ] **`localeCompare` over fact rows, in ten places** — a locale-divergence
+   class rather than an arrival-order one: two readers on machines with
+   different locales sort the same rows differently, which breaks the same
+   pure-function-of-the-fact-set invariant by another route. `fact-order.mjs`
+   states the rule (codepoint, never `localeCompare`) and `inspect.mjs`'s four
+   were fixed alongside the root sort. The rest sit in `core.mjs`'s
+   `findContradictions` and its store-row listing, `digest/select.mjs`,
+   `digest/compose.mjs` and `ledger-viz.mjs` — left deliberately rather than
+   half-sweeping five files mid-task.
+6. [ ] **`mud-editor.mjs` has the adventure editor's old loose contract** —
    `planMudEditorSync` returns bare triples and `mud-browser-entry.mjs` stamps
    them at the call site, exactly as the adventure pair did before the fix. Its
    one production caller stamps correctly, so there is no live break — this is
    symmetry, and the same mechanical change of shape.
-6. [ ] **Wikidata** — the pinned dated dump
+7. [ ] **Wikidata** — the pinned dated dump
    (`wikidata-20260810-all.json.gz`, 155,457,882,747 bytes) is downloading in
    the operator's terminal via `bash scripts/resume-wikidata-dump.sh`, which
    resumes from wherever a break left it — re-run it after any interruption.
