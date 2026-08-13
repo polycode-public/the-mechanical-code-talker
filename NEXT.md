@@ -33,15 +33,15 @@ The method is `PLAN_NEWS_FEED_QUALITY.md`: run
 (`node scripts/news-bench/capture-fixtures.mjs`, then
 `node scripts/news-bench/run-live-cycle.mjs`), show every card whole in the
 four-part form, fix the top item below, merge, repeat — never waiting on
-pipelines. Position: iterations 1–12 run. Iteration 12's feed reads 14 cards,
-7 with real background and 5 thin, ranked by substance with admission per source
-printed — NYT 8 of 8 with something to say, Hacker News 1 of 6. The london card
-carries the phrasal fix (`frenzy | mgx:take-over | london`) and no `year ⊑
-eclipse` reaches the research rows. What the next run should show: the syrian
-card without its filler, and "rescuers free quake victim" reading correctly
-again. Harness note: `run-live-cycle.mjs` starts fresh state each run,
-so the negative cache resets and the same misses re-burn lookup slots per run;
-the deployed worker persists state and does not.
+pipelines. Position: iterations 1–13 run, all merged and pushed. Iteration 13's
+feed reads 14 cards, 6 with real background and 5 thin, ranked by substance with
+admission per source printed — NYT 8 of 8 with something to say, Hacker News 1
+of 6. The syrian card is clean, `rescuers free quake victim` reads correctly,
+the london card carries the phrasal fix, and the research rows come out in
+content order rather than in the order the lookups returned. Harness note:
+`run-live-cycle.mjs` starts fresh state each run, so the negative cache resets
+and the same misses re-burn lookup slots per run; the deployed worker persists
+state and does not.
 
 The work list, ranked by value against the plan's target card.
 
@@ -57,19 +57,16 @@ The work list, ranked by value against the plan's target card.
    exported and pinned, so that signature change is a real edit. The invariant
    to hold throughout: a surface that cannot render the attribution must not
    render the claim.
-2. [ ] **The graph's own false fact becomes an anchor's sense** — in flight on
-   `worktree-agent-a8aed6d0760b04093`. The unplaced-hub scope landed and the
-   syrian card is byte-identical, because its strays never came through the hub
-   walk. Instrumented: both arrive on the article-entity walk, and the article's
-   own extraction minted `say | rdfs:subClassOf | matter` from "many say it is
-   just a matter of time". That asserted isa places `say` under `substance`, so
-   `matter` then legitimately meets the anchor pool — no sense gate can refuse
-   it, because the graph believes it. Two upstream causes: the mint itself in
-   `extract-facts.mjs`, and `articleEntityNames` in `news.mjs` admitting `say`
-   and `moves`, neither of which is an entity. A measured lever left pending
-   their fix: a strict article walk drops the genuine stray
-   `dance | mgx:relatedTo | moves` from the trump tariff card (background 24 →
-   15) and does not touch the syrian card.
+2. [ ] **One event, two verbs, two rows on the card** — the russia card reads
+   "russia frees robert gilman. russia releases robert gilman." because the
+   headline says "Freed by Russia" and the description says "released". Both
+   rows are true and the graph is right to hold both; the card is wrong to say
+   it twice. A lexical synonym fold was tried and reverted — free/release split
+   on the subject's kind, which is an open set, so folding them called a rescue
+   a jail delivery ("rescuers releases quake victim"). The fix belongs at
+   paragraph assembly, where the whole row set is in view, not at extraction
+   where one row is. Against the plan's §2 target card this is now the most
+   visible defect on the best card.
 3. [ ] **"hackernews discuss" reads as a plural** — live on 6 of 14 cards.
    `isSubjectPlural` reads a naive `-s` suffix, so a singular site name spelled
    with a trailing `-s` renders bare. The fix is one entry in the existing
