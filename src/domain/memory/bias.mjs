@@ -2,6 +2,8 @@
 // computeTrust. `biasByBundle` is the `[bias]` table from tmct.toml. CRITICAL:
 // bias only REORDERS a hit list — it must never drop or hide one.
 
+import { compareFactsByContent } from "./fact-order.mjs";
+
 /** Matches a corpus-kind Source id ("src:corpus:<bundleName>"); anything else
  *  is not a corpus bundle and ranks at the neutral bias of 1. */
 const CORPUS_SOURCE_RE = /^src:corpus:(.+)$/;
@@ -23,12 +25,14 @@ export function biasForRow(row, biasByBundle = {}) {
   return Math.max(...ids.map((id) => biasForSourceId(id, biasByBundle)));
 }
 
-/** Rank fact rows by bias (desc), then trust (desc), then original order
- *  (stable) — reorders only, never drops a row. */
+/** Rank fact rows by bias (desc), then trust (desc), then content order —
+ *  reorders only, never drops a row. The last step is content and not array
+ *  index on purpose: an index tiebreak is arrival order, so two peers holding
+ *  one fact set would rank it two ways. */
 export function rankByBiasThenTrust(rows, biasByBundle = {}) {
   const list = Array.isArray(rows) ? rows : [];
   return list
-    .map((row, index) => ({ row, index, bias: biasForRow(row, biasByBundle) }))
-    .sort((a, b) => (b.bias - a.bias) || ((b.row?.trust ?? 0) - (a.row?.trust ?? 0)) || (a.index - b.index))
+    .map((row) => ({ row, bias: biasForRow(row, biasByBundle) }))
+    .sort((a, b) => (b.bias - a.bias) || ((b.row?.trust ?? 0) - (a.row?.trust ?? 0)) || compareFactsByContent(a.row, b.row))
     .map((x) => x.row);
 }

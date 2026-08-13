@@ -25,6 +25,7 @@
 // the ranking stays auditable.
 
 import { SOURCE_PRIOR } from "../memory/trust.mjs";
+import { compareFactsByContent } from "../memory/fact-order.mjs";
 import { clusterSenses } from "../sense-split.mjs";
 import DEFAULT_CONFIG from "./config.json" with { type: "json" };
 
@@ -186,16 +187,17 @@ export function selectFacts(term, rows, store = {}, opts = {}) {
     else eligible.push(item);
   }
 
-  // Breadth-first cut to budget: each family sorted by score (tie broken by
-  // object label for determinism), then pulled round-robin in family priority
-  // order so the digest covers relations before it repeats one.
+  // Breadth-first cut to budget: each family sorted by score (ties broken on
+  // the fact's own content, never on the order it arrived), then pulled
+  // round-robin in family priority order so the digest covers relations before
+  // it repeats one.
   const byFamily = new Map();
   for (const item of eligible) {
     if (!byFamily.has(item.family)) byFamily.set(item.family, []);
     byFamily.get(item.family).push(item);
   }
   for (const list of byFamily.values()) {
-    list.sort((a, b) => b.score - a.score || a.row.object.localeCompare(b.row.object));
+    list.sort((a, b) => b.score - a.score || compareFactsByContent(a.row, b.row));
   }
   const orderedFamilies = FAMILY_PRIORITY.filter((f) => byFamily.has(f))
     .concat([...byFamily.keys()].filter((f) => !FAMILY_PRIORITY.includes(f)).sort());
@@ -222,7 +224,7 @@ export function selectFacts(term, rows, store = {}, opts = {}) {
   selected.sort((a, b) => {
     const fa = FAMILY_PRIORITY.indexOf(a.family);
     const fb = FAMILY_PRIORITY.indexOf(b.family);
-    return (fa - fb) || (b.score - a.score) || a.row.object.localeCompare(b.row.object);
+    return (fa - fb) || (b.score - a.score) || compareFactsByContent(a.row, b.row);
   });
 
   return {

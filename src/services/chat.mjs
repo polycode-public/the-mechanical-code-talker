@@ -37,6 +37,7 @@ import { uuidv7 } from "../adapters/uuid.mjs";
 import * as defaultSource from "../adapters/source.mjs";
 import { loadTemplates, render as renderTemplate } from "../adapters/corpus/templates.mjs";
 import { rankByBiasThenTrust } from "../domain/memory/bias.mjs";
+import { compareFactsByContent } from "../domain/memory/fact-order.mjs";
 import { HAS_A_PREDICATE, foldedFactRows as foldStoreFactRows, loadMemory as loadMemoryStore, normFactPredicate, normFactTerm as normFactTermStatic, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
 import { BACKEND_REJECTED_CODE, BACKEND_UNAVAILABLE_CODE } from "../adapters/memory/row-backend.mjs";
 import {
@@ -1051,7 +1052,7 @@ async function answerMemoryClassQuery(memoryDir, query) {
   try { ({ loadMemory, readFactRows } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   let mem;
   try { mem = await loadMemory(memoryDir); } catch { return null; }
-  const rows = cls === "Fact" ? readFactRows(mem) : null;
+  const rows = cls === "Fact" ? readFactRows(mem).slice().sort(compareFactsByContent) : null;
   const inds = rows || (mem.individuals || []).filter((i) => (i.class || "") === cls);
   if (countM) return { text: `${inds.length} ${inds.length === 1 ? plural.replace(/s$/, "") : plural}.`, kind: "count" };
   if (!inds.length) return { text: `I don't have any ${plural} stored yet.`, miss: true };
@@ -1072,13 +1073,6 @@ async function answerMemoryClassQuery(memoryDir, query) {
 // stealing the phrasing before a member count ever runs.
 const TAUGHT_CLASS_COUNT_RE = /^how\s+many\s+([a-z][\w-]*(?:\s+[a-z][\w-]*)*)\s*(.*)$/i;
 
-/** A fact row's deterministic identity for ordering. */
-const orderKeyOf = (f) => `${f.subject} ${f.predicate} ${f.object} ${f.provenance || ""}`;
-const orderKeyCompare = (a, b) => {
-  const ka = orderKeyOf(a); const kb = orderKeyOf(b);
-  return ka < kb ? -1 : ka > kb ? 1 : 0;
-};
-
 /** The store's subclass graph, both directions, built once per turn.
  *  Keyed on the rows array identity so a rebuilt row cache rebuilds the maps. */
 function classGraphFor(rows, cache) {
@@ -1098,7 +1092,7 @@ function taughtMembersUnder(isa, children, variants, biasByBundle) {
   for (const v of variants) for (const d of descendantSet(v, children)) classes.add(d);
   const isDirect = (f) => variants.has(f.object);
   const candidates = isa.filter((f) => isDirect(f) || classes.has(f.object));
-  const keyed = uniqueFacts(candidates).slice().sort(orderKeyCompare);
+  const keyed = uniqueFacts(candidates);
   const direct = rankByBiasThenTrust(keyed.filter(isDirect), biasByBundle);
   const inherited = rankByBiasThenTrust(keyed.filter((f) => !isDirect(f)), biasByBundle);
   return { direct, inherited, members: [...direct, ...inherited], classes };
@@ -1308,11 +1302,7 @@ async function answerCollectionContents(memoryDir, query, biasByBundle = {}, cac
   const containerRaw = restricted ? restricted[2] : unrestricted[1];
   const rows = await factRows(memoryDir, cache);
   const containerVariants = factTermVariants(normFactTerm, containerRaw);
-  // Sorted by content-addressed key before ranking, same discipline as
-  // taughtMembersUnder: rankByBiasThenTrust's own tiebreak is array index, so
-  // an unsorted filter would render two peers' facts in their own arrival
-  // order instead of one shared order.
-  const members = rows.filter((f) => CONTAINMENT_PREDICATES.includes(f.predicate) && containerVariants.has(f.object)).sort(orderKeyCompare);
+  const members = rows.filter((f) => CONTAINMENT_PREDICATES.includes(f.predicate) && containerVariants.has(f.object));
   if (!members.length) return null; // no containment rows at all — answerMembershipList keeps this noun
   const renderMembers = (list, noun) => {
     const ranked = rankByBiasThenTrust(uniqueFacts(list), biasByBundle);
@@ -8851,6 +8841,14 @@ const RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([
 const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
 const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
 
+/** An already-ranked hit list with the subject's type facts moved to the
+ *  front, each half keeping its ranked order. What a thing IS answers "what is
+ *  X" more directly than anything else the store holds about it. */
+const definitionFirst = (hits) => [
+  ...hits.filter((f) => ISA_PREDICATES.has(f.predicate)),
+  ...hits.filter((f) => !ISA_PREDICATES.has(f.predicate)),
+];
+
 /** How far the isa ladder's miss text probes for a chain it can name a
  *  recovery for. Purely a REPORTING reach: the live chases answer within their
  *  own hop bounds and this never widens them, it only tells the miss whether
@@ -9918,7 +9916,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       const containerVariants = factTermVariants(normFactTerm, containerRaw.replace(/^(?:an?|the)\s+/i, "").trim());
       const hits = (await factRows(memoryDir, cache)).filter(
         (f) => predicates.includes(f.predicate) && containerVariants.has(f.object),
-      ).sort(orderKeyCompare); // content-addressed order, not arrival order — see answerCollectionContents' own note
+      );
       if (hits.length) {
         const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
         const lines = ranked.map(renderFactLine);
@@ -10114,8 +10112,13 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     }
     // Bias only REORDERS — every hit still renders and is cited (Part 6's
     // "disclosed, never dropped" contract). Unconfigured/tied bias degrades to
-    // trust-desc, byte-identical to before this feature existed.
-    hits = rankByBiasThenTrust(hits, biasByBundle);
+    // trust-desc.
+    //
+    // A definition then leads with what the subject IS. Bias and trust say
+    // nothing about that, and once they tie the isa row sorts wherever its
+    // predicate spelling happens to fall, so "what is a dog" opens on "dog can
+    // bark". Every other hit keeps its ranked place behind it.
+    hits = definitionFirst(rankByBiasThenTrust(hits, biasByBundle));
     const allRows = await factRows(memoryDir, cache);
     const { lines, grouped } = senseSplitFactList(hits, allRows, variants, { cache });
     // A long undifferentiated "what is X" leads with the digest — a bounded
@@ -10919,7 +10922,7 @@ async function whatElseAnswer(memoryDir, query, last) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const variants = factTermVariants(normFactTerm, term);
-  const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
+  const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject)).sort(compareFactsByContent);
   const picture = pickPhrase("full-picture", term.toLowerCase(), "the full picture");
   const nothingMore = {
     text: `That's everything I know about "${term}" — /memory to see ${picture}.`,
@@ -10962,7 +10965,7 @@ async function synonymFactAnswer(memoryDir, query, envelope) {
   const facts = await memoryFacts(memoryDir);
   for (const { variant, source } of await synonymsOf(term)) {
     const variants = factTermVariants(normFactTerm, variant);
-    const hits = facts.filter((f) => variants.has(f.subject));
+    const hits = facts.filter((f) => variants.has(f.subject)).sort(compareFactsByContent);
     if (!hits.length) continue;
     const lines = hits.map(renderFactLine);
     const shown = lines.slice(0, FACT_ANSWER_CAP);
@@ -11337,7 +11340,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     if (!((fallThroughIsa && !/^there\b/i.test(fallThroughIsa[1].trim())) || CONFIRM_TAG_RE.test(q))) return null;
   }
   const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
-  const byTrust = (a, b) => b.trust - a.trust;
+  const byTrust = (a, b) => (b.trust - a.trust) || compareFactsByContent(a, b);
   const renderMany = (hits) => {
     const lines = hits.map(renderFactLine);
     const shown = lines.slice(0, FACT_ANSWER_CAP);
@@ -19214,7 +19217,9 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
         const separated = separateChoiceTie(grounded, constraintTerms, rowsAfterPull);
         if (separated) {
           const { winner, runnerUp, missedByRunnerUp } = separated;
-          const groundingFact = winner.facts.length > 0 ? winner.facts.slice().sort((a, b) => b.trust - a.trust)[0] : null;
+          const groundingFact = winner.facts.length > 0
+            ? winner.facts.slice().sort((a, b) => (b.trust - a.trust) || compareFactsByContent(a, b))[0]
+            : null;
           const groundingClause = groundingFact
             ? `${factPhrase(groundingFact)} (source: ${citationProvenance(groundingFact.provenance)})`
             : renderIsaChain(winner.chain);
@@ -19255,7 +19260,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       // edge exists for the winning option — probeChoiceOptions' own guard.
       let text; let matches; let hop; let traversalNote; let matchedBy;
       if (winner.facts.length > 0) {
-        const fact = winner.facts.slice().sort((a, b) => b.trust - a.trust)[0];
+        const fact = winner.facts.slice().sort((a, b) => (b.trust - a.trust) || compareFactsByContent(a, b))[0];
         text = `${winner.text} — ${factPhrase(fact)} (source: ${citationProvenance(fact.provenance)}).`;
         matches = winner.facts;
         hop = 1;

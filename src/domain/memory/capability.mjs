@@ -19,6 +19,7 @@
 // Pure and import-free of core.mjs, exactly like trust.mjs beside it.
 
 import { findIsaChain, buildSubClassSuccessors, SUBCLASS_PREDICATE, TYPE_PREDICATE } from "../syllogise.mjs";
+import { compareFactsByContent } from "./fact-order.mjs";
 
 /** The negative-polarity CURIE prefix. A separate prefix, never an
  *  "mgx:not-<lemma>" mint: fact-phrase.mjs's predicatePhrase reads "mgx:not-fly" as
@@ -74,7 +75,7 @@ export const NEG_CAPABLE_OF_PREDICATE = negatedPredicate(CAPABLE_OF_PREDICATE);
  *  order it lists them in. One constant each, in one place, so the verbosity of
  *  every case-4 answer is tuned by editing two lines. */
 export const CAPABILITY_REPORT_CAP = 6;
-const byTrustThenName = (a, b) => (b.trust || 0) - (a.trust || 0) || String(a.subject).localeCompare(String(b.subject));
+const byTrustThenName = (a, b) => (b.trust || 0) - (a.trust || 0) || compareFactsByContent(a, b);
 
 const asSet = (v) => (v instanceof Set ? v : new Set(Array.isArray(v) ? v : [v]));
 
@@ -155,7 +156,9 @@ export function resolveCapabilityPolarity(subject, object, facts, { maxHops = 3 
   }
 
   // hop count first, trust only within a rank — the whole point of the design
-  candidates.sort((a, b) => a.hops - b.hops || (b.fact.trust || 0) - (a.fact.trust || 0));
+  candidates.sort((a, b) => a.hops - b.hops
+    || (b.fact.trust || 0) - (a.fact.trust || 0)
+    || compareFactsByContent(a.fact, b.fact));
   const hops = candidates[0].hops;
   const winning = candidates.filter((c) => c.hops === hops);
   const positive = winning.filter((c) => c.polarity === "positive").map((c) => c.fact);
@@ -198,19 +201,22 @@ export function capabilityBaseRate(subject, object, facts, { maxHops = 3 } = {})
   const rows = Array.isArray(facts) ? facts : [];
   const isaRows = rows.filter((f) => f.predicate === SUBCLASS_PREDICATE || f.predicate === TYPE_PREDICATE);
 
-  const parents = isaRows.filter((f) => subjects.has(f.subject)).map((f) => f.object);
+  // The class the whole report is about, so it cannot come from whichever
+  // parent row happened to be stored first.
+  const parents = isaRows.filter((f) => subjects.has(f.subject)).sort(compareFactsByContent).map((f) => f.object);
   if (!parents.length) return null;
   const klass = parents[0];
 
   const siblings = [...new Set(
-    isaRows.filter((f) => f.object === klass && !subjects.has(f.subject)).map((f) => f.subject),
+    isaRows.filter((f) => f.object === klass && !subjects.has(f.subject))
+      .sort(compareFactsByContent).map((f) => f.subject),
   )];
 
   const capabilityOf = (name) => {
-    const hit = rows.find(
+    const hit = rows.filter(
       (f) => f.subject === name && objects.has(f.object)
         && (f.predicate === CAPABLE_OF_PREDICATE || f.predicate === NEG_CAPABLE_OF_PREDICATE),
-    );
+    ).sort(compareFactsByContent)[0];
     if (!hit) return { name, polarity: "unknown", fact: null };
     return { name, polarity: hit.predicate === NEG_CAPABLE_OF_PREDICATE ? "negative" : "positive", fact: hit };
   };
