@@ -12,9 +12,9 @@
 // key. Codepoint order throughout, never localeCompare — two locales have to
 // land on the same order.
 //
-// The store's own precedent is p2p-room.mjs's sortFactIndividualsById, which
-// sorts Fact individuals by content-addressed id after every merge for exactly
-// this reason. This is that discipline carried through to the read side.
+// The store's own precedent is rows.mjs's sortFactIndividualsById, which sorts
+// Fact individuals by content-addressed id after every merge for exactly this
+// reason. This is that discipline carried through to the read side.
 
 /** A fact row's content-derived sort key. */
 export const factOrderKey = (f) => [

@@ -33,12 +33,12 @@ function parseChatTagRest(rest) {
 const PEER_NODE_MARKER = "#node:";
 const PEER_TAG_PREFIX = "peer:";
 
-/** `peer:<displayName>#node:<nodeId>@<ts>` — the wire shape a broadcasting peer
- *  relabels its own teach/operator tags into. The node id is the origin's
- *  stable identity and the only part that keys the Source; the display name is
+/** `peer:<displayName>#node:<nodeId>@<ts>` — the shape a tag takes when it
+ *  names the node that authored it. The node id is the origin's stable
+ *  identity and the only part that keys the Source; the display name is
  *  user-chosen, mutable and collidable, so it records who to SHOW, not who it
  *  is — the same discipline `child:`'s term and `world:`'s turn segments hold.
- *  Null for anything without the segment, so an older peer tag falls through to
+ *  Null for anything without the segment, so a tag missing it falls through to
  *  the plain teach parse unchanged. */
 function parsePeerNodeTagRest(rest) {
   if (!rest.startsWith(PEER_TAG_PREFIX)) return null;
@@ -79,11 +79,11 @@ function parsePeerNodeTagRest(rest) {
  *   teach:chat:<session>@<ts>  -> { kind:"teach",     createdAt:<ts>, sessionId:<session> }
  *   teach:peer:<name>#node:<id>@<ts>
  *                              -> { kind:"teachNode", nodeId:<id>, displayName:<name>, createdAt:<ts> }
- *     (a peer's own tag, relabeled for the wire by whichever node authored it.
- *      The node id keys the Source; the display name is presentation only. A
- *      peer tag with no `#node:` segment predates the segment and parses as a
- *      plain "teach" whose session slot is the whole name — which is what lets
- *      old and new readers share one wire.)
+ *     (a tag another node authored. The node id keys the Source; the display
+ *      name is presentation only, so two nodes that chose the same name stay
+ *      separate Sources. A tag with no `#node:` segment predates the segment
+ *      and parses as a plain "teach" whose session slot is the whole name, so
+ *      a store holding both shapes reads both.)
  *   web:<url> | url:<url>      -> { kind:"web",       url:<url> }
  *   reference:<pack>:<article>[@revid] -> { kind:"reference", pack, article }
  *     (split on the first two colons only; the article keeps any @revid and
@@ -198,8 +198,8 @@ export function provenanceTagToSource(tag) {
   }
   if (head.startsWith("teach:")) {
     const rest = head.slice("teach:".length);
-    // teach:peer:<name>#node:<id>@<ts> — a peer's own relabeled tag off the
-    // wire, keyed on the node id rather than the name beside it.
+    // teach:peer:<name>#node:<id>@<ts> — a tag another node authored, keyed on
+    // the node id rather than the name beside it.
     const peerNode = parsePeerNodeTagRest(rest);
     if (peerNode) return peerNode;
     // the chat teach lane's natural frames — chat.mjs's teachProvenanceTag

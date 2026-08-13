@@ -9,13 +9,13 @@
 //
 // The literature calls the missing rule CAUSAL STABILITY: a record is safe to
 // drop once every replica that could still send a conflicting copy has it. Two
-// inputs, and the mesh has one of them.
+// inputs.
 //
 //   - The ROSTER. `node:<joiner> mgx:invitedBy node:<inviter>` is an ordinary
 //     replicated fact, so the set of node ids ever admitted to a world is a
-//     grow-only union every peer computes the same way. `admittedNodes` reads
-//     it. Grow-only is exactly right here: a roster that could shrink would let
-//     a forgotten node's stale copy back in.
+//     grow-only union every replica computes the same way. `admittedNodes`
+//     reads it. Grow-only is exactly right here: a roster that could shrink
+//     would let a forgotten node's stale copy back in.
 //   - The ACKNOWLEDGEMENT. Nothing yet records that a named node holds a named
 //     record. `stableRecordIds` takes it as an argument rather than inventing
 //     it, and answers "nothing is stable" when it is absent — which is the
@@ -32,7 +32,24 @@
 // invariant every read-time resolver over the store has to meet.
 // docs/references/papers/crdt.md carries the full design and the options it
 // rejected.
-import { INVITED_BY_PREDICATE } from "../p2p/facts.mjs";
+
+export const INVITED_BY_PREDICATE = "mgx:invitedBy";
+
+/** The term a node id takes as a fact subject or object. */
+export const nodeTerm = (nodeId) => `node:${nodeId}`;
+
+/** One admission edge: who let a node in. There is no open discovery here, so
+ *  this records a social admission graph that an identity cannot mint for
+ *  itself. The joiner writes it, because the joiner is the only side that
+ *  knows both node ids at the moment it decides to join. */
+export function invitedByFact(joinerNodeId, inviterNodeId, timestamp) {
+  return {
+    subject: nodeTerm(joinerNodeId),
+    predicate: INVITED_BY_PREDICATE,
+    object: nodeTerm(inviterNodeId),
+    provenance: `ace:p2p:${joinerNodeId}@${timestamp}`,
+  };
+}
 
 /** The node ids a world has ever admitted, from its admission edges. Both ends
  *  of each edge count: the joiner wrote the edge about itself, and it names the

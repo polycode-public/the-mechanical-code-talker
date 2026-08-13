@@ -124,12 +124,13 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
   replaces it — check `mcr.microsoft.com/v2/playwright/tags/list` if a pipeline fails on "manifest
   unknown" right after a playwright bump.
 - **Any read-time resolver over the fact store must be a pure function of the fact set** — no wall
-  clock, no local counter, no reliance on arrival order. `p2p-room.mjs`'s `sortFactIndividualsById`
-  is the precedent: it sorts Fact individuals by content-addressed id after every merge so a
-  resolver downstream never sees two peers' facts in different orders. See
-  `docs/references/papers/crdt.md`'s "Where 'latest wins' happens" section for the full account.
-  Check it by feeding one peer's facts to the resolver in two different orders and demanding the
-  same answer back.
+  clock, no local counter, no reliance on arrival order.
+  `src/adapters/memory/rows.mjs`'s `sortFactIndividualsById` is the precedent: it sorts Fact
+  individuals by content-addressed id after every merge so a resolver downstream never sees two
+  writers' facts in different orders. `src/domain/memory/fact-order.mjs` carries the same
+  discipline through to the read side. See `docs/references/papers/crdt.md`'s "Where 'latest wins'
+  happens" section for the full account. Check it by feeding one writer's facts to the resolver in
+  two different orders and demanding the same answer back.
 
 ## Test the blast radius, not the whole suite
 

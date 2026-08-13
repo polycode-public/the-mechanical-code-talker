@@ -36,11 +36,11 @@ Jobs grouped by stage, mapped to the consumer surface each one exercises:
 |---|---|---|
 | gate | `secret_detection`, `detect:playwright-version` | no leaked credential ships; every browser job runs the pinned Playwright |
 | test | `unit:smoke`, `unit:fast`, `unit`, `unit:slow`, `pack:contents`, `license:deps` | internal correctness under every surface; the published file list matches the committed manifest; the dependency tree stays inside the licence allowlist |
-| e2e (local) | `e2e-web-index`, `e2e-web-local-origin`, `e2e-tui`, `e2e-cli` | the site shell, the sprites/ledger/WebRTC/boot-budget pages against a served build, the TUI, and the full CLI verb surface |
+| e2e (local) | `e2e-web-index`, `e2e-web-local-origin`, `e2e-tui`, `e2e-cli` | the site shell, the sprites/ledger/boot-budget pages against a served build, the TUI, and the full CLI verb surface |
 | deploy | `deploy:website`, `publish:npm` | the live AWS/CloudFront site; the version-gated, provenance-signed npm publish |
 | verify | `semgrep-sast`, `pii:lint`, `links:check`, `smoke:post-deploy`, `e2e:published-package` | static analysis and repo hygiene; the just-deployed site serves the right version and encoding; the just-published package installs from the real registry and passes the CLI/TUI e2e against the installed binary |
 | site-ready | `site:ready` | the CDN provably serves this exact commit before the deployed matrix runs |
-| e2e (deployed) | `e2e:deployed:shell`, `e2e:deployed:pages`, `e2e:deployed:pages-timing`, `e2e:deployed:mesh`, `capture:hero` | every shipped page, the timing-sensitive flows, and the three-peer P2P mesh — all against `https://tmct.polycode.co.uk`, not a local build |
+| e2e (deployed) | `e2e:deployed:shell`, `e2e:deployed:pages`, `e2e:deployed:pages-timing`, `capture:hero` | every shipped page and the timing-sensitive flows — all against `https://tmct.polycode.co.uk`, not a local build |
 
 Longest job: `e2e:deployed:pages` at 9m 31s. No defined job was absent from this run.
 
@@ -97,18 +97,18 @@ to a test: the architecture diagram has no drift guard against the layer set, an
 false-premise flag has no dedicated test file.
 
 **Reverse direction and the one unbacked claim — found, then fixed the same day.** The audit
-surfaced twelve shipped, tested capabilities absent from README's narrative (the typed
+surfaced eleven shipped, tested capabilities absent from README's narrative (the typed
 discourse record, goal recognition, plan counterfactuals, filler-clause stripping, quantified
 locative teach, help.html, the sprites animation model, adventure staff animation, the research
-service, the P2P/WebRTC sharing layer, receipts.html/claims.html, and MUDIII's other two
+service, receipts.html/claims.html, and MUDIII's other two
 layouts) plus one claim CI does not back (a nightly `npm audit`/OSV-Scanner job that exists
-nowhere in `.gitlab-ci.yml`). All twelve now have prose in their natural README sections, the
+nowhere in `.gitlab-ci.yml`). All eleven now have prose in their natural README sections, the
 security section states exactly what runs (SAST and secret detection per pipeline,
 provenance-signed publishing, an unscheduled local audit script), and the bibliography's
 "no intent vocabulary" line was reworded to stay true beside the shipped goal recognition
 (`71ecac4d`). The suspected stale about-page count turned out correct in README — the stale
 figure was the build script's own comment, fixed alongside. A follow-up audit of the post-fix
-README verified all twelve new passages independently and found one defect in them — the
+README verified all eleven new passages independently and found one defect in them — the
 follow-up-context worked example ran its two turns in an order the discourse record doesn't
 support (a count never registers a set) — corrected to the verified list-then-count sequence.
 

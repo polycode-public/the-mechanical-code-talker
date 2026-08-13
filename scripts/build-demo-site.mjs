@@ -231,16 +231,6 @@ writeVersionFile();
   console.log(`wrote ${winkVendorPath} (${(winkVendorBytes / 1048576).toFixed(2)} MB)`);
 }
 
-// The shared P2P asset, built the same way and for the same reason: every page
-// that can join a shared world imports THIS one same-origin module at runtime,
-// so the networking layer is never copied into a per-page engine bundle. The
-// pages import it lazily, so a visitor who never shares never fetches it.
-{
-  const { buildP2pVendor } = await import(join(here, "build-p2p-vendor.mjs"));
-  const { outPath: p2pVendorPath, bytes: p2pVendorBytes } = await buildP2pVendor(SITE);
-  console.log(`wrote ${p2pVendorPath} (${(p2pVendorBytes / 1024).toFixed(0)} KB)`);
-}
-
 execFileSync(process.execPath, [join(here, "build-demo-graph.mjs"), join(SITE, "demo-graph.json")], { stdio: "inherit" });
 
 // The ledger hero: build the memory payload through the real teach paths, then
@@ -1015,7 +1005,6 @@ const CACHE = ${JSON.stringify(`tmct-precache-v${version}-${buildHash}`)};
 const CONTENT_ADDRESSED = [
   ${JSON.stringify(seedPath)},
   "./vendor/wink.js",
-  "./vendor/p2p.js",
   "./vendor/three.js",
   "./reference-pack/index.json",
 ];
@@ -1067,8 +1056,8 @@ self.addEventListener("fetch", (event) => {
   const packArticle = url.pathname.includes("/reference-pack/articles/");
   const pageOrBundle = url.pathname.endsWith(".html") || url.pathname.endsWith("/")
     || url.pathname.endsWith(".bundle.js") || url.pathname.endsWith(".css");
-  // A page's own URL carries query strings of its own (an invite link), so the
-  // deploy-tracking test comes first and reads the path alone.
+  // A page's own URL can carry query strings of its own, so the deploy-tracking
+  // test comes first and reads the path alone.
   const contentAddressed = !pageOrBundle
     && (packArticle || CONTENT_ADDRESSED.some((p) => precacheUrl(p) === url.href));
   if (pageOrBundle) {
@@ -1115,7 +1104,7 @@ self.addEventListener("fetch", (event) => {
     ["index.html", null], ["chat.html", null], ["help.html", null],
     ...ABOUT_PAGES.map((p) => [p, null]), [SHARED_STYLESHEET, null],
     ["chat-browser.bundle.js", null], ["sprites-browser.bundle.js", null],
-    ["vendor/wink.js", null], ["vendor/p2p.js", null], ["vendor/three.js", null],
+    ["vendor/wink.js", null], ["vendor/three.js", null],
     ["chat-seed.json", seedStamp], ["reference-pack/index.json", null],
   ];
   const buildHash = createHash("sha256")

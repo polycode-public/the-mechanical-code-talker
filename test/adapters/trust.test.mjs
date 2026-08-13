@@ -402,7 +402,7 @@ test("entailed hook: min(premise trusts) × rule-confidence when premises are su
   assert.equal(withPremises.score, 0.3); // min(0.9,0.6,0.8)=0.6 × 0.5 = 0.30
 });
 
-// ---- teach:peer:<name>#node:<id>@<ts> — the wire's origin identity ----------
+// ---- teach:peer:<name>#node:<id>@<ts> — the authoring node's identity -------
 
 test("a peer tag's node segment keys the Source; the display name beside it is presentation only", () => {
   assert.deepEqual(

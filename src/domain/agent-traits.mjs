@@ -15,7 +15,7 @@
 //
 // Every list this module returns is sorted in codepoint order before it is
 // returned, and every resolver here is a pure function of the row SET, never
-// of the order the rows arrived in — the same rule p2p-room.mjs's
+// of the order the rows arrived in — the same rule rows.mjs's
 // sortFactIndividualsById holds for a merged fact store, so two callers who
 // built the same rows in different orders never read a different answer.
 

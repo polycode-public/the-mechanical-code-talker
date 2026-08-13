@@ -131,52 +131,7 @@ test("a character starts already knowing about food already sitting in its own s
   );
 });
 
-const rowsFor = (rows, predicate) => rows.filter((r) => r.predicate === predicate);
-
-test("a wave writes a room-scoped fact the world's own fold never reads as state", async () => {
-  const session = await createMudSession(worldPayload, { characters: ["mole-1"] });
-  const before = await session.snapshot();
-
-  assert.equal(await session.wave("mole-1"), "garden", "it waves in the room it is standing in");
-  const after = await session.snapshot();
-  const waves = rowsFor(after.rows, "mgx:waved");
-  assert.equal(waves.length, 1);
-  assert.equal(waves[0].subject, "mole-1");
-  assert.equal(waves[0].object, "garden");
-  assert.equal(
-    after.state.placements.get("mole-1").object,
-    before.state.placements.get("mole-1").object,
-    "a gesture moves nothing",
-  );
-  assert.equal(after.state.turnCount, before.state.turnCount, "and costs no turn");
-});
-
-test("waving twice supersedes the first wave, so the live tag is the fresher one and the older is kept behind it", async () => {
-  const session = await createMudSession(worldPayload, { characters: ["mole-1"] });
-  await session.wave("mole-1");
-  const first = rowsFor((await session.snapshot()).rows, "mgx:waved")[0].provenance;
-  await session.wave("mole-1");
-  const waves = rowsFor((await session.snapshot()).rows, "mgx:waved");
-  assert.equal(waves.length, 1, "the same character waving in the same room is the same fact id");
-  // One waver is one hop, so its record holds one tag: its CURRENT belief. The
-  // repeat wave replaces it rather than piling up, which is what keeps
-  // "currently waving" a recency read over a single timestamp.
-  assert.equal(waves[0].provenance.split(" | ").length, 1);
-  assert.notEqual(waves[0].provenance, first, "and the live tag is the later wave's");
-  assert.ok(Date.parse(waves[0].createdAt ?? waves[0].assertions[0].createdAt) > Date.parse(first.split("@").pop()));
-
-  // the first wave is not discarded — it moves behind the head, linked both ways
-  const { loadMemory } = await import("../../src/adapters/memory/core.mjs");
-  const m = await loadMemory(session.memoryDir);
-  const demoted = m.individuals.filter((i) => i.class === "Fact" && /#v1$/.test(i.id));
-  const attrOf = (ind, prop) => ind.attributes.find((a) => a.prop === prop)?.value;
-  assert.equal(demoted.length, 1, "exactly one superseded wave");
-  assert.equal(attrOf(demoted[0], "mgx:factProvenance"), first, "kept unmutated");
-  assert.equal(attrOf(demoted[0], "mgx:supersededBy"), waves[0].assertions[0].id);
-  assert.equal(attrOf(m.individuals.find((i) => i.id === waves[0].assertions[0].id), "mgx:supersedes"), demoted[0].id);
-});
-
-test("a recast session seeds its epoch marker, so a peer's leftover snapshots from the old run fold as history", async () => {
+test("a recast session seeds its epoch marker, so leftover snapshots from the old run fold as history", async () => {
   const session = await createMudSession(worldPayload, { characters: ["mole-1"] });
   assert.equal((await session.snapshot()).state.epoch, 0, "an unrecast boot writes no marker and stays on epoch 0");
 
@@ -188,9 +143,8 @@ test("a recast session seeds its epoch marker, so a peer's leftover snapshots fr
   assert.equal(marker.object, "2");
   assert.match(marker.provenance, /^world:mud-garden/, "seeded with the world's own tag, so the state fold reads it");
 
-  // The convergence case a rebind creates: a peer that never recast syncs its
-  // old run's snapshots into this store. They merge (facts are add-only) but
-  // can no longer outrank the fresh seed.
+  // The convergence case: an old run's snapshots merge into this store (facts
+  // are add-only) but can no longer outrank the fresh seed.
   const { appendFacts } = await import("../../src/adapters/memory/core.mjs");
   await appendFacts(recast.memoryDir, [
     { subject: "mole-1@turn9", predicate: "mgx:currently-in", object: "burrow-1", provenance: "world:mud-garden:turn9" },
@@ -203,29 +157,6 @@ test("a recast session seeds its epoch marker, so a peer's leftover snapshots fr
   assert.ok(result.room, "the new run plays on");
   const stamped = (await recast.snapshot()).rows.some((r) => r.subject.includes("@epoch2@turn"));
   assert.ok(stamped, "and its own writes carry the epoch, so they outrank the old run everywhere they merge");
-});
-
-test("a claim is one add-only fact per animal, and two claims on one animal both stand", async () => {
-  const session = await createMudSession(worldPayload, { characters: ["mole-1", "badger-2"] });
-  assert.equal(await session.claimCharacters(["mole-1", "badger-2"], "alpha"), 2);
-  await session.claimCharacters(["mole-1"], "beta");
-
-  const claims = rowsFor((await session.snapshot()).rows, "mgx:playedBy");
-  assert.deepEqual(
-    claims.filter((r) => r.subject === "mole-1").map((r) => r.object).sort(),
-    ["alpha", "beta"],
-    "nothing is overwritten — both claims stand and every reader settles them the same way",
-  );
-  assert.deepEqual(claims.filter((r) => r.subject === "badger-2").map((r) => r.object), ["alpha"]);
-});
-
-test("neither a claim nor a wave can move a character or open a room", async () => {
-  const session = await createMudSession(worldPayload, { characters: ["mole-1"] });
-  await session.claimCharacters(["mole-1"], "alpha");
-  await session.wave("mole-1");
-  const snap = await session.snapshot();
-  assert.equal(snap.state.placements.get("mole-1").object, "garden");
-  assert.equal(snap.state.exits.get("garden").size, 1, "the garden still has exactly the one shaft it was written with");
 });
 
 // A page's teach checkbox reaches every character's turn as

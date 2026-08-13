@@ -2,9 +2,9 @@
 // world payload, agent roster and asset manifest, mirroring mud-viz.test.mjs's
 // own style — these tests pin the page's STRUCTURE (the deck's controls,
 // including the foxes/goblins-relabelled sliders and the two new controls
-// this page adds over mud.html's own deck; the deliberate absence of every
-// P2P surface; the board opening already playing), plus the pure render-glue
-// functions the page splices into its own inline script.
+// this page adds over mud.html's own deck; the board opening already
+// playing), plus the pure render-glue functions the page splices into its own
+// inline script.
 //
 // Driven from test/fixtures/mudiii-ticks.json (the frozen engine/viz
 // interface — see its own `_readme`) and data/mudiii-assets.json (the asset
@@ -291,14 +291,6 @@ test("renderMudiiiHtml: the turn counter is read off the engine's own payload, n
   const boot = /async function boot\(\) \{([\s\S]*?)\n  \}/.exec(html);
   assert.ok(boot, "boot() is in the page script");
   assert.doesNotMatch(boot[1], /globalTurn = opening\.turn/, "the opening board sets it through the same path a tick does");
-});
-
-test("renderMudiiiHtml: every P2P surface mud.html carries is deliberately absent here", () => {
-  const html = renderMudiiiHtml({ worldPayload: WORLD_PAYLOAD, agents: AGENTS });
-  assert.doesNotMatch(html, /id="statePill"/);
-  assert.doesNotMatch(html, /id="shareBtn"/);
-  assert.doesNotMatch(html, /id="joinOpenBtn"/);
-  assert.doesNotMatch(html, /wave-btn/);
 });
 
 test("renderMudiiiHtml: the ring walks the followed agent, and every press spends a whole-world turn", () => {

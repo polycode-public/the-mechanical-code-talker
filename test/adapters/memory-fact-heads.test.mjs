@@ -346,8 +346,8 @@ test("the head index never reaches a serialised payload, an export, or a wire fa
       ["classes", "generated_at", "individuals", "memory", "objectProperties", "prefixes", "proseIndex", "vocabulary"],
     );
 
-    // The row surface the P2P layer builds wire facts from is unchanged, so a
-    // broadcast cannot pick up head material it has no field for.
+    // The row surface every reader works from is unchanged, so nothing
+    // downstream picks up head material it has no field for.
     const [row] = readFactRows(memory);
     assert.deepEqual(
       Object.keys(row).sort(),

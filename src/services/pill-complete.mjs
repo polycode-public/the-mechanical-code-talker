@@ -32,8 +32,7 @@
 // these exact names, because createPillComplete calls the other two by bare
 // name at runtime and that call only resolves if all three sit as siblings
 // in the same inline script. `pillCompleteMarkup` is different: it is a
-// markup BUILDER, the same role `shareOverlayHtml` plays in
-// share-overlay-viz.mjs — it runs once, server/module-side, to produce the
+// markup BUILDER — it runs once, server/module-side, to produce the
 // initial HTML string a page embeds, and is never spliced into the client
 // script. That is the only reason it may (and does) import `escapeHtml`.
 //
@@ -189,10 +188,9 @@ export function matchPills(candidates, typed, opts = {}) {
  * caller can `getElementById` them right after inserting this markup, before
  * constructing `createPillComplete`.
  *
- * Runs once at page-render time (module- or server-side), the same role
- * `shareOverlayHtml` plays in share-overlay-viz.mjs — it is NOT one of the
- * three functions an adopting page splices into its inline script, so it is
- * the one export in this module allowed to import `escapeHtml`.
+ * Runs once at page-render time (module- or server-side) — it is NOT one of
+ * the three functions an adopting page splices into its inline script, so it
+ * is the one export in this module allowed to import `escapeHtml`.
  */
 export function pillCompleteMarkup({ inputId, inputHtml }) {
   const esc = escapeHtml;
@@ -446,8 +444,7 @@ export function createPillComplete({ input, ghostEl, statusEl, railEl, getCandid
  * the one exception: it is structural, not a themed colour choice — the
  * ghost text sits in a layer BEHIND the input, so the input has to be
  * see-through for the ghost's suffix to read at all. Themed through `--pc-*`
- * custom properties defaulting to the site's shared tokens, the way
- * share-overlay-viz.mjs's `--so-*` variables do.
+ * custom properties defaulting to the site's shared tokens.
  */
 export const PILL_COMPLETE_CSS = `
   .pc-field {

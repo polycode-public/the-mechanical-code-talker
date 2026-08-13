@@ -181,13 +181,13 @@ async function resumedPosition(memoryDir) {
 
 // ---- the world-state fold ----------------------------------------------------
 
-/** Which run of the world a store is on. Recasting a shared world (mud.html's
+/** Which run of the world a store is on. Recasting a world (mud.html's
  *  RESET, a slider, the scenario dropdown) reopens the same deterministic
- *  instance ids over a fresh store while peers may still hold the old run's
- *  snapshots — this marker is how every reader agrees the world has started
- *  over. It is an ordinary add-only fact: each recast appends a larger value,
- *  the fold takes the max, and merging two peers' stores converges because max
- *  is order-free. */
+ *  instance ids over a fresh store, so the old run's snapshots can still be
+ *  sitting in a store somewhere — this marker is how every reader agrees the
+ *  world has started over. It is an ordinary add-only fact: each recast
+ *  appends a larger value, the fold takes the max, and merging two stores
+ *  converges because max is order-free. */
 export const WORLD_EPOCH_PREDICATE = "mgx:world-epoch";
 const WORLD_EPOCH_SUBJECT = "world";
 
@@ -257,36 +257,6 @@ export function worldActionRows(rows) {
   });
 }
 
-// The predicates a played turn can write. Every one of them already exists
-// above as a private constant; this set is the one place they are gathered so
-// a caller outside this file can ask "is this fact part of the live world"
-// without learning each name. rdf:type and the display name earn their place
-// alongside the folded ones: a dug room and a dug object are minted mid-play,
-// and a reader that never receives their class or their plain name cannot draw
-// them at all.
-const MUD_STATE_PREDICATES = new Set([
-  ...PLACEMENT_PREDICATES,
-  ...POSITION_PREDICATES,
-  OPEN_PREDICATE,
-  MASS_PREDICATE,
-  KNOWS_ABOUT_PREDICATE,
-  DISPLAY_NAME_PREDICATE,
-  "rdf:type",
-  // Which run the world is on IS live world state: a peer that misses the
-  // recast marker keeps folding the old run's snapshots as current.
-  WORLD_EPOCH_PREDICATE,
-]);
-
-/** Whether `predicate` carries live world state — where a thing stands, what
- *  it weighs, whether it is open, what somebody knows, which way a room leads,
- *  and the class and name a dug thing is minted with. The P2P sync filter
- *  reads this to tell a fact a turn produced from the page chrome around it.
- *  Pure. */
-export function isMudStatePredicate(predicate) {
-  const p = String(predicate || "");
-  return MUD_STATE_PREDICATES.has(p) || EXIT_PREDICATE_RE.test(p);
-}
-
 /** Every individual the world names — its rooms, its cast, its props, and
  *  anything dug up since — as the plain id strings a parser has to have
  *  DECLARED before it can resolve them. @turnN snapshots are skipped: a
@@ -308,7 +278,7 @@ export function worldIndividualNames(rows) {
  *  stored), and the epoch itself.
  *
  *  Rows rank by the (epoch, turn) pair, so a recast can never be outranked by
- *  the run it replaced: a peer's turn-9 snapshot from before the recast loses
+ *  the run it replaced: a turn-9 snapshot from before the recast loses
  *  to a turn-1 snapshot written after it. Base rows carry no stamp of their
  *  own and rank as turn 0 of the CURRENT epoch — a recast re-seeds the same
  *  deterministic ids, so the shard's own rows are exactly the state the new
@@ -653,10 +623,9 @@ async function writeWorldTurn(memoryDir, world, k, facts, cache) {
 // the last carrot appends a SECOND claim to the same edge, tagged `:gone`, and
 // appendFacts unions the two tags onto the one fact exactly as it unions any
 // repeat assertion. "The carrot was here on turn 2" and "the carrot is gone on
-// turn 5" are both true; the reader's job is to say which one rules, the same
-// recency question the p2p layer asks of its own tags. So reading knowledge
-// back means reading the newest claim per edge, never the union of every claim
-// ever made.
+// turn 5" are both true; the reader's job is to say which one rules. So
+// reading knowledge back means reading the newest claim per edge, never the
+// union of every claim ever made.
 
 const VOIDED_TESTIMONY_SUFFIX = ":gone";
 

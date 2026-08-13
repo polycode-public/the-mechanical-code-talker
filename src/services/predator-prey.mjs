@@ -168,9 +168,7 @@ const MUDIII_STATE_PREDICATE_SET = new Set([
  *  board, who put it there, and the class and model a mid-play mint needs. */
 export const MUDIII_STATE_PREDICATES = Object.freeze([...MUDIII_STATE_PREDICATE_SET].sort());
 
-/** Whether `predicate` carries live town-square state. The P2P sync filter
- *  reads this to tell a fact a turn produced from the page chrome around it.
- *  Pure. */
+/** Whether `predicate` carries live town-square state. Pure. */
 export function isMudiiiStatePredicate(predicate) {
   const p = String(predicate || "");
   return MUDIII_STATE_PREDICATE_SET.has(p) || EXIT_PREDICATE_RE.test(p);
@@ -204,8 +202,8 @@ export function seededSpawnCell(options, { layoutName, epoch = 0, turn = 0, id }
  *
  *  Rows rank by the (epoch, turn) pair, exactly as adventure.mjs's
  *  foldWorldState does, so a recast can never be outranked by the run it
- *  replaced: a peer's turn-9 snapshot from before the recast loses to a turn-1
- *  snapshot written after it. An unstamped row carries no stamp of its own and
+ *  replaced: a turn-9 row written before the recast loses to a turn-1 row
+ *  written after it. An unstamped row carries no stamp of its own and
  *  ranks as turn 0 of the CURRENT epoch — the world pack's own rows are
  *  exactly the state a fresh run starts from.
  *

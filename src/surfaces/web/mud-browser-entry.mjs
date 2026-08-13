@@ -38,9 +38,8 @@ import {
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines, objectClassChain, recordExamined,
   diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
-  roomKindOf, isMudStatePredicate, worldEpochFact,
+  roomKindOf, worldEpochFact,
 } from "../../services/adventure.mjs";
-import { waveFact, playedByFact, P2P_PREDICATES } from "../../domain/p2p/facts.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
 import { runMudTurn } from "../../services/mud-turn.mjs";
 import { parseMudEditorText, planMudEditorSync } from "../../services/mud-editor.mjs";
@@ -90,10 +89,9 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
   await appendFacts(memoryDir, seedFacts.map((f) => ({
     subject: f.subject, predicate: f.predicate, object: f.object, provenance: tag,
   })));
-  // A recast opens the same deterministic ids over a fresh store while peers
-  // may still hold the old run's snapshots. The epoch marker is what makes
-  // every fold — local and merged — treat this seed as the newer state. An
-  // unrecast boot writes nothing, so a solo session's store is unchanged.
+  // The epoch marker is what makes every fold treat this seed as the newer
+  // state, so an earlier run's snapshots can never outrank it. An unrecast
+  // boot writes nothing, so a plain session's store is unchanged.
   if (epoch > 0) await appendFacts(memoryDir, [{ ...worldEpochFact(epoch), provenance: tag }]);
   for (const rule of worldPayload.rules) {
     await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: tag });
@@ -289,49 +287,12 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
     return { unrecognized, added: toAppend.length, removed };
   }
 
-  // Wall-clock resolution is 1ms, and both writers below are content-addressed
-  // by (subject, predicate, object) — a second wave from the same character in
-  // the same room is the SAME fact id, so it only registers as a change if its
-  // provenance tag differs. Two writes inside one tick would share a timestamp,
-  // share a tag, and the second would silently vanish. p2p-room.mjs nudges its
-  // own clock for exactly this reason; this is the same nudge for the writes
-  // that happen before a room exists.
-  let lastWriteMs = -Infinity;
-  function stampNow() {
-    const nudged = Math.max(Date.now(), lastWriteMs + 1);
-    lastWriteMs = nudged;
-    return new Date(nudged).toISOString();
-  }
-
-  /** `character` waves in whichever room it currently stands in — an ordinary
-   *  add-only fact, so a page with no network renders it exactly like a page
-   *  sharing the world with three others. Returns the room waved in, or null
-   *  when the character stands nowhere (out of play). Nothing is ever
-   *  retracted: "currently waving" is a recency read over this fact's own
-   *  provenance timestamp. */
-  async function wave(character) {
-    const here = await roomOf(character);
-    if (!here) return null;
-    await appendFacts(memoryDir, [waveFact(character, here, stampNow())]);
-    return here;
-  }
-
-  /** Claim `characters` for `peerId` — one add-only `mgx:playedBy` fact each.
-   *  Claims never overwrite: two peers claiming the same animal both write,
-   *  and every reader settles it the same way by taking the oldest claim. */
-  async function claimCharacters(characters, peerId) {
-    const at = stampNow();
-    const claims = (characters || []).map((character) => playedByFact(character, peerId, at));
-    if (claims.length) await appendFacts(memoryDir, claims);
-    return claims.length;
-  }
-
   return {
     memoryDir,
     codeGraph,
     get graph() { return memoryGraph; },
     refreshGraph,
-    windows, snapshot, applyEdit, wave, claimCharacters,
+    windows, snapshot, applyEdit,
   };
 }
 
@@ -422,9 +383,9 @@ export function worldFactsForCast(facts, characters) {
 //
 // `tmct.page` keeps the sprite resolution and the digest/affordance/knowledge
 // readers the room view and chat pills render from, the roster helpers that
-// decide which animals this visit is played with, the two predicate lists the
-// P2P layer checks against, and the SKOS neighbourhood behind the edit mode's
-// cursor pills — none of which is `.toString()`-splice-safe.
+// decide which animals this visit is played with, and the SKOS neighbourhood
+// behind the edit mode's cursor pills — none of which is
+// `.toString()`-splice-safe.
 publishTmctSurface({
   open: createMudSession,
   turn: (line, options, session) => {
@@ -453,7 +414,6 @@ publishTmctSurface({
     personKnowledgeLines, personKnownFoodLines,
     diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
     roomKindOf,
-    isMudStatePredicate, P2P_PREDICATES,
     relatedForTerm,
   },
 });

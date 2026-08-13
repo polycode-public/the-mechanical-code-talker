@@ -394,7 +394,7 @@
       "area": "storage",
       "verdict": "extend",
       "cite": "Shapiro et al., INRIA RR-7506, s3.3.1, Specification 11",
-      "note": "the element is a (triple, source) RECORD, not a triple: core.mjs files every assertion under <groupId>@<sourceId> and unions provenance tags inside it. So it is a G-Set of records each carrying a G-Set of tags, plus a per-source revision chain that demotes rather than deletes. PLAN_MUD_WEBRTC.md's \"a G-Set's merge rule, byte for byte\" is right about union and loose about granularity.",
+      "note": "the element is a (triple, source) RECORD, not a triple: core.mjs files every assertion under <groupId>@<sourceId> and unions provenance tags inside it. So it is a G-Set of records each carrying a G-Set of tags, plus a per-source revision chain that demotes rather than deletes. Calling appendFacts \"a G-Set's merge rule, byte for byte\" is right about union and loose about granularity.",
       "verified": "2026-08-02 — primary source read"
     },
     {
@@ -402,7 +402,7 @@
       "area": "storage",
       "verdict": "open",
       "cite": "Shapiro et al., INRIA RR-7506, s3.3.5, Specification 15 (introduced there; no prior citation given)",
-      "note": "not built, and not needed for what ships: no product path removes a replicated element, and the unique add-tag an OR-Set would need already exists as the provenance tag - which is a citation people read, so a tombstone would put holes in the audit trail. Named as the retraction option in PLAN_MUD_WEBRTC.md; crdt.md prices it against the compaction-rollup shape instead.",
+      "note": "not built, and not needed for what ships: no product path removes a replicated element, and the unique add-tag an OR-Set would need already exists as the provenance tag - which is a citation people read, so a tombstone would put holes in the audit trail. crdt.md prices it against the compaction-rollup shape instead.",
       "verified": "2026-08-02 — primary source read"
     },
     {
@@ -434,7 +434,7 @@
       "area": "storage",
       "verdict": "map",
       "cite": "Hellerstein, \"The Declarative Imperative: Experiences and Conjectures in Distributed Logic\", ACM SIGMOD Record 39(1), 2010, pp. 5-19, DOI 10.1145/1860702.1860704 (conjecture); Ameloot, Neven, Van den Bussche, \"Relational Transducers for Declarative Networking\", PODS 2011 pp. 283-292 and JACM 60(2) Art. 15, 2013, DOI 10.1145/2450142.2450151 (proof); Hellerstein & Alvaro, \"Keeping CALM\", CACM 63(9), 2020, pp. 72-81, DOI 10.1145/3369736",
-      "note": "the base layer is monotone and coordination-free, so CALM applies to it. The read is NOT: ranking rows and taking the newest means \"there is no later row\", which is negation. Moving it to the read buys CONFLUENCE (same set, same view), not monotonicity - and only because p2p-room.mjs sorts Fact individuals by content-addressed id so the fold is a function of the set. Hellerstein's paper is 2010, commonly misdated 2011.",
+      "note": "the base layer is monotone and coordination-free, so CALM applies to it. The read is NOT: ranking rows and taking the newest means \"there is no later row\", which is negation. Moving it to the read buys CONFLUENCE (same set, same view), not monotonicity - and only because rows.mjs sorts Fact individuals by content-addressed id so the fold is a function of the set. Hellerstein's paper is 2010, commonly misdated 2011.",
       "verified": "2026-08-02 — primary source read"
     }
   ]
