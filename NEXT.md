@@ -18,17 +18,13 @@ each states its own status in its opening lines; `archive/` holds the delivered 
 holds ONLY what to do next. Completed work is not narrated here; `git log` and the
 `reports/BENCHMARK_*.md` reports hold that record.
 
-Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
-`~/.claude/inboxes/tmct-hanoi.md`.
+Session handle (inbox): `tmct`. See `~/.claude/inboxes/tmct.md`.
 
 Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline): bucket
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
 ## Open items
-
-News-card work runs through the `news-feed-quality` skill
-(`.claude/skills/news-feed-quality/SKILL.md`).
 
 The work list, ranked by value.
 
