@@ -487,23 +487,24 @@ function candidateTermOccurrencesPos(sentences, nlp, lexicon) {
   return counts;
 }
 
-// The words a noun phrase opens with. One of these in front of a token settles
-// that the token heads a noun phrase, whatever follows it.
-const NOUN_PHRASE_OPENERS = new Set(["DET", "PRON", "PART", "NUM"]);
+// The tags a noun phrase opens with. One of these in front of a token settles
+// that the token heads a noun phrase of its own, whatever follows it — a
+// determiner ("the day it happened"), a possessive, a numeral, or the
+// preposition that governs the phrase ("immigrants to countries they have no
+// connection to").
+const NOUN_PHRASE_OPENERS = new Set(["DET", "PRON", "PART", "NUM", "ADP"]);
 
-/** Does the token at `i` stand where only a clause's finite verb can, despite
- *  its NOUN tag? A tagger reads "many say it is just a matter of time" and "the
- *  government moves to assert control" as nouns on the very word each clause
- *  turns on, and a term scan then offers "say" and "moves" as things to look
- *  up. Two closed frames say otherwise: a pronoun subject and its own verb
- *  right after the token ("say it is"), and an infinitive right after it
- *  ("moves to assert"). A determiner in front means the word really does head a
- *  noun phrase ("the plan to assert control", "the day it happened"), and that
- *  reading stands. */
+/** Does the token at `i` stand where only a clause's own verb can, despite its
+ *  NOUN tag? A tagger reads "many say it is just a matter of time" as a noun on
+ *  the very word the clause turns on, and a term scan then offers "say" as
+ *  something to look up. One closed frame says otherwise: a subject pronoun and
+ *  its own verb right behind the token. The pronoun has to be a subject one, so
+ *  a relative clause hanging off a real noun ("a camera that would cost …")
+ *  keeps its reading. */
 function readsAsClauseVerb(values, pos, i) {
   if (i > 0 && NOUN_PHRASE_OPENERS.has(pos[i - 1])) return false;
-  if (pos[i + 1] === "PRON" && (pos[i + 2] === "VERB" || pos[i + 2] === "AUX")) return true;
-  return String(values[i + 1] ?? "").toLowerCase() === "to" && pos[i + 2] === "VERB";
+  if (pos[i + 1] !== "PRON" || RELATIVE_PRONOUNS.has(String(values[i + 1] ?? "").toLowerCase())) return false;
+  return pos[i + 2] === "VERB" || pos[i + 2] === "AUX";
 }
 
 /** The stored term keys `sentences` only ever uses as a clause's verb. Folded

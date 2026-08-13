@@ -483,18 +483,22 @@ test("optimisticTriples: a copula whose subject is a pronoun abstains, never rea
   );
 });
 
-test("termsUsedOnlyAsVerbs names the words a text turns a clause on, and leaves a real noun alone", () => {
+test("termsUsedOnlyAsVerbs names the word a text turns a clause on, and leaves a real noun alone", () => {
   const verbs = termsUsedOnlyAsVerbs([
     "In Sweida Province, dominated by the country's Druse minority, many say it is just a matter of "
       + "time before the central government moves to assert control over the region.",
   ]);
-  assert.deepEqual([...verbs].sort(), ["moves", "say"]);
-  // A determiner in front settles that the word heads a noun phrase, whatever
-  // follows it.
-  assert.deepEqual([...termsUsedOnlyAsVerbs(["The plan to assert control failed on the day it began."])], []);
+  assert.deepEqual([...verbs], ["say"]);
+  // A determiner in front settles that the word heads a noun phrase.
+  assert.deepEqual([...termsUsedOnlyAsVerbs(["The eclipse arrived on the day it was promised."])], []);
+  // The preposition that governs a phrase does the same, so a reduced relative
+  // clause after one is no reason to call its head a verb.
+  assert.deepEqual([...termsUsedOnlyAsVerbs(["ICE sends immigrants to countries they have no connection to."])], []);
+  // A relative clause is not a subject pronoun and its verb.
+  assert.deepEqual([...termsUsedOnlyAsVerbs(["The warships carried a high-definition camera that would cost a fortune."])], []);
   // One verb reading never disqualifies a word the same text also uses as a
   // noun.
-  assert.deepEqual([...termsUsedOnlyAsVerbs(["The ceasefire talks resumed.", "He talks to them daily."])], []);
+  assert.deepEqual([...termsUsedOnlyAsVerbs(["The ceasefire talks resumed.", "Many talks it is over."])], []);
 });
 
 test("optimisticTriples: a non-relative multi-verb sentence contributes a fact per clause", () => {
