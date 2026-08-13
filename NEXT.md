@@ -66,20 +66,18 @@ The work list, ranked by value against the plan's target card.
    cures one card; the class needs the scope to do something better than switch
    off. One measured non-answer already: anchoring on the hub's seeds plus the
    far side of its reported rows reshuffles noise rather than cutting it.
-3. [ ] **The lexicon arm's object scan doesn't read through a count of-chain** —
-   in flight on `worktree-agent-ae96b58e71cd6d7ea`, carrying a second defect
-   found in iteration 12: the free/release synonym fold is lexical, so
-   "Rescuers Free Quake Victim" became "rescuers releases quake victim" — wrong
-   sense (rescuers free from rubble, they do not release from custody) and wrong
-   agreement (plural subject, singular verb surface). The agreement half is not
-   news-only: any fold or mint whose canonical surface is third-person singular
-   does it under a plural subject. The track's main job:
-   "The blast triggers hundreds of evacuations." mints
-   `blast | tmct:triggers | hundred`. The newswire frame reads through the count
-   (`skipCountPhrase`); Pass 2a/2b's `nearestEntity(i, +1)` does not. Fixing it
-   changes the object scan for every lexicon verb in every corpus lane, not just
-   news, which is why it is its own item rather than a remainder of the frame
-   work that found it.
+3. [ ] **"hackernews discuss" reads as a plural** — live on 6 of 14 cards.
+   `isSubjectPlural` reads a naive `-s` suffix, so a singular site name spelled
+   with a trailing `-s` renders bare. The fix is one entry in the existing
+   `SINGULAR_NOUNS_ENDING_S` closed set, but it moves 5 pinned assertions across
+   `news-feed.test.mjs`, `news-card-article-entities.test.mjs` and
+   `news-card-coverage.test.mjs`. Written and reverted once already because
+   those files belong to the sense-scope track; land it when they are free.
+   The wider version — a plural column on 43 of the curated table's 49 entries,
+   plus a subject-number test that does not read "redis", "socrates" or "mjs"
+   as plural — needs the lexicon's declared plurals, and `fact-phrase.mjs` is
+   deliberately import-free so it can be stringified into the browser. That
+   cost is the real one, and it is bigger than the typing.
 4. [ ] **`buildMemoryIndex` rebuilt per write** — in flight on
    `worktree-agent-a382d01858173b066`. A measured "this does not pay" is an
    acceptable outcome. The prize is ~74 ms of a ~280 ms
