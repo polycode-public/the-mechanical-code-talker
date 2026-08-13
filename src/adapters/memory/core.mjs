@@ -520,6 +520,18 @@ function backfillFactsProjection(db) {
 
 const individualAttr = (ind, prop) => (ind?.attributes || []).find((a) => a?.prop === prop)?.value || "";
 const individualKey = (ind, key) => (ind?.attributes || []).find((a) => a?.key === key)?.value || "";
+
+/** Order two strings by codepoint, never by locale. Every listing this store
+ *  hands out is read on whatever machine holds it, and two locales sorting one
+ *  set differently is the same broken promise arrival order would be: a read
+ *  over the fact store answers to the set, and to nothing about where it ran.
+ *  memory/fact-order.mjs states the rule; inspect.mjs keeps its own copy of
+ *  this comparator for the text it renders. */
+const byCodepoint = (a, b) => {
+  const ka = String(a ?? "");
+  const kb = String(b ?? "");
+  return ka < kb ? -1 : ka > kb ? 1 : 0;
+};
 const subjectPredicateKey = (subject, predicate) => `${subject}\u0000${predicate}`;
 
 // ---- Derived-local tables: `fact_heads` and `fact_object_supersessions` -----
@@ -3868,7 +3880,7 @@ export function findRulesByName(memory, name) {
   return (memory?.individuals || [])
     .filter((i) => i?.class === RULE_CLASS
       && (i.attributes || []).find((a) => a?.prop === RULE_NAME_PROP)?.value === n)
-    .sort((a, b) => kindOf(a).localeCompare(kindOf(b)) || String(a.id).localeCompare(String(b.id)));
+    .sort((a, b) => byCodepoint(kindOf(a), kindOf(b)) || byCodepoint(a.id, b.id));
 }
 
 /** Every taught Rule as a plain row {id, name, kind, slots, provenance} —
@@ -3893,8 +3905,7 @@ export function readRuleRows(memory) {
       provenance: attr("mgx:factProvenance") || "",
     });
   }
-  rows.sort((a, b) => a.name.localeCompare(b.name)
-    || a.kind.localeCompare(b.kind) || String(a.id).localeCompare(String(b.id)));
+  rows.sort((a, b) => byCodepoint(a.name, b.name) || byCodepoint(a.kind, b.kind) || byCodepoint(a.id, b.id));
   return rows;
 }
 
@@ -4800,7 +4811,7 @@ export function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR, 
   const byKey = new Map();
   for (const r of rows) {
     if (resolutionStrategyFor(r.predicate) === RESOLUTION_MERGE) continue;
-    const key = `${r.subject} ${r.predicate}`;
+    const key = subjectPredicateKey(r.subject, r.predicate);
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key).push(r);
   }
@@ -4809,7 +4820,10 @@ export function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR, 
     if (new Set(group.map((r) => r.object)).size < 2) continue;
     const strategy = resolutionStrategyFor(group[0].predicate);
     if (strategy !== RESOLUTION_CONTRADICTION && !resolveSiblingGroups(group, strategy).contested) continue;
-    out.push(group.slice().sort((a, b) => b.trust - a.trust || a.object.localeCompare(b.object)));
+    out.push(group.slice().sort((a, b) => b.trust - a.trust || byCodepoint(a.object, b.object)));
   }
-  return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
+  return out.sort((a, b) => byCodepoint(
+    subjectPredicateKey(a[0].subject, a[0].predicate),
+    subjectPredicateKey(b[0].subject, b[0].predicate),
+  ));
 }
