@@ -122,7 +122,7 @@ export const SOURCE_RELIABILITY_PROP = "mgx:sourceReliability"; // actor-level (
 // per-session Source instead (`${ID}:<sessionId>`, sourceIdFor below).
 export const OPERATOR_SOURCE_ID = "src:operator-chat";
 const TEACH_SOURCE_ID = "src:teach-chat";
-// One Source per peer NODE, keyed by the stable id its relabeled tag carries.
+// One Source per authoring NODE, keyed by the stable id its tag carries.
 const TEACH_NODE_SOURCE_ID = "src:teach-node";
 
 const ROLES = new Set(["visitor", "tmct"]);
@@ -384,11 +384,11 @@ export function factGroupId(recordId) {
 }
 
 /** The record id one provenance tag keys for a triple. A store files an
- *  assertion under the Source its OWN tag derives, and a broadcast relabel
- *  changes that Source — locally a chat session, at the peer the node that
- *  sent it. So two stores hold one assertion under two ids, and anything that
- *  has to name a record ACROSS the wire (a retraction does) resolves the id
- *  through the tag rather than assuming both ends agree. */
+ *  assertion under the Source its OWN tag derives, and a relabelled tag names a
+ *  different Source — locally a chat session, elsewhere the node that authored
+ *  it. So two stores hold one assertion under two ids, and anything that has to
+ *  name a record ACROSS stores (a retraction does) resolves the id through the
+ *  tag rather than assuming both ends agree. */
 export function factRecordIdForTag(groupId, tag) {
   return `${groupId}@${assertionSourceFor(tag).id}`;
 }
@@ -449,7 +449,7 @@ function assertionTimestampFor(tags, fallback = "", pick = Math.max) {
 
 /** Does an incoming assertion replace this source's own current record?
  *  A genuinely newer embedded timestamp does; an exact re-delivery never does,
- *  which is what keeps a re-seed and a duplicate mesh delivery no-ops. Both
+ *  which is what keeps a re-seed and a duplicate delivery no-ops. Both
  *  sides must carry a real embedded timestamp — an unstamped corpus row
  *  asserted a second time is the same hop saying the same thing, not a new
  *  version. The one tie-break: at equal instants a record carrying an
@@ -784,7 +784,6 @@ export async function openSqliteSeedStore(dbPath) {
 const ROW_META_MEMORY_KEY = "memory";
 const ROW_META_PREFIXES_KEY = "prefixes";
 const ROW_SYLLOGISE_STATE_KEY = "syllogiseState";
-const ROW_NODE_ID_KEY = "nodeId";
 
 /** Bind a row backend as a `memoryDir` token: `{ backend: "row", impl,
  *  cachedPayload, basePayload }`. `basePayload` is the read-only seed overlay;
@@ -2414,47 +2413,6 @@ export async function saveSyllogiseState(dir, state) {
   await atomicWriteJson(file, state);
 }
 
-// ---- Node id: the stable per-store P2P identity, a second sidecar ----------
-// 16 hex, minted the first time a store joins a room and never regenerated.
-// Persisted beside the store rather than inside the graph so it survives a
-// store that gets re-seeded, and so nothing about it ever replicates: a node
-// id is this store's own name for itself, not a fact about the world.
-
-export const NODE_ID_REL = join(MEMORY_DIR_REL, "node-id.json");
-const SQLITE_NODE_ID_KEY = "nodeId";
-
-/** This store's node id, or null when it has never joined a room. */
-export async function loadNodeId(dir) {
-  if (isMemoryHandle(dir)) return dir.nodeId || null;
-  if (isSqliteHandle(dir)) {
-    const row = dir.db.prepare("SELECT v FROM meta WHERE k = ?").get(SQLITE_NODE_ID_KEY);
-    return row?.v ? JSON.parse(row.v).nodeId || null : null;
-  }
-  if (isRowHandle(dir)) return (await readRowMeta(dir, ROW_NODE_ID_KEY, null))?.nodeId || null;
-  try {
-    return JSON.parse(await readFile(join(dir, NODE_ID_REL), "utf8")).nodeId || null;
-  } catch (e) {
-    if (e?.code === "ENOENT") return null;
-    throw e;
-  }
-}
-
-/** Record this store's node id — atomic file write (Backend A), a handle field
- *  (Backend B), a meta-table row (Backend C), or a meta value in the injected
- *  store (Backend D). Callers mint through resolveStoreNodeId, which never
- *  overwrites an id a store already holds, so this value is written once. */
-export async function saveNodeId(dir, nodeId) {
-  if (isMemoryHandle(dir)) { dir.nodeId = nodeId; return; }
-  if (isSqliteHandle(dir)) {
-    dir.db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)").run(SQLITE_NODE_ID_KEY, JSON.stringify({ nodeId }));
-    return;
-  }
-  if (isRowHandle(dir)) { await dir.impl.putMeta(ROW_NODE_ID_KEY, JSON.stringify({ nodeId })); return; }
-  const file = join(dir, NODE_ID_REL);
-  await mkdir(dirname(file), { recursive: true });
-  await atomicWriteJson(file, { nodeId });
-}
-
 /** Fresh read -> mutate -> atomic write. Serialized per call; every public
  *  append goes through here, including the lazy legacy-provenance migration
  *  and actor-level Source reliability recompute. `fn` may be async (the
@@ -2738,11 +2696,11 @@ function sourceIdFor(desc) {
   switch (desc?.kind) {
     case "operator": return { id: desc.sessionId ? `${OPERATOR_SOURCE_ID}:${desc.sessionId}` : OPERATOR_SOURCE_ID, type: "operator" };
     case "teach": return { id: desc.sessionId ? `${TEACH_SOURCE_ID}:${desc.sessionId}` : TEACH_SOURCE_ID, type: "teach" };
-    // One Source per peer NODE, keyed on the stable id the tag carries rather
-    // than the display name beside it: names are user-chosen and collidable, so
-    // two peers who picked the same one would otherwise collapse into a single
-    // Source and corroborate each other for free. Scores at the teach tier —
-    // a peer teaching is still a person telling us something.
+    // One Source per authoring NODE, keyed on the stable id the tag carries
+    // rather than the display name beside it: names are user-chosen and
+    // collidable, so two nodes that picked the same one would otherwise collapse
+    // into a single Source and corroborate each other for free. Scores at the
+    // teach tier — a node teaching is still a person telling us something.
     case "teachNode": return { id: `${TEACH_NODE_SOURCE_ID}:${desc.nodeId}`, type: "teach" };
     case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
     case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
@@ -2914,11 +2872,11 @@ function migrateLegacyProvenance(payload) {
 }
 
 /** A Source id that names one actor and can therefore hold a track record —
- *  the `${SINGLETON}:<id>` shape, for a local operator/teach session or for a
- *  peer NODE across the mesh. A corpus/web/provider/entailed Source names a
- *  document or a derivation, so there is no actor to score.
+ *  the `${SINGLETON}:<id>` shape, for a local operator/teach session or for
+ *  another NODE that authored the tag. A corpus/web/provider/entailed Source
+ *  names a document or a derivation, so there is no actor to score.
  *
- *  A peer node counts for the same reason a local session does, and it is the
+ *  Another node counts for the same reason a local session does, and it is the
  *  reason this matters most: a node that asserts junk drags its own every-fact
  *  prior toward half, so minting fresh identities to corroborate yourself stops
  *  being free the moment any of those claims is contradicted. */
@@ -3031,7 +2989,7 @@ function recomputeSourceReliability(payload) {
 /**
  * Two rollup summaries at one id JOIN instead of overwriting: union the ids
  * they absorbed, then re-derive count, bounds and prior from that union. This
- * is what lets two peers that compacted the same group at different moments
+ * is what lets two stores that compacted the same group at different moments
  * converge — union, min and max are all joins, so the result is the same in
  * either order and applying it twice changes nothing. Re-writing a summary that
  * already holds everything the incoming one does is therefore a no-op, which is
@@ -3263,12 +3221,12 @@ function assertionGroupsFor(payload, groupId, provenance, createdAt = "") {
   if (groups.length === 1 && groups[0].sourceId === NO_SOURCE_ID) {
     if (factRecordIdsFor(payload, groupId).length) return [];
   }
-  // A source whose assertion was retracted here does not come back on the next
-  // sync. This is the ingest half of the enforcement: every delivery path for a
-  // fact lands in this function, so a re-sent copy of a retracted assertion is
-  // recognized and dropped rather than re-materialized. The comparison is
-  // against the assertion's OWN embedded instant, so the same source saying the
-  // thing again — a fresh tag, a later moment — still lands.
+  // A source whose assertion was retracted here does not come back the next
+  // time those rows land. This is the ingest half of the enforcement: every
+  // delivery path for a fact lands here, so a re-sent copy of a retracted
+  // assertion is recognized and dropped rather than re-materialized. The
+  // comparison is against the assertion's OWN embedded instant, so the same
+  // source saying the thing again — a fresh tag, a later moment — still lands.
   const retractions = retractionsFor(payload, groupId);
   if (retractions.length) {
     groups = groups.filter((group) => !isRetractedRecord(
@@ -3380,7 +3338,7 @@ function normalizeExtractionFindings(extraction) {
  *     record it replaces kept whole under `#v<n>` and linked both ways;
  *   - the same source saying the same thing again: its tags union onto the head
  *     and its first write's stamps stand. An exact re-delivery changes nothing,
- *     which is what keeps a re-seed and a duplicate mesh path idempotent.
+ *     which is what keeps a re-seed and a duplicate delivery path idempotent.
  */
 function planFactAssertion(payload, spec) {
   const { groupId, s, p, o, label, tokens, group, createdAt, observedAt, quantifier, environments, extraction = [] } = spec;
@@ -4216,10 +4174,10 @@ export async function foldedFactRows(dir) {
  *
  *  The rows come out in content order, not in the order the payload happened to
  *  hold them. A reader that takes the first of several equally-ranked rows, or
- *  sorts by a key that ties, otherwise answers by arrival order — and two peers
+ *  sorts by a key that ties, otherwise answers by arrival order — and two stores
  *  holding one fact set arrive at it differently. Sorting here is what lets a
  *  reader inherit the guarantee instead of re-earning it: the fold is the one
- *  place every fact read passes through. p2p-room.mjs's sortFactIndividualsById
+ *  place every fact read passes through. rows.mjs's sortFactIndividualsById
  *  does the same job one level down, over the stored records. */
 function foldFactRows(memory, ctx, opts = {}) {
   // A materialised head, when the backend keeps one, replaces the group's own
@@ -4271,7 +4229,7 @@ const FACT_ID_PREFIX = "fact:";
  *  Pure: the speakers come back sorted, so a claim two outlets attributed reads
  *  the same whichever order the attributions arrived in, and an attribution
  *  whose claim the fold never saw simply hangs on nothing — which is the case
- *  every time rows arrive over p2p out of order. */
+ *  every time rows arrive out of order. */
 function attachSpeakers(rows) {
   // An attribution names its claim as its SUBJECT, and a claim's own subject is
   // a term, so the prefix rules nearly every row out on one comparison. The
@@ -4357,11 +4315,11 @@ function factFoldContext(memory, { pairs = null, scopedGroups = new Set() } = {}
     else groups.set(groupId, [ind]);
   }
 
-  // The read half of retraction enforcement. A record a peer re-delivered before
-  // its retraction arrived is still sitting in the payload, and this is what
-  // keeps it out of the answer: the fold is a pure function of the fact set, so
-  // both peers read the same row whichever order the two arrived in. Only a
-  // group that actually carries a retraction pays anything for the check.
+  // The read half of retraction enforcement. A record re-delivered before its
+  // retraction arrived is still sitting in the payload, and this is what keeps
+  // it out of the answer: the fold is a pure function of the fact set, so both
+  // stores read the same row whichever order the two arrived in. Only a group
+  // that actually carries a retraction pays anything for the check.
   for (const [groupId, retractions] of retractionsByGroup) {
     const members = groups.get(groupId);
     if (!members) continue;
@@ -4376,7 +4334,7 @@ function factFoldContext(memory, { pairs = null, scopedGroups = new Set() } = {}
   }
 
   // Codepoint order on the record id, which sorts by source key — the same
-  // locale-free determinism the P2P layer's own sort insists on, so two peers
+  // locale-free determinism rows.mjs's own sort insists on, so two stores
   // holding the same records read the same row.
   for (const members of groups.values()) members.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
@@ -4619,8 +4577,8 @@ function factGroupsReferencing(payload, goneGroupIds) {
  *
  *  The delete leaves a RETRACTION RECORD behind, one per (triple, source),
  *  carrying the record ids it suppressed and the moment it did. That record is
- *  what makes the retraction survive a sync: a plain delete against a grow-only
- *  set comes straight back from any peer that still holds the fact. It also
+ *  what makes the retraction survive a merge: a plain delete against a grow-only
+ *  set comes straight back from any store that still holds the fact. It also
  *  keeps the retraction on record rather than erasing the fact that something
  *  was asserted at all. A retraction record is never itself removed here.
  *
@@ -4726,8 +4684,9 @@ export async function removeFacts(dir, ids, { provenance = "", retractedAt = "" 
 }
 
 /** Every retraction record the store holds, as the wire facts that carry them.
- *  The P2P layer's own diff and sync response read this: a retraction is not a
- *  fact row, so nothing that walks readFactRows would ever find one. */
+ *  Anything that ships one store's retractions to another reads this: a
+ *  retraction is not a fact row, so nothing that walks readFactRows would ever
+ *  find one. */
 export function readRetractions(memory) {
   const out = [];
   for (const ind of memory?.individuals || []) {
@@ -4787,12 +4746,12 @@ export async function appendRetractions(dir, wireFacts) {
 /** What this store could retire, and the roster it has to convince first.
  *
  *  `roster` is the world's admission graph, folded to a set of node ids —
- *  replicated, grow-only, and the same on every peer holding the same facts.
- *  `retirable` is the tombstones every peer on that roster is known to hold.
+ *  replicated, grow-only, and the same on every replica holding the same facts.
+ *  `retirable` is the tombstones every node on that roster is known to hold.
  *  `acknowledgedBy(nodeId)` is what supplies that evidence; nothing produces it
  *  yet, so `retirable` reads empty and this is a report rather than a sweep.
  *  Retiring nothing is the current behaviour, and it is the safe one: a
- *  tombstone dropped one peer early lets that peer's copy resurrect a retracted
+ *  tombstone dropped one node early lets that node's copy resurrect a retracted
  *  fact. See docs/references/papers/crdt.md. */
 export function retirableRetractions(memory, { self = "", acknowledgedBy = null } = {}) {
   const roster = admittedNodes(readFactRows(memory));
