@@ -45,17 +45,15 @@ the deployed worker persists state and does not.
 
 The work list, ranked by value against the plan's target card.
 
-1. [ ] **A report's claim is not attributed to its speaker** — the recognizer now
-   unwraps "President Trump said X" to the claim X, but the row states X flatly
-   with no record of who said it. Shape decided: a reified finding, a Fact about
-   a Fact, with a new name in the closed findings vocabulary
-   (`src/adapters/memory/shacl.mjs`, `core.mjs`'s byte-pinned vocabulary note,
-   `docs/adapter-contract.md`) — chosen over reusing `statedBy` and over leaving
-   the speaker in provenance only. A design pass is running now to settle the
-   name, whether this store can carry a fact id in subject position at all, the
-   card rendering, and whether an attributed claim still counts as grounded.
-   Implementation waits on items 3 and 5 to free `extract-facts.mjs` and
-   `core.mjs`.
+1. [ ] **A report's claim is not attributed to its speaker** — spec settled in
+   `PLAN_ATTRIBUTION.md`, nine commits, the first in flight on
+   `worktree-agent-aaf657f8c9ee51365`. The two findings that shaped it:
+   reification over a Fact is unprecedented in this store, and `normFactTerm`
+   strips the `fact:` prefix so the reference is unrecoverable at read time
+   until a carve-out lands. An attributed claim stays grounded and every
+   rendering names the speaker; the invariant is that a surface which cannot
+   render the attribution must not render the claim. Commits 2–5 are blocked
+   only on other agents' files, 6–8 on `core.mjs` and `extract-facts.mjs`.
 2. [ ] **An unplaced hub turns the sense scope off entirely** — in flight on
    `worktree-agent-a88fb2f1a0b11930f`, anchoring the scope on the terms the
    article itself names when the hub is unplaced (chosen over admitting
@@ -92,21 +90,18 @@ The work list, ranked by value against the plan's target card.
    reused as-is, and `factRecordsByGroup`'s values are arrays that call sites
    mutate in place, so the overlay must copy on read. ~15 call sites plus
    `patchAssembledPayload`.
-5. [ ] **The world editor supersedes a placement by arriving last** — in flight
-   on `worktree-agent-a10784011d797633e`.
-   `foldWorldState` ranks placements by `(epoch, turn)` with `turn >= prior.turn`,
-   so at equal turn the row later in the array wins, and `adventure-editor.mjs`
-   supersedes by appending an untimed duplicate that only wins by arrival order.
-   `crdt.md` already documents the fold as arbitrary at ties, and a p2p store
-   gets content-address order from `sortFactIndividualsById` today, so this is
-   already broken there. The fix is to stamp an editor edit
-   `snapshotSubject(subject, turn + 1, epoch)` so it outranks rather than relying
-   on arrival. Do this one before item 6 — it is what item 6 breaks.
-6. [ ] **The readers the content tiebreak couldn't reach** — `news-feed.mjs`'s
-   `tierOf` and `/memory`'s listing still order by arrival. Reaching them means
-   sorting `foldFactRows`' output at the root so `readFactRows` hands out content
-   order and every downstream reader inherits it. Measured: 13 pins move, 4 are
-   already fixed, 8 are benign reorderings, and 1 is item 5's editor break.
+5. [ ] **The readers the content tiebreak couldn't reach** — in flight on
+   `worktree-agent-a729ca045490445f1`, unblocked now the world editor stamps its
+   edits. `news-feed.mjs`'s `tierOf` and `/memory`'s listing still order by
+   arrival; reaching them means sorting `foldFactRows`' output at the root so
+   `readFactRows` hands out content order and every downstream reader inherits
+   it. Measured before the editor fix: 13 pins move, 4 already fixed, 8 benign
+   reorderings, 1 the editor break that is now gone.
+6. [ ] **`mud-editor.mjs` has the adventure editor's old loose contract** —
+   `planMudEditorSync` returns bare triples and `mud-browser-entry.mjs` stamps
+   them at the call site, exactly as the adventure pair did before the fix. Its
+   one production caller stamps correctly, so there is no live break — this is
+   symmetry, and the same mechanical change of shape.
 7. [ ] **Wikidata** — the pinned dated dump
    (`wikidata-20260810-all.json.gz`, 155,457,882,747 bytes) is downloading in
    the operator's terminal via `bash scripts/resume-wikidata-dump.sh`, which
