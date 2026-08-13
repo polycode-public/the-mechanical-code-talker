@@ -11,9 +11,7 @@ closes too, even if the sub-clause itself is deferred. Only promote it to a genu
 when it's actually unrelated to A's own scope (a different file or subsystem entirely), and say so
 explicitly when you do. Closing A outright and opening a freshly-labeled item for the same discovery
 is stalling dressed as progress: the open-item count looks flat or improved, but the record now hides
-that A was never actually finished. (Landed 2026-08-01 after doing exactly this: a track's own
-seed-fetch-retry fix got marked done and its test-coverage gap got logged as a brand new item,
-until corrected.)
+that A was never actually finished.
 
 Living handover. Any session resumes from here. **Plan of record: the `PLAN_*.md` design docs** —
 each states its own status in its opening lines; `archive/` holds the delivered ones. This file
@@ -29,22 +27,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-The method is the `news-feed-quality` skill
-(`.claude/skills/news-feed-quality/SKILL.md`): run
-(`node scripts/news-bench/capture-fixtures.mjs`, then
-`node scripts/news-bench/run-live-cycle.mjs`), show every card whole in the
-four-part form, fix the top item below, merge, repeat — never waiting on
-pipelines. Position: iterations 1–13 run, all merged and pushed. Iteration 13's
-feed reads 14 cards, 6 with real background and 5 thin, ranked by substance with
-admission per source printed — NYT 8 of 8 with something to say, Hacker News 1
-of 6. The syrian card is clean, `rescuers free quake victim` reads correctly,
-the london card carries the phrasal fix, and the research rows come out in
-content order rather than in the order the lookups returned. Harness note:
-`run-live-cycle.mjs` starts fresh state each run, so the negative cache resets
-and the same misses re-burn lookup slots per run; the deployed worker persists
-state and does not.
+News-card work runs through the `news-feed-quality` skill
+(`.claude/skills/news-feed-quality/SKILL.md`).
 
-The work list, ranked by value against the plan's target card.
+The work list, ranked by value.
 
 1. [ ] **Reshape the seed's band set** — add `child`, `namenet`, `prose` and
    `domains/code` to what seeds the store; delete and purge `aws`, `python` and
@@ -93,6 +79,3 @@ what's specific enough to `tmct` that it doesn't belong in that general model.
   narrow text-replace edit's own match can end before a trailing item's text, leaving it
   unresolved and untouched for several commits even after the section's own summary line says
   "None open."
-
-*Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
-history, plus the `reports/BENCHMARK_<axis>_<version>.md` reports and `archive/`.*
