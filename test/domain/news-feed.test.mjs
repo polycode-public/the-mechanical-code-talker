@@ -7,6 +7,7 @@ import {
   subgraphAround,
   buildNewsItems,
   renderNewsParagraph,
+  printedParagraphRows,
   evictNewsFacts,
   classifyNewsRow,
   reportedRows,
@@ -149,6 +150,63 @@ test("renderNewsParagraph leads with the report, then the identity clause, then 
   assert.equal(
     paragraph,
     "ceasefire is found in geneva. ceasefire causes criticism and relief. ceasefire is a diplomatic process and an event. Around it: relief is temporary.",
+  );
+});
+
+test("a headline and its description reporting one act in two words get one sentence, and the graph keeps both edges", () => {
+  const rows = [
+    row("fact:headline", "russia", "mgx:free", "robert gilman"),
+    row("fact:description", "russia", "tmct:releases", "robert gilman"),
+  ];
+  assert.equal(renderNewsParagraph("russia", rows), "russia frees robert gilman.");
+  const card = buildNewsItems(rows, { now: NOW, windowMs: HOUR, limit: 6 }).find((item) => item.hub === "russia");
+  assert.deepEqual([...card.factIds].sort(), ["fact:description", "fact:headline"]);
+  assert.deepEqual(
+    printedParagraphRows("russia", rows).map((r) => r.id).sort(),
+    ["fact:description", "fact:headline"],
+    "the sentence that states the act carries both rows that state it",
+  );
+});
+
+test("one verb of a pair, alone on a card, still reads as its own act — a rescue is not a jail delivery", () => {
+  const rows = [row("fact:rescue", "rescuers", "mgx:free", "a quake victim")];
+  assert.equal(renderNewsParagraph("rescuers", rows), "rescuers free a quake victim.");
+});
+
+test("two verbs over one subject and one object stay two sentences when they name two acts", () => {
+  const rows = [
+    row("fact:held", "russia", "mgx:detain", "robert gilman"),
+    row("fact:let-go", "russia", "tmct:releases", "robert gilman"),
+  ];
+  assert.equal(
+    renderNewsParagraph("russia", rows),
+    "russia detains robert gilman. russia releases robert gilman.",
+  );
+});
+
+test("the second verb of a pair keeps its sentence when it names someone the first did not", () => {
+  const rows = [
+    row("fact:headline", "russia", "mgx:free", "robert gilman"),
+    row("fact:description", "russia", "tmct:releases", "robert gilman"),
+    row("fact:second", "russia", "tmct:releases", "ksenia karelina"),
+  ];
+  assert.equal(
+    renderNewsParagraph("russia", rows),
+    "russia frees robert gilman. russia releases ksenia karelina and robert gilman.",
+  );
+});
+
+test("the one-act fold answers the same paragraph whichever order the two rows arrive in", () => {
+  const rows = [
+    row("fact:headline", "russia", "mgx:free", "robert gilman"),
+    row("fact:description", "russia", "tmct:releases", "robert gilman"),
+    row("fact:known", "russia", "rdfs:subClassOf", "country", { provenance: "corpus:conceptnet" }),
+  ];
+  const forward = renderNewsParagraph("russia", rows);
+  assert.equal(forward, renderNewsParagraph("russia", [...rows].reverse()));
+  assert.deepEqual(
+    printedParagraphRows("russia", rows).map((r) => r.id),
+    printedParagraphRows("russia", [...rows].reverse()).map((r) => r.id),
   );
 });
 
@@ -398,8 +456,8 @@ test("a link term the closing sentence can name in full still yields neighbours,
   const items = buildNewsItems(discussionRows(), { now: NOW, windowMs: 6 * HOUR, limit: 10 });
   const byHub = new Map(items.map((item) => [item.hub, item]));
 
-  assert.match(byHub.get("recipe builder").paragraph, /Around it: hackernews discuss an eclipse webcam/);
-  assert.match(byHub.get("eclipse webcam").paragraph, /Around it: hackernews discuss a recipe builder/);
+  assert.match(byHub.get("recipe builder").paragraph, /Around it: hackernews discusses an eclipse webcam/);
+  assert.match(byHub.get("eclipse webcam").paragraph, /Around it: hackernews discusses a recipe builder/);
 });
 
 test("neighbourRows ranks by a predicate the hub's own report used, then observation time, then id", () => {

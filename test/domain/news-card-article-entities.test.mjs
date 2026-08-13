@@ -96,9 +96,9 @@ test("the paragraph still leads with the report and follows it with what the art
   const card = cardFor([...reportRows(), ...definitionRows()], { articleEntityNames: namesInHeadline });
   assert.equal(
     card.paragraph,
-    'hackernews discuss "tim king, amigados developer, has died".'
+    'hackernews discusses "tim king, amigados developer, has died".'
     + " amigados is part of amigaos. amigados is a kind of operating system."
-    + " Around it: hackernews discuss a rust compiler rewrite.",
+    + " Around it: hackernews discusses a rust compiler rewrite.",
   );
 });
 

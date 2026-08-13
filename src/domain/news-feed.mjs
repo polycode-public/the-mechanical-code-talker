@@ -6,7 +6,7 @@
 // sortFactIndividualsById holds for a CRDT-merged fact set.
 
 import { sha256Bytes, normFactTerm } from "./hash.mjs";
-import { FACT_PREDICATE_PHRASES, predicatePhrase, factSentence } from "./fact-phrase.mjs";
+import { FACT_PREDICATE_PHRASES, predicatePhrase, predicateVerb, factSentence } from "./fact-phrase.mjs";
 import { STOP_SET } from "./hub-terms.mjs";
 import { articleFor } from "./digest/words.mjs";
 import { provenanceTagToSource } from "./memory/trust.mjs";
@@ -793,6 +793,32 @@ const KNOWN_FACT_SENTENCE_CAP = 2;
 // wall of text.
 const OBJECTS_PER_SENTENCE = 6;
 
+// Two report rows on one card can state ONE act under two words: a headline
+// says a prisoner was "freed", the description says "released", and the graph
+// is right to hold both edges because two different sentences really said so.
+// The card is the thing that should say it once.
+//
+// The fold is here, at assembly, and NOT at extraction, because only here is
+// the whole row set in view. Extraction reads one verb at a time, and folding
+// "free" onto "release" there turned "rescuers free quake victim" into a jail
+// delivery: the two senses of "free" split on the subject's kind, an open set,
+// and a headline carries nothing to tell them apart. A card folds only where
+// BOTH verbs already stand over the SAME subject naming the SAME people, which
+// is the evidence extraction never had. A rescue card carries "free" alone, so
+// nothing folds and it still reads as a rescue.
+//
+// The bar for a pair is that the two words name one act wherever a card can
+// hold both. Verbs that merely share a subject and an object stay apart,
+// opposites first among them: "russia detains X" and "russia releases X" are
+// two claims about one prisoner, they are in no group together, and each keeps
+// its own sentence.
+const ONE_ACT_VERB_GROUPS = [
+  ["free", "release"],
+];
+const ONE_ACT_CANONICAL_VERB = new Map(
+  ONE_ACT_VERB_GROUPS.flatMap((group) => group.map((verb) => [verb, group[0]])),
+);
+
 // A term the graph says is more than this many things is read across senses:
 // "earthquake" is a natural event, a cognition, a social station and nine more,
 // so no single class line about it is trustworthy on a card about one quake.
@@ -944,6 +970,18 @@ function predicatesInRenderOrder(rows) {
   return [...curated, ...rest];
 }
 
+/** The act a report predicate states, as the key two predicates share when
+ *  they say it in one word: the predicate's verb lemma folded onto its group's
+ *  canonical verb, with any particle beside it, so `tmct:releases` and
+ *  `mgx:free` both read "release" while `mgx:strike-near` stays apart from
+ *  `mgx:strike`. Empty for a predicate that states no act at all (an identity
+ *  row, a comparative, a passive participle), which folds with nothing. */
+function oneActKey(predicate) {
+  const verb = predicateVerb(predicate);
+  if (!verb) return "";
+  return `${ONE_ACT_CANONICAL_VERB.get(verb.lemma) ?? verb.lemma} ${verb.particle}`;
+}
+
 /** One sentence per (subject, predicate) group over `rows`, in the order the
  *  rows arrive — the same shape the hub's own relation sentences take, so a
  *  background line reads like the rest of the paragraph rather than a dump.
@@ -993,13 +1031,28 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null, articleTerms =
   const isReported = idMembership(reportedIds);
   const hubRows = subgraphRows.filter((r) => normFactTerm(r.subject) === hubTerm);
   const reportedHubRows = hubRows.filter((r) => isReported(r.id));
+  // Every sentence here shares the one subject, so the act key and the objects
+  // are all that separate two of them. A predicate whose act a sentence above
+  // it has already stated, over people that sentence already names, adds no
+  // word a reader has not read — its rows join the sentence that says their
+  // act, so a fact still counts as printed and the fold can lose nothing. A
+  // predicate that brings a new name to the act keeps its own sentence.
   const report = [];
+  const statedActs = new Map();
   for (const predicate of predicatesInRenderOrder(reportedHubRows)) {
     if (IDENTITY_PREDICATES.has(predicate) || report.length >= REPORT_SENTENCE_CAP) continue;
     const groupRows = reportedHubRows.filter((r) => r.predicate === predicate);
     const objects = groupRows.map((r) => r.object).sort();
     if (!objects.length) continue;
-    report.push({ text: `${hub} ${predicatePhrase(predicate, hub)} ${joinObjects(objects)}`, rows: groupRows });
+    const actKey = oneActKey(predicate);
+    const stated = actKey ? statedActs.get(actKey) : null;
+    if (stated && objects.every((object) => stated.objects.has(object))) {
+      stated.entry.rows.push(...groupRows);
+      continue;
+    }
+    const entry = { text: `${hub} ${predicatePhrase(predicate, hub)} ${joinObjects(objects)}`, rows: groupRows };
+    report.push(entry);
+    if (actKey && !stated) statedActs.set(actKey, { entry, objects: new Set(objects) });
   }
 
   // A hub that only ever appears as an OBJECT — the place a quake struck, the

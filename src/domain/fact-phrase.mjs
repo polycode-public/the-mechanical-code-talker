@@ -150,14 +150,35 @@ const SINGULAR_NOUNS_ENDING_S = new Set([
   "news", "physics", "species", "series", "means", "measles", "mathematics", "politics", "economics",
 ]);
 
+/** How much word has to sit in front of one of those nouns before the whole
+ *  reads as a COMPOUND built on it. An English compound takes its number from
+ *  its rightmost element, so "hackernews", "subspecies", "miniseries" and
+ *  "geopolitics" are all as singular as the noun they end in, and the table
+ *  above covers the family rather than one site's name. Three characters is
+ *  where the real first elements start ("sub", "geo", "mini", "hacker") and
+ *  where the words that merely END in one of those nouns stop: "sinews",
+ *  "renews" and "demeans" leave two characters in front and stay plural. */
+const COMPOUND_FIRST_ELEMENT_MIN_CHARS = 3;
+
+/** Does a head noun end in one of the singular "-s" nouns above, as itself or
+ *  as the last element of a compound built on it? */
+function endsInSingularNounEndingS(head) {
+  for (const noun of SINGULAR_NOUNS_ENDING_S) {
+    if (head === noun) return true;
+    if (head.endsWith(noun) && head.length - noun.length >= COMPOUND_FIRST_ELEMENT_MIN_CHARS) return true;
+  }
+  return false;
+}
+
 /**
  * Is a stored fact's SUBJECT text grammatically plural, for the one thing
  * this file needs it for: choosing a minted verb's surface form. Reads the
  * HEAD noun only — the word right after any leading article, before a
  * trailing "of ..." phrase, so "the group of scientists" agrees on "group"
  * ("the group of scientists reports"), not "scientists". From there: the
- * closed irregular table above, then the regular "-s" suffix, same
- * naive-morphology trade thirdPersonSingularSurface already takes above. A
+ * closed irregular table above, then the singular "-s" nouns and the compounds
+ * they head, then the regular "-s" suffix, same naive-morphology trade
+ * thirdPersonSingularSurface already takes above. A
  * subject this can't read (empty, or a plural-invariant noun like "sheep")
  * defaults to singular — English's own unmarked form, and also this file's
  * pre-existing default for every caller that passes no subject at all.
@@ -166,7 +187,7 @@ export function isSubjectPlural(subject) {
   const head = String(subject || "").trim().replace(/^(?:the|a|an)\s+/i, "").split(/\s+/)[0]?.toLowerCase() ?? "";
   if (!head) return false;
   if (IRREGULAR_PLURAL_NOUNS.has(head)) return true;
-  if (SINGULAR_NOUNS_ENDING_S.has(head)) return false;
+  if (endsInSingularNounEndingS(head)) return false;
   return /[a-z]s$/.test(head) && !/ss$/.test(head);
 }
 
@@ -252,6 +273,33 @@ export function predicatePhrase(predicate, subject) {
   return colon === -1 ? p : p.slice(colon + 1);
 }
 
+/**
+ * The verb a stored predicate states an ACT with, as `{ lemma, particle }`,
+ * or null when the predicate states anything else. `mgx:free` reads
+ * `{ lemma: "free", particle: "" }`, the lexicon's pre-inflected
+ * `tmct:releases` reads `{ lemma: "release", particle: "" }`, and
+ * `mgx:strike-near` / `tmct:reliesOn` carry their particle beside the lemma.
+ *
+ * The branches below mirror predicatePhrase's own, in its order, so anything
+ * that reads as a curated phrase, a negation, a comparative, a passive
+ * participle or a shared attribute answers null here rather than a verb it
+ * never renders as. Two rows minted down different paths — one through the
+ * lexicon's declared verbs, one from a bare lemma — reduce to the same answer,
+ * which is what lets a caller ask whether they state their act in one word.
+ */
+export function predicateVerb(predicate) {
+  const p = String(predicate ?? "");
+  if (FACT_PREDICATE_PHRASES[p] || p.startsWith("mgxneg:")) return null;
+  if (/^mgx:[a-z]+(?:-[a-z]+)*-than$/i.test(p)) return null;
+  if (new RegExp(`^mgx:(?:${TEACH_PARTICIPLE_SRC}|${NEWS_PASSIVE_PARTICIPLE_SRC})-[a-z]+$`, "i").test(p)) return null;
+  if (/^mgx:same-[a-z]+-as$/i.test(p)) return null;
+  const minted = /^mgx:([a-z]+)(?:-([a-z]+))?$/i.exec(p);
+  if (minted) return { lemma: minted[1].toLowerCase(), particle: minted[2]?.toLowerCase() ?? "" };
+  const declared = /^tmct:([a-z]+)([A-Z][a-z]+)?$/.exec(p);
+  if (declared) return { lemma: baseVerbSurface(declared[1]).toLowerCase(), particle: declared[2]?.toLowerCase() ?? "" };
+  return null;
+}
+
 /** "a heart has a valve" from one { subject, predicate, object } fact row —
  *  "scientists report a finding" for a plural row.subject, off the same
  *  agreement rule in predicatePhrase above. */
@@ -312,6 +360,8 @@ export function phraseRendererSource() {
     `const baseVerbSurface = ${baseVerbSurface};`,
     `const IRREGULAR_PLURAL_NOUNS = new Set(${JSON.stringify([...IRREGULAR_PLURAL_NOUNS])});`,
     `const SINGULAR_NOUNS_ENDING_S = new Set(${JSON.stringify([...SINGULAR_NOUNS_ENDING_S])});`,
+    `const COMPOUND_FIRST_ELEMENT_MIN_CHARS = ${COMPOUND_FIRST_ELEMENT_MIN_CHARS};`,
+    `const endsInSingularNounEndingS = ${endsInSingularNounEndingS};`,
     `const isSubjectPlural = ${isSubjectPlural};`,
     `const predicatePhrase = ${predicatePhrase};`,
     `const factSentence = ${factSentence};`,
