@@ -821,7 +821,7 @@ export function wrapRowBackend(impl, {
     sqliteSeedOverlayRows: sqliteSeedOverlayRows ? [...sqliteSeedOverlayRows] : null,
     sqliteSeedKeyOrds: null,
     baseRows: null,
-    baseRowKeys: null,
+    baseKeyOrds: null,
     storedRows: null,
     onOversizedRow,
     copyOnRead,
@@ -862,11 +862,8 @@ function overlayRows(baseRows, sessionRows) {
  *  session store does not already hold a row for. */
 function seedOnlyKeys(handle) {
   const sessionKeys = new Set(handle.storedRows.map((r) => r.rowKey));
-  const baseKeys = handle.sqliteSeedStore
-    ? sqliteSeedKeyOrds(handle).keys()
-    : handle.baseRows.map((r) => r.rowKey);
   const seedOnly = new Set();
-  for (const key of baseKeys) if (!sessionKeys.has(key)) seedOnly.add(key);
+  for (const key of readOnlyLayerKeyOrds(handle).keys()) if (!sessionKeys.has(key)) seedOnly.add(key);
   return seedOnly;
 }
 
@@ -947,19 +944,26 @@ function dropAssembledRowPayload(handle) {
   handle.cachedIndex = null;
   handle.storedRows = null;
   handle.baseRows = null;
-  handle.baseRowKeys = null;
+  handle.baseKeyOrds = null;
 }
 
-/** Every key a READ-ONLY layer under this handle holds — the sqlite seed and
- *  its overlay, or the base payload's own projection. A session row keyed the
- *  same as one of these SHADOWS it, so deleting that session row brings the
- *  read-only row back rather than dropping the individual: a rebuild is the
- *  only honest answer to that delete, and this is what tells the write path so.
- *  Held for the handle's life once asked for, like the seed's key ords. */
-function readOnlyLayerKeys(handle) {
+/** Every key a READ-ONLY layer under this handle holds, with the ord each one
+ *  carries — the sqlite seed and its overlay, or the base payload's own
+ *  projection. A session row keyed the same as one of these SHADOWS it, so
+ *  deleting that session row brings the read-only row back rather than dropping
+ *  the individual: a rebuild is the only honest answer to that delete, and this
+ *  is what tells the write path so.
+ *
+ *  The ords are what let a write project the SESSION's rows alone and still put
+ *  a newly-keyed row past everything the read-only layer already holds. A key
+ *  and an integer per row is small where the rows themselves are not, so this is
+ *  held for the handle's life once a write has asked for it. */
+function readOnlyLayerKeyOrds(handle) {
   if (handle.sqliteSeedStore) return sqliteSeedKeyOrds(handle);
-  if (!handle.baseRowKeys) handle.baseRowKeys = new Set((handle.baseRows || []).map((row) => row.rowKey));
-  return handle.baseRowKeys;
+  if (!handle.baseKeyOrds) {
+    handle.baseKeyOrds = new Map((handle.baseRows || []).map((row) => [row.rowKey, ordOfRow(row)]));
+  }
+  return handle.baseKeyOrds;
 }
 
 /** A record with its audit stamp removed. `mgx:updatedAt` moves on every
@@ -992,17 +996,17 @@ function movedBeyondAuditStamp(beforeRow, row) {
 async function persistRowPayload(handle, payload) {
   await ensureRowPayload(handle);
   const seedKeys = seedOnlyKeys(handle);
-  // On the sqlite path the seed is out of BOTH sides of the diff: the rows it
-  // holds are exactly the keys no write may touch, so projecting them would
+  // The seed is out of BOTH sides of the diff, whichever layer holds it: those
+  // keys are exactly the ones no write may touch, so projecting them would
   // materialize the whole seed only to filter every row of it back out.
-  const before = handle.sqliteSeedStore ? handle.storedRows : overlayRows(handle.baseRows, handle.storedRows);
+  const before = handle.storedRows;
   const beforeByKey = new Map(before.map((row) => [row.rowKey, row]));
-  const after = payloadToRows(handle.sqliteSeedStore ? payloadWithoutRowKeys(payload, seedKeys) : payload, {
-    priorRows: handle.sqliteSeedStore ? handle.storedRows : before,
+  const after = payloadToRows(payloadWithoutRowKeys(payload, seedKeys), {
+    priorRows: before,
     // The seed's ords are handed over as the map the handle already holds. The
     // session's own rows come first, so a key both layers hold keeps the ord
     // assembly gives it.
-    ...(handle.sqliteSeedStore ? { priorOrds: sqliteSeedKeyOrds(handle) } : {}),
+    priorOrds: readOnlyLayerKeyOrds(handle),
     onOversizedRow: handle.onOversizedRow,
     ...(handle.log ? { log: handle.log } : {}),
   });
@@ -1025,7 +1029,7 @@ async function persistRowPayload(handle, payload) {
   for (const row of writes) next.set(row.rowKey, row);
   handle.storedRows = [...next.values()];
   const meta = { memory: payload.memory, prefixes: payload.prefixes };
-  if (patchAssembledPayload(handle.cachedPayload, meta, writes, removals, readOnlyLayerKeys(handle))) {
+  if (patchAssembledPayload(handle.cachedPayload, meta, writes, removals, readOnlyLayerKeyOrds(handle))) {
     patchStoreWideIndex(handle, writes, removals);
     return;
   }

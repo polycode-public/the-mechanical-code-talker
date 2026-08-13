@@ -400,25 +400,32 @@ test("the seed overlay's own base rows never cap out on read, even one already o
   assert.equal(hugeGroup.examples.length, 1);
 });
 
-test("a write that would re-project an already-oversized seed group throws by default, naming the row", async () => {
-  const dir = wrapRowBackend(spyBackend().backend, { basePayload: await seedPayloadWithOversizedGroup() });
-  await assert.rejects(
-    appendFact(dir, { subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T2), createdAt: T2 }),
-    (error) => {
-      assert.equal(error.code, "TMCT_BACKEND_REJECTED");
-      assert.equal(error.rowKey, "edge-group:mgx:hugeGroup");
-      return true;
-    },
-  );
-});
-
-test("under onOversizedRow: \"drop\", the same write completes and the oversized seed row is still never written back", async () => {
+test("a write over a parsed-payload seed leaves an already-oversized seed group alone, under the default posture", async () => {
   const spy = spyBackend();
-  const dir = wrapRowBackend(spy.backend, { basePayload: await seedPayloadWithOversizedGroup(), onOversizedRow: "drop" });
+  const dir = wrapRowBackend(spy.backend, { basePayload: await seedPayloadWithOversizedGroup() });
   await appendFact(dir, { subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T2), createdAt: T2 });
   const writtenKeys = spy.calls.putRows.flat();
   assert.ok(writtenKeys.length, "the session's own fact still writes");
   assert.equal(writtenKeys.includes("edge-group:mgx:hugeGroup"), false, "the oversized seed row is never written back");
+});
+
+test("the cap still bites on a group the SESSION owns, over the same seed", async () => {
+  // The seed's own oversized group is out of the projection now, so this is
+  // what says the posture still reaches the rows a write can actually land:
+  // a group no layer under the session holds, grown past the cap by the
+  // session itself.
+  const dir = wrapRowBackend(spyBackend().backend, { basePayload: await seedPayloadWithOversizedGroup() });
+  await assert.rejects(
+    appendUtterances(dir, Array.from({ length: 40 }, (_, i) => ({
+      role: "visitor", text: `what is a dog ${i}`, sessionId: SESSION, sessionStarted: T1,
+      ts: `2026-07-10T10:${String(i).padStart(2, "0")}:00.000Z`,
+    }))),
+    (error) => {
+      assert.equal(error.code, "TMCT_BACKEND_REJECTED");
+      assert.equal(error.rowKey, "edge-group:mgx:saidInSession", "the row named is the session's own");
+      return true;
+    },
+  );
 });
 
 // ---- the seed held as a sqlite store ----------------------------------------
@@ -509,25 +516,28 @@ test("overlay rows sit over a sqlite seed and under the session's own, and are r
   }
 });
 
-test("a write over a sqlite seed projects only the session's own rows, so an oversized seed row cannot fail it", async () => {
+test("a write projects only the session's own rows, whichever layer holds the seed", async () => {
   // A seed whose statedBy group is over the per-row cap before any session has
-  // taught anything — what a real corpus band's own fan-out looks like.
+  // taught anything — what a real corpus band's own fan-out looks like. Neither
+  // seed shape may fail a write on it: the key is one no write may touch, so
+  // projecting it at all is work the write path then throws away.
   const highFanOut = Array.from({ length: 40 }, (_, i) => ({
     subject: `term${i}`, predicate: "IsA", object: "thing", provenance: "corpus:conceptnet", createdAt: T1,
   }));
   const seed = await buildSeedSqlite([...SEED_FACTS, ...highFanOut]);
   const taught = { subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T2), createdAt: T2 };
   try {
-    await assert.rejects(
-      appendFact(wrapRowBackend(spyBackend().backend, { basePayload: seed.payload }), taught),
-      (error) => error.code === "TMCT_BACKEND_REJECTED",
-      "the parsed-payload path re-projects the whole seed, so the oversized record reaches the cap",
-    );
-
-    const spy = spyBackend();
-    const dir = wrapRowBackendOverSqliteSeed(spy.backend, seed.store);
-    await appendFact(dir, taught);
-    assert.equal(spy.calls.putRows.flat().length, 2, "the taught fact and its source, and nothing of the seed");
+    for (const [shape, handleFor] of [
+      ["a parsed-payload seed", (spy) => wrapRowBackend(spy.backend, { basePayload: seed.payload })],
+      ["a sqlite seed", (spy) => wrapRowBackendOverSqliteSeed(spy.backend, seed.store)],
+    ]) {
+      const spy = spyBackend();
+      await appendFact(handleFor(spy), taught);
+      assert.equal(
+        spy.calls.putRows.flat().length, 2,
+        `${shape}: the taught fact and its source, and nothing of the seed`,
+      );
+    }
   } finally {
     await seed.cleanup();
   }
