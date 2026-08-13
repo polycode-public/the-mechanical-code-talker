@@ -64,6 +64,24 @@ test("a mixed store reports only the single-valued disagreement, never the multi
   }
 });
 
+test("a contradiction group orders its objects by codepoint, so a locale cannot reorder them", async () => {
+  const dir = await tmpRepo();
+  try {
+    // An accented object is where locale and codepoint part company: en
+    // collation files "résumé" beside "resume", while its codepoint (U+00E9)
+    // sorts after every plain letter. Same trust on both, so the tiebreak is
+    // the whole answer, and two machines reading one store have to agree.
+    const provenance = "corpus:conceptnet /r/IsA";
+    await appendFact(dir, { subject: "chapter", predicate: SINGLE_VALUED, object: "résumé", provenance });
+    await appendFact(dir, { subject: "chapter", predicate: SINGLE_VALUED, object: "resumes", provenance });
+    const groups = findContradictions(await loadMemory(dir));
+    assert.equal(groups.length, 1);
+    assert.deepEqual(groups[0].map((r) => r.object), ["resumes", "résumé"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("the exemption list is the resolver table's merge row, at both polarities", () => {
   for (const p of MULTI_VALUED_PREDICATES) {
     assert.equal(resolutionStrategyFor(p), RESOLUTION_MERGE, `${p} resolves by merge`);

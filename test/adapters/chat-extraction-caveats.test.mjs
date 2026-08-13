@@ -14,6 +14,7 @@ import {
   renderUniversalRestrictionLine,
 } from "../../src/services/chat.mjs";
 import { appendFacts, openMemoryBackend } from "../../src/adapters/memory/core.mjs";
+import { factIdForTriple } from "../../src/domain/hash.mjs";
 
 const CANONICAL_LINE_RE = /\n\nCanonical:[^\n]*$/;
 const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
@@ -95,6 +96,61 @@ test("a reported-speech row reads back with its caveat between the fact and the 
   );
 });
 
+test("a reported-speech row names the speaker the report attributed it to", async () => {
+  const [turn] = await driveSession({
+    facts: [
+      {
+        subject: "sighting", predicate: "rdfs:subClassOf", object: "report",
+        provenance: "extracted:nyt-world.md", extraction: ["reported-speech"],
+      },
+      {
+        subject: factIdForTriple("sighting", "rdfs:subClassOf", "report"),
+        predicate: "mgx:attributedTo", object: "president trump",
+        provenance: "extracted:nyt-world.md",
+      },
+    ],
+    asks: ["what is a sighting"],
+  });
+  assert.equal(
+    body(turn),
+    "i learned: sighting is a kind of report (read from reported speech) (president trump said) (source: extracted:nyt-world.md)",
+  );
+});
+
+test("a claim two outlets attributed to two speakers names both", async () => {
+  const claimId = factIdForTriple("sighting", "rdfs:subClassOf", "report");
+  const [turn] = await driveSession({
+    facts: [
+      {
+        subject: "sighting", predicate: "rdfs:subClassOf", object: "report",
+        provenance: "extracted:nyt-world.md", extraction: ["reported-speech"],
+      },
+      { subject: claimId, predicate: "mgx:attributedTo", object: "president trump", provenance: "extracted:nyt-world.md" },
+      { subject: claimId, predicate: "mgx:attributedTo", object: "state department", provenance: "extracted:reuters.md" },
+    ],
+    asks: ["what is a sighting"],
+  });
+  assert.match(body(turn), /\(president trump and state department said\)/);
+});
+
+test("an attribution whose claim the store never held names nobody and prints no id", async () => {
+  const [turn] = await driveSession({
+    facts: [
+      {
+        subject: "kestrel", predicate: "rdfs:subClassOf", object: "bird",
+        provenance: "extracted:coastline.md",
+      },
+      {
+        subject: factIdForTriple("sighting", "rdfs:subClassOf", "report"),
+        predicate: "mgx:attributedTo", object: "president trump",
+        provenance: "extracted:nyt-world.md",
+      },
+    ],
+    asks: ["what is a kestrel"],
+  });
+  assert.equal(body(turn), "i learned: kestrel is a kind of bird (source: extracted:coastline.md)");
+});
+
 test("a row carrying two findings reads both, once each, in the caveat table's own order", async () => {
   const [turn] = await driveSession({
     facts: [{
@@ -166,6 +222,21 @@ test("a union line declares a finding recorded on any row it composed", () => {
   );
   const clean = members.map(({ extraction, ...rest }) => rest);
   assert.equal(renderUnionLine(node, clean), "every pet is a cat or a dog (source: extracted:pets.md)");
+});
+
+test("a union line names the speaker any row it composed was attributed to", () => {
+  const node = { subject: "pet", predicate: "rdfs:subClassOf", object: "u1", provenance: "extracted:pets.md" };
+  const members = [
+    { subject: "u1", predicate: "owl:unionOf", object: "cat", provenance: "extracted:pets.md" },
+    {
+      subject: "u1", predicate: "owl:unionOf", object: "dog", provenance: "extracted:pets.md",
+      extraction: ["reported-speech"], attributedTo: ["the vet"],
+    },
+  ];
+  assert.equal(
+    renderUnionLine(node, members),
+    "every pet is a cat or a dog (read from reported speech) (the vet said) (source: extracted:pets.md)",
+  );
 });
 
 test("an enumeration line declares a finding recorded on any member it lists", () => {

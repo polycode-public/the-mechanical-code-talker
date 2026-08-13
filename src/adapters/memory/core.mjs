@@ -40,6 +40,7 @@ import {
 export { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "../../domain/memory/trust.mjs";
 import { NEG_PREDICATE_PREFIX, negatedPredicate } from "../../domain/memory/capability.mjs";
 import { factOrderKey } from "../../domain/memory/fact-order.mjs";
+import { partitionAttributions } from "../../domain/news-feed.mjs";
 import {
   planHeadRollup, planChainRollup, mergeRollups,
   isHeadRollupId, isChainRollupId, isRollupId, headRollupTypeOf,
@@ -519,6 +520,18 @@ function backfillFactsProjection(db) {
 
 const individualAttr = (ind, prop) => (ind?.attributes || []).find((a) => a?.prop === prop)?.value || "";
 const individualKey = (ind, key) => (ind?.attributes || []).find((a) => a?.key === key)?.value || "";
+
+/** Order two strings by codepoint, never by locale. Every listing this store
+ *  hands out is read on whatever machine holds it, and two locales sorting one
+ *  set differently is the same broken promise arrival order would be: a read
+ *  over the fact store answers to the set, and to nothing about where it ran.
+ *  memory/fact-order.mjs states the rule; inspect.mjs keeps its own copy of
+ *  this comparator for the text it renders. */
+const byCodepoint = (a, b) => {
+  const ka = String(a ?? "");
+  const kb = String(b ?? "");
+  return ka < kb ? -1 : ka > kb ? 1 : 0;
+};
 const subjectPredicateKey = (subject, predicate) => `${subject}\u0000${predicate}`;
 
 // ---- Derived-local tables: `fact_heads` and `fact_object_supersessions` -----
@@ -3867,7 +3880,7 @@ export function findRulesByName(memory, name) {
   return (memory?.individuals || [])
     .filter((i) => i?.class === RULE_CLASS
       && (i.attributes || []).find((a) => a?.prop === RULE_NAME_PROP)?.value === n)
-    .sort((a, b) => kindOf(a).localeCompare(kindOf(b)) || String(a.id).localeCompare(String(b.id)));
+    .sort((a, b) => byCodepoint(kindOf(a), kindOf(b)) || byCodepoint(a.id, b.id));
 }
 
 /** Every taught Rule as a plain row {id, name, kind, slots, provenance} —
@@ -3892,8 +3905,7 @@ export function readRuleRows(memory) {
       provenance: attr("mgx:factProvenance") || "",
     });
   }
-  rows.sort((a, b) => a.name.localeCompare(b.name)
-    || a.kind.localeCompare(b.kind) || String(a.id).localeCompare(String(b.id)));
+  rows.sort((a, b) => byCodepoint(a.name, b.name) || byCodepoint(a.kind, b.kind) || byCodepoint(a.id, b.id));
   return rows;
 }
 
@@ -4181,7 +4193,47 @@ function foldFactRows(memory, ctx, opts = {}) {
   // holds the two to the same answer.
   const keyed = rows.map((row) => ({ key: factOrderKey(row), row }));
   keyed.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-  return keyed.map((entry) => entry.row);
+  return attachSpeakers(keyed.map((entry) => entry.row));
+}
+
+// What every fact id starts with, and nothing a source ever writes as a term:
+// the prefix factIdFor mints and normFactTerm's carve-out keeps whole.
+const FACT_ID_PREFIX = "fact:";
+
+/** Hangs each attributed claim's speakers on the claim's own row, as
+ *  `attributedTo` — absent, never empty, the same way `extraction` is.
+ *
+ *  A report's claim and the speaker it was attributed to are two rows: the
+ *  claim, and `fact:<claimId> | mgx:attributedTo | <speaker>` beside it. A
+ *  surface that cannot render the attribution must not render the claim, so
+ *  resolving the pair belongs here rather than in each reader — the fold is the
+ *  one place every fact read passes through, and a reader that renders a row
+ *  inherits its speaker without asking for it.
+ *
+ *  news-feed.mjs's partitionAttributions owns which rows are attributions and
+ *  how one claim's speakers are ordered; only its map is wanted here, because a
+ *  fold hides no row from its readers — the news card suppresses attributions
+ *  from its own lanes, the store still holds and reads them.
+ *
+ *  Pure: the speakers come back sorted, so a claim two outlets attributed reads
+ *  the same whichever order the attributions arrived in, and an attribution
+ *  whose claim the fold never saw simply hangs on nothing — which is the case
+ *  every time rows arrive over p2p out of order. */
+function attachSpeakers(rows) {
+  // An attribution names its claim as its SUBJECT, and a claim's own subject is
+  // a term, so the prefix rules nearly every row out on one comparison. The
+  // fold is the hottest fact read there is, and the full test costs two
+  // lowercased copies and two regexes per row — on a store no report has ever
+  // written to, that is the whole price of a feature it does not use.
+  const referring = rows.filter((row) => row.subject.startsWith(FACT_ID_PREFIX));
+  if (!referring.length) return rows;
+  const { speakersByClaimId } = partitionAttributions(referring);
+  if (!speakersByClaimId.size) return rows;
+  for (const row of rows) {
+    const speakers = speakersByClaimId.get(row.id);
+    if (speakers?.length) row.attributedTo = speakers;
+  }
+  return rows;
 }
 
 /** Everything a group fold reads out of a payload, gathered in one pass: each
@@ -4485,6 +4537,26 @@ function recordSourceIdOf(record) {
   return hash < 0 ? rest : rest.slice(0, hash);
 }
 
+/** The triples that name any of `goneGroupIds` in a TERM rather than through an
+ *  edge, as group ids — what a retraction has to take with it, because an
+ *  objectProperties scrub cannot see a fact id sitting in an attribute value.
+ *
+ *  The whole group comes back, not the matching record: an attribution two
+ *  outlets both wrote is one triple with two records, and retracting the claim
+ *  under it leaves neither of them anything to be about. A term is only ever a
+ *  reference when it is a fact id, so membership in the gone set IS the test —
+ *  no term a source writes can collide with one. */
+function factGroupsReferencing(payload, goneGroupIds) {
+  const groups = new Set();
+  for (const ind of payload?.individuals || []) {
+    if (ind?.class !== FACT_CLASS) continue;
+    const subject = individualAttr(ind, "rdf:subject");
+    const object = individualAttr(ind, "rdf:object");
+    if (goneGroupIds.has(subject) || goneGroupIds.has(object)) groups.add(factGroupId(ind.id));
+  }
+  return groups;
+}
+
 /** Retract facts by id — a real DELETE (syllogise.mjs's retractability
  *  mechanism). A GROUP id retracts the triple: every source's record for it,
  *  demoted leaves included, since retracting "dogs bark" cannot leave half its
@@ -4499,9 +4571,16 @@ function recordSourceIdOf(record) {
  *  keeps the retraction on record rather than erasing the fact that something
  *  was asserted at all. A retraction record is never itself removed here.
  *
+ *  A triple retracted WHOLE takes the triples that name it with it, through
+ *  factGroupsReferencing above — the reified attribution beside a report's
+ *  claim is the live case, and the edge scrub cannot reach it. While any
+ *  source's record for a triple still stands the claim does too, so nothing
+ *  cascades off a single retracted record.
+ *
  *  Returns { removed, records } — `removed` the ids asked for that matched, so
  *  it may be smaller than the input and is never longer than it; `records` the
- *  concrete record ids that went, which is what the retraction absorbed. */
+ *  concrete record ids that went, cascaded ones included, which is what the
+ *  retraction absorbed. */
 export async function removeFacts(dir, ids, { provenance = "", retractedAt = "" } = {}) {
   const idSet = new Set((ids || []).filter(Boolean));
   const removed = [];
@@ -4512,12 +4591,7 @@ export async function removeFacts(dir, ids, { provenance = "", retractedAt = "" 
     const removedSet = new Set();
     const matched = new Set();
     const retiredByGroupAndSource = new Map(); // `${groupId} ${sourceId}` -> { groupId, sourceId, ids, template }
-    payload.individuals = (payload.individuals || []).filter((ind) => {
-      if (ind?.class !== FACT_CLASS) return true;
-      const groupId = factGroupId(ind.id);
-      const asked = idSet.has(ind.id) ? ind.id : (idSet.has(groupId) ? groupId : "");
-      if (!asked) return true;
-      matched.add(asked);
+    const retire = (ind, groupId) => {
       removedSet.add(ind.id);
       const sourceId = recordSourceIdOf(ind);
       const key = `${groupId} ${sourceId}`;
@@ -4544,8 +4618,36 @@ export async function removeFacts(dir, ids, { provenance = "", retractedAt = "" 
           },
         });
       }
-      return false;
-    });
+    };
+
+    // Round one takes the ids asked for; every round after it takes whatever
+    // the last one left pointing at a triple that is now gone. A reference to a
+    // reference would need a third round, so the loop runs until a round finds
+    // nothing rather than assuming one hop.
+    let asking = idSet;
+    let cascading = false;
+    while (asking.size) {
+      const standingGroups = new Set();
+      const emptiedGroups = new Set();
+      payload.individuals = (payload.individuals || []).filter((ind) => {
+        if (ind?.class !== FACT_CLASS) return true;
+        const groupId = factGroupId(ind.id);
+        const asked = asking.has(ind.id) ? ind.id : (asking.has(groupId) ? groupId : "");
+        if (!asked) {
+          standingGroups.add(groupId);
+          return true;
+        }
+        // Only the caller's own ids answer for what it asked; a cascade is this
+        // call's consequence, not part of the request.
+        if (!cascading) matched.add(asked);
+        emptiedGroups.add(groupId);
+        retire(ind, groupId);
+        return false;
+      });
+      const gone = [...emptiedGroups].filter((groupId) => !standingGroups.has(groupId));
+      asking = gone.length ? factGroupsReferencing(payload, new Set(gone)) : new Set();
+      cascading = true;
+    }
     for (const id of matched) removed.push(id);
     if (!removed.length) return; // honest no-op — nothing matched, no write needed beyond this
     for (const id of removedSet) records.push(id);
@@ -4709,7 +4811,7 @@ export function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR, 
   const byKey = new Map();
   for (const r of rows) {
     if (resolutionStrategyFor(r.predicate) === RESOLUTION_MERGE) continue;
-    const key = `${r.subject} ${r.predicate}`;
+    const key = subjectPredicateKey(r.subject, r.predicate);
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key).push(r);
   }
@@ -4718,7 +4820,10 @@ export function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR, 
     if (new Set(group.map((r) => r.object)).size < 2) continue;
     const strategy = resolutionStrategyFor(group[0].predicate);
     if (strategy !== RESOLUTION_CONTRADICTION && !resolveSiblingGroups(group, strategy).contested) continue;
-    out.push(group.slice().sort((a, b) => b.trust - a.trust || a.object.localeCompare(b.object)));
+    out.push(group.slice().sort((a, b) => b.trust - a.trust || byCodepoint(a.object, b.object)));
   }
-  return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
+  return out.sort((a, b) => byCodepoint(
+    subjectPredicateKey(a[0].subject, a[0].predicate),
+    subjectPredicateKey(b[0].subject, b[0].predicate),
+  ));
 }

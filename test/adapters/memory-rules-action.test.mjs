@@ -177,6 +177,21 @@ test("readRuleRows sorts deterministically and skips nothing it can read", async
   }
 });
 
+test("readRuleRows orders names by codepoint, so a locale cannot reorder the listing", async () => {
+  const dir = await tempDir();
+  try {
+    // An accented name is where locale and codepoint part company: en collation
+    // files "résumé" beside "resume", while its codepoint (U+00E9) sorts after
+    // every plain letter. Two machines reading one store have to agree.
+    await appendRule(dir, { name: "résumé", kind: "compose2", slots: { base1: "parent", base2: "parent" } });
+    await appendRule(dir, { name: "resumes", kind: "compose2", slots: { base1: "parent", base2: "parent" } });
+    const rows = readRuleRows(await loadMemory(dir));
+    assert.deepEqual(rows.map((r) => r.name), ["resumes", "résumé"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("SHACL rejects a malformed action rule", () => {
   const bogusKind = validateIndividual({
     id: "rule:x", label: "x", class: "Rule",
