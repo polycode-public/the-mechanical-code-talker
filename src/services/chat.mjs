@@ -1052,7 +1052,7 @@ async function answerMemoryClassQuery(memoryDir, query) {
   try { ({ loadMemory, readFactRows } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   let mem;
   try { mem = await loadMemory(memoryDir); } catch { return null; }
-  const rows = cls === "Fact" ? readFactRows(mem) : null;
+  const rows = cls === "Fact" ? readFactRows(mem).slice().sort(compareFactsByContent) : null;
   const inds = rows || (mem.individuals || []).filter((i) => (i.class || "") === cls);
   if (countM) return { text: `${inds.length} ${inds.length === 1 ? plural.replace(/s$/, "") : plural}.`, kind: "count" };
   if (!inds.length) return { text: `I don't have any ${plural} stored yet.`, miss: true };
@@ -8841,6 +8841,14 @@ const RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([
 const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
 const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
 
+/** An already-ranked hit list with the subject's type facts moved to the
+ *  front, each half keeping its ranked order. What a thing IS answers "what is
+ *  X" more directly than anything else the store holds about it. */
+const definitionFirst = (hits) => [
+  ...hits.filter((f) => ISA_PREDICATES.has(f.predicate)),
+  ...hits.filter((f) => !ISA_PREDICATES.has(f.predicate)),
+];
+
 /** How far the isa ladder's miss text probes for a chain it can name a
  *  recovery for. Purely a REPORTING reach: the live chases answer within their
  *  own hop bounds and this never widens them, it only tells the miss whether
@@ -10104,8 +10112,13 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     }
     // Bias only REORDERS — every hit still renders and is cited (Part 6's
     // "disclosed, never dropped" contract). Unconfigured/tied bias degrades to
-    // trust-desc, byte-identical to before this feature existed.
-    hits = rankByBiasThenTrust(hits, biasByBundle);
+    // trust-desc.
+    //
+    // A definition then leads with what the subject IS. Bias and trust say
+    // nothing about that, and once they tie the isa row sorts wherever its
+    // predicate spelling happens to fall, so "what is a dog" opens on "dog can
+    // bark". Every other hit keeps its ranked place behind it.
+    hits = definitionFirst(rankByBiasThenTrust(hits, biasByBundle));
     const allRows = await factRows(memoryDir, cache);
     const { lines, grouped } = senseSplitFactList(hits, allRows, variants, { cache });
     // A long undifferentiated "what is X" leads with the digest — a bounded
@@ -10909,7 +10922,7 @@ async function whatElseAnswer(memoryDir, query, last) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const variants = factTermVariants(normFactTerm, term);
-  const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
+  const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject)).sort(compareFactsByContent);
   const picture = pickPhrase("full-picture", term.toLowerCase(), "the full picture");
   const nothingMore = {
     text: `That's everything I know about "${term}" — /memory to see ${picture}.`,
@@ -10952,7 +10965,7 @@ async function synonymFactAnswer(memoryDir, query, envelope) {
   const facts = await memoryFacts(memoryDir);
   for (const { variant, source } of await synonymsOf(term)) {
     const variants = factTermVariants(normFactTerm, variant);
-    const hits = facts.filter((f) => variants.has(f.subject));
+    const hits = facts.filter((f) => variants.has(f.subject)).sort(compareFactsByContent);
     if (!hits.length) continue;
     const lines = hits.map(renderFactLine);
     const shown = lines.slice(0, FACT_ANSWER_CAP);
@@ -19204,7 +19217,9 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
         const separated = separateChoiceTie(grounded, constraintTerms, rowsAfterPull);
         if (separated) {
           const { winner, runnerUp, missedByRunnerUp } = separated;
-          const groundingFact = winner.facts.length > 0 ? winner.facts.slice().sort((a, b) => b.trust - a.trust)[0] : null;
+          const groundingFact = winner.facts.length > 0
+            ? winner.facts.slice().sort((a, b) => (b.trust - a.trust) || compareFactsByContent(a, b))[0]
+            : null;
           const groundingClause = groundingFact
             ? `${factPhrase(groundingFact)} (source: ${citationProvenance(groundingFact.provenance)})`
             : renderIsaChain(winner.chain);
@@ -19245,7 +19260,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
       // edge exists for the winning option — probeChoiceOptions' own guard.
       let text; let matches; let hop; let traversalNote; let matchedBy;
       if (winner.facts.length > 0) {
-        const fact = winner.facts.slice().sort((a, b) => b.trust - a.trust)[0];
+        const fact = winner.facts.slice().sort((a, b) => (b.trust - a.trust) || compareFactsByContent(a, b))[0];
         text = `${winner.text} — ${factPhrase(fact)} (source: ${citationProvenance(fact.provenance)}).`;
         matches = winner.facts;
         hop = 1;
