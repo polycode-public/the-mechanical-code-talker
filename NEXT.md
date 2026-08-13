@@ -47,40 +47,12 @@ The work list, ranked by value.
    stays — it reads a loaded graph's module count, which is state, not intent.
    `isConversational` is exported, so any change to its behaviour is
    consumer-visible.
-2. [ ] **Reshape the seed's band set.** `child`, `namenet` and `domains/code`
-   seed, and `aws`/`python`/`java` are purged. Two parts are still open.
-
-   `prose` is not a band. `corpus/prose/` is 80 `.txt` files with a sha256
-   manifest, and nothing in the repo turns that prose into `{start, rel, end}`
-   rows — `corpus/generated/ace-surface-variants.jsonl` is a sentence-rewrite
-   log, not triples, and its own README puts it outside the product path.
-   Making `prose` a band needs an extraction step that does not exist yet.
-   `scripts/template-coverage.mjs` already measures how much of that prose the
-   ACE grammar parses, so its coverage number is where to start sizing the work.
-
-   The browser seed carries 2,000 of the child band's 58,552 new facts. The
-   uncapped set is 174.2 MB against a 100 MiB `SEED_BYTE_CEILING`, so
-   `SEED_BAND_CAPS` caps `child` and the shipped asset lands 1.5 MB under the
-   ceiling. Two levers, both changing what the deployed demo can answer: hand
-   `conceptnet`'s cap (28,000 today, 36.4 MB) to `child`, or raise the ceiling,
-   which needs `test-e2e/pages-chat-boot-budget.test.mjs` re-measured in a real
-   browser first.
-3. [ ] **`appendFacts` costs more the fuller the store gets.** `tmct import
+2. [ ] **`appendFacts` costs more the fuller the store gets.** `tmct import
    --corpus child` on the sqlite backend takes about 9 minutes wall for 68,955
    facts, with the WAL peaking near 240 MB. The in-memory path is unaffected —
    the same 127,404-fact `init:xl` set seeds in about 13s in-process. This is
    why `npm run init:xl` and `npm run check:readme`'s heavy block are now
-   ten-minute commands. Promoted out of item 1 rather than held as its
-   remainder: the cost is in the engine's own append path, not in the band set
-   that exposed it.
-4. [ ] **A config naming a purged band takes the CLI down.** `tmct.toml` files
-   written before the purge still carry `[extensions.tier2-aws]` and its two
-   siblings. `mergeExtensionEntry` reads an unrecognized name as a
-   host-supplied bundle, so the user gets `an unrecognized extension needs a
-   "kind"` — an error about their own config, for a band tmct used to ship.
-   Anyone who runs `npm i -g` over an existing install hits it. Either the
-   resolver skips a name it once shipped and says so, or the purge is a major
-   version bump with the edit in the release notes.
+   ten-minute commands.
 
 ## Discipline
 
