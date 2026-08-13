@@ -483,14 +483,21 @@ test("optimisticTriples: a copula whose subject is a pronoun abstains, never rea
   );
 });
 
-test("termsUsedOnlyAsVerbs names the word a text turns a clause on, and leaves a real noun alone", () => {
+test("termsUsedOnlyAsVerbs names the words a text turns a clause on, and leaves a real noun alone", () => {
   const verbs = termsUsedOnlyAsVerbs([
     "In Sweida Province, dominated by the country's Druse minority, many say it is just a matter of "
       + "time before the central government moves to assert control over the region.",
   ]);
-  assert.deepEqual([...verbs], ["say"]);
+  assert.deepEqual([...verbs], ["say", "moves"]);
   // A determiner in front settles that the word heads a noun phrase.
   assert.deepEqual([...termsUsedOnlyAsVerbs(["The eclipse arrived on the day it was promised."])], []);
+  // An infinitive follows real nouns constantly. Only a token whose own left
+  // neighbour is a common noun reads as that noun phrase's verb.
+  assert.deepEqual([...termsUsedOnlyAsVerbs([
+    "The insects are disappearing for many reasons, including rapid development to cater to tourists.",
+    "He was the only person to break the sound barrier on land.",
+    "Three warships were sent to Valencia to capture pictures of the corona.",
+  ])], []);
   // The preposition that governs a phrase does the same, so a reduced relative
   // clause after one is no reason to call its head a verb.
   assert.deepEqual([...termsUsedOnlyAsVerbs(["ICE sends immigrants to countries they have no connection to."])], []);

@@ -507,6 +507,20 @@ function readsAsClauseVerb(values, pos, i) {
   return pos[i + 2] === "VERB" || pos[i + 2] === "AUX";
 }
 
+/** The same question for the other frame a newswire sentence hides a verb in:
+ *  an infinitive right behind the token, with a finished noun phrase in front
+ *  of it — "the central government moves to assert control". The noun phrase is
+ *  what makes the reading safe, because an infinitive alone follows nouns
+ *  constantly ("rapid development to cater to tourists", "the only person to
+ *  break the sound barrier"): those all carry an adjective, a determiner or a
+ *  preposition on the token itself, and only a token whose own left neighbour
+ *  is a common noun reads as the verb that noun phrase governs. */
+function readsAsInfinitiveClauseVerb(values, pos, i) {
+  if (i === 0 || pos[i - 1] !== "NOUN") return false;
+  if (String(values[i + 1] ?? "").toLowerCase() !== "to") return false;
+  return pos[i + 2] === "VERB";
+}
+
 /** The stored term keys `sentences` only ever uses as a clause's verb. Folded
  *  the same way `ungroundedTermOccurrences` folds its own counts, so a caller
  *  can subtract this set from those keys directly. A term the text also uses as
@@ -538,7 +552,9 @@ export function termsUsedOnlyAsVerbs(sentences, { lexicon = loadLexicon(), nlp }
       const term = foldEntity(values[i], lexicon);
       if (!term) continue;
       total.set(term, (total.get(term) || 0) + 1);
-      if (readsAsClauseVerb(values, pos, i)) asVerb.set(term, (asVerb.get(term) || 0) + 1);
+      if (readsAsClauseVerb(values, pos, i) || readsAsInfinitiveClauseVerb(values, pos, i)) {
+        asVerb.set(term, (asVerb.get(term) || 0) + 1);
+      }
     }
   }
   const verbs = new Set();
