@@ -5,7 +5,8 @@
 `src/domain/memory/causal-stability.mjs`,
 `src/services/p2p-room.mjs`, `src/domain/p2p/facts.mjs`,
 `src/domain/p2p/provenance-relabel.mjs`, `src/services/adventure.mjs` (`foldWorldState`,
-`rulingTestimonyClaim`), `PLAN_MUD_WEBRTC.md`.
+`rulingTestimonyClaim`), `src/services/adventure-editor.mjs` (`planWorldEditorSync`),
+`PLAN_MUD_WEBRTC.md`.
 **Retrieval date:** 2026-08-02. The 2011 Shapiro et al. artefacts, RFC 677, the CALM line and the
 delta-state paper were checked against primary sources: the report PDFs' own title pages and ISRN
 blocks, dblp, the ACM Digital Library, and the IETF datatracker. Four citations were not, and each
@@ -186,6 +187,17 @@ fact set fold it differently while their arrival orders differ. `p2p-room.mjs`'s
 content-addressed id, in codepoint order and never `localeCompare`, and `readFactRows` reads them
 in that order. `rulingTestimonyClaim` needs no such help. Its comparator is a strict order over
 four fields, so its fold is order-independent by construction.
+
+**The writers keep off the tie.** The sort makes a tie land the same way everywhere; a writer that
+never ties needs no sort at all. Every write to a fold-versioned family stamps its own
+`(epoch, turn)` at one past the world's current turn count, so it outranks what it supersedes by
+rank. A played turn always did this. The world editor now does too: `planWorldEditorSync` returns
+its placement and openness rows already stamped `subject@turnN`, where it used to hand back a bare
+triple. A bare triple folds as turn 0 of the current epoch, which ties with the base row it was
+meant to replace and beats it only by sitting later in the array — so an edit to a world nobody
+had played yet was exactly that tie, and reversing the row order made the edit disappear. The
+"other" family (types, exits, the container and puzzle facts) keeps its bare subject, because every
+reader takes those raw and none of them ranks.
 
 So the ranking is a last-writer-wins register whose "last" is `(epoch, turn)` and whose tiebreak is
 content-address order. Arbitrary at ties, identical on every peer, and computed fresh from the set
@@ -481,10 +493,11 @@ one place that shrinks — `removeFacts` and `retireRetractions` both delete row
 is what keeps that shrinkage from undoing itself on the next sync.
 
 **The conflict resolution is a read-time query, and it must stay a pure function of the set.** That
-is the invariant to protect. `foldWorldState` broke it and was fixed outside itself, by
-`p2p-room.mjs` sorting Fact individuals by content-addressed id after every merge. Any future
-resolver has to be checked the same way: feed one peer's facts in two different orders and demand
-the same answer. A resolver that reads a wall clock, a local counter, or array position without
+is the invariant to protect. `foldWorldState` broke it and was fixed from two sides: `p2p-room.mjs`
+sorts Fact individuals by content-addressed id after every merge, and every writer to a
+fold-versioned family stamps a turn that outranks what it supersedes rather than counting on
+arriving after it. Any future resolver has to be checked the same way: feed one peer's facts in two
+different orders and demand the same answer. A resolver that reads a wall clock, a local counter, or array position without
 that sort will look correct in a single-browser test and diverge on the mesh.
 
 **Retraction over the mesh took the summary route, because an OR-Set tombstone would put holes in
