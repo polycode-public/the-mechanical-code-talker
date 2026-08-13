@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { PassThrough, Readable } from "node:stream";
 import {
   uuidv7, runTurn, runChat, helpText, COMMANDS, SESSION_LOG_DIR, PROMPT,
-  answerCount, renderStats, isConversational,
+  answerCount, renderStats, isConversational, selectTool,
   renderVerbose, WALL_MISS_RE, NARRATE_MARKER,
 } from "../../src/services/chat.mjs";
 import { dispatchTool } from "../../src/tools/server.mjs";
@@ -593,6 +593,20 @@ test("isConversational: ordinary English is never read as a question about code"
     // ordinary English word ("use", "class", "history", "test", "contains",
     // "members") can make a line read as structural.
     assert.equal(isConversational(line), words <= 3, `"${line}" is judged on its length alone`);
+  }
+});
+
+test("selectTool: only the enumerated small-talk falls through to text, so a three-word request still emits tmct_ask", () => {
+  const declared = new Set(["tmct_ask"]);
+  for (const smallTalk of ["hi", "hello", "thanks", "ok", "what can you do", "who are you", "are you an ai"]) {
+    assert.equal(selectTool(smallTalk, declared), null, `"${smallTalk}" is small-talk, so no tool`);
+  }
+  for (const request of ["what calls fnAlpha", "where is walk.mjs", "buildContextBundle"]) {
+    assert.deepEqual(
+      selectTool(request, declared),
+      { name: "tmct_ask", input: { query: request } },
+      `"${request}" is a request a host wants a tool call for, short as it is`,
+    );
   }
 });
 

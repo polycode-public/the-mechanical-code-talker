@@ -1784,33 +1784,48 @@ const STRUCT_WORDS = new Set([
   "testing", "defining", "touching", "extending", "inheritance", "coverage", "member", "members",
 ]);
 
-/** Does this look like small-talk / an orientation request rather than a
- *  structural question? Greetings & help/identity phrases always qualify; a
- *  very short input does too, unless the session declared code-graph mode.
- *
- *  `codeGraphMode` is the session's declared switch (`/code-graph on|off`, or
- *  the `codeGraphMode` option a host sets). Nothing here reads the text for
- *  code-shaped tokens: what the user is asking about is declared, never
- *  guessed. With the switch on, every line is a question about the code graph,
- *  so the short-input catch-all stands down. */
-export function isConversational(query, { codeGraphMode = false } = {}) {
+/** Is the line one of the enumerated small-talk phrasings — a greeting, a thanks,
+ *  an acknowledgement, a "what can you do", a "who are you", an "are you an AI"?
+ *  Every one of these is a closed list, so a line qualifies by being a member and
+ *  never by how it happens to be spelled. */
+function matchesSmallTalkPhrase(query) {
   const raw = String(query).trim();
   const q = raw.toLowerCase().replace(/[.!?]+$/, "").trim();
   if (GREET.has(q) || THANKS.has(q) || OK_ACK.has(q)) return true;
   if (CAPABILITY_PHRASES.some((re) => re.test(raw))) return true;
   if (IDENTITY_PHRASES.some((re) => re.test(raw))) return true;
-  if (aiIdentityMatch(raw)) return true;
-  // The catch-all counts words, so a contraction decides the turn on
-  // punctuation alone: "what's on peg-a" counts 3 and gets the orientation
-  // card, "what is on peg-a" counts 4 and gets the answer. Write the
-  // contraction out for the count only.
-  //
-  // The count is the whole reason this is expandContractions and not
-  // normalizeQuery: the fuller pass strips filler, which takes the count DOWN,
-  // and sends "please describe a dog" and "tell me about a dog" to the card
-  // instead. `q` itself is left alone so the GREET/THANKS/OK_ACK membership
-  // above reads the text as typed.
-  return !codeGraphMode && expandContractions(q).split(/\s+/).filter(Boolean).length <= 3;
+  return aiIdentityMatch(raw);
+}
+
+/** Is the line short enough for the chat lane to treat as an orientation opener
+ *  rather than a question? Three words or fewer, counted after contractions are
+ *  written out — so a contraction decides the turn on punctuation alone
+ *  otherwise: "what's on peg-a" counts 3 and gets the orientation card, "what is
+ *  on peg-a" counts 4 and gets the answer.
+ *
+ *  The count is the whole reason this is expandContractions and not
+ *  normalizeQuery: the fuller pass strips filler, which takes the count DOWN,
+ *  and sends "please describe a dog" and "tell me about a dog" to the card
+ *  instead. */
+function isSmallTalkLength(query) {
+  const q = String(query).trim().toLowerCase().replace(/[.!?]+$/, "").trim();
+  return expandContractions(q).split(/\s+/).filter(Boolean).length <= 3;
+}
+
+/** Does this look like small-talk / an orientation request rather than a
+ *  structural question? This is the chat lane's rule: the enumerated phrasings
+ *  always qualify, and a very short input does too, unless the session declared
+ *  code-graph mode. The tool seam uses the phrase lists alone (askFallback) —
+ *  a three-word tool request there is a request, not an opener.
+ *
+ *  `codeGraphMode` is the session's declared switch (`/code-graph on|off`, or
+ *  the `codeGraphMode` option a host sets). Nothing here reads the text for
+ *  code-shaped tokens: what the user is asking about is declared, never
+ *  guessed. With the switch on, every line is a question about the code graph,
+ *  so the length rule stands down. */
+export function isConversational(query, { codeGraphMode = false } = {}) {
+  if (matchesSmallTalkPhrase(query)) return true;
+  return !codeGraphMode && isSmallTalkLength(query);
 }
 
 /** The words that, in the slot of a short "what is X" / "who is X", name the
@@ -1860,17 +1875,15 @@ const BACKED_TOOLS = new Set([
  *      "untested") → that tool with its argument bound from the exact arg key the
  *      dispatchTool switch reads (COMMANDS above). Only when the tool is
  *      declared by the caller.
- *   2. Otherwise, a non-conversational structural question → tmct_ask{query:…},
- *      when tmct_ask is declared. Small-talk (isConversational) never emits a
- *      call — it falls through to a text answer.
- *
- * `codeGraphMode` is the host's declared switch, the same one a session carries
- * (`/code-graph on|off`). A host that reads its own code graph through this
- * seam passes true, and short lines stop reading as small-talk.
+ *   2. Otherwise, a structural question → tmct_ask{query:…}, when tmct_ask is
+ *      declared. Only the enumerated small-talk phrasings
+ *      (matchesSmallTalkPhrase) fall through to a text answer instead. The chat
+ *      lane's length rule is not applied here: a host asks this seam for a tool
+ *      by sending a request, and "what calls fnAlpha" is three words.
  *
  * Returns { name, input } or null (→ answer as text).
  */
-export function selectTool(text, declaredNames, { codeGraphMode = false } = {}) {
+export function selectTool(text, declaredNames) {
   const t = String(text || "").trim();
   if (!t) return null;
 
@@ -1885,20 +1898,21 @@ export function selectTool(text, declaredNames, { codeGraphMode = false } = {}) 
         const val = restTok.join(" ").trim();
         if (val) input[spec.arg] = val;
         // an entity command with no argument can't bind a call — fall through
-        else if (!spec.optional) return askFallback(t, declaredNames, codeGraphMode);
+        else if (!spec.optional) return askFallback(t, declaredNames);
       }
       return { name: spec.tool, input };
     }
   }
 
   // 2. structural question → tmct_ask, unless it's small-talk
-  return askFallback(t, declaredNames, codeGraphMode);
+  return askFallback(t, declaredNames);
 }
 
-/** The tmct_ask fallback: emit tmct_ask{query} for a non-conversational line when
- *  the caller declared tmct_ask; otherwise null (→ text answer). */
-function askFallback(text, declaredNames, codeGraphMode = false) {
-  if (declaredNames.has("tmct_ask") && BACKED_TOOLS.has("tmct_ask") && !isConversational(text, { codeGraphMode })) {
+/** The tmct_ask fallback: emit tmct_ask{query} when the caller declared tmct_ask
+ *  and the line isn't one of the enumerated small-talk phrasings; otherwise null
+ *  (→ text answer). */
+function askFallback(text, declaredNames) {
+  if (declaredNames.has("tmct_ask") && BACKED_TOOLS.has("tmct_ask") && !matchesSmallTalkPhrase(text)) {
     return { name: "tmct_ask", input: { query: text } };
   }
   return null;

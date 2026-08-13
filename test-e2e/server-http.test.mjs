@@ -198,6 +198,7 @@ test("selectTool: command → specific tool; question → tmct_ask; small-talk /
   assert.deepEqual(selectTool("describe Widget", declared), { name: "tmct_describe", input: { symbol: "Widget" } });
   assert.deepEqual(selectTool("/callers Widget", declared), { name: "tmct_callers", input: { symbol: "Widget" } });
   assert.deepEqual(selectTool("which functions call Widget", declared), { name: "tmct_ask", input: { query: "which functions call Widget" } });
+  assert.deepEqual(selectTool("what calls Widget", declared), { name: "tmct_ask", input: { query: "what calls Widget" } });
   assert.equal(selectTool("hi", declared), null);          // small-talk
   assert.equal(selectTool("thanks", declared), null);      // small-talk
   // a declared tool the shim can't ground, and no tmct_ask → no emission
