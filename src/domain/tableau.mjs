@@ -40,6 +40,15 @@
 
 import { normFactTerm } from "./hash.mjs";
 
+/** Codepoint order, never localeCompare. Every string sorted in this file is
+ *  built from stored fact terms, and the sorts decide the ORDER RULES FIRE:
+ *  which disjunct the or-rule branches on first, which axioms internalize
+ *  first, which role assertions survive MAX_ROLE_ASSERTIONS. Under the step,
+ *  branch and node ceilings a different firing order is a different verdict,
+ *  so a locale-sensitive compare would let two machines read one KB and
+ *  disagree about whether it is satisfiable. */
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 // ---- concept-expression AST --------------------------------------------
 
 const atom = (name) => ({ t: "atom", name });
@@ -86,7 +95,7 @@ function pushNegation(expr, negate) {
     case "or": {
       const flip = expr.t === "and" ? "or" : "and";
       const cs = expr.cs.map((c) => pushNegation(c, negate));
-      cs.sort((a, b) => canonicalKey(a).localeCompare(canonicalKey(b)));
+      cs.sort((a, b) => byCodepoint(canonicalKey(a), canonicalKey(b)));
       return { t: negate ? flip : expr.t, cs };
     }
     case "some":
@@ -428,7 +437,7 @@ function addLabel(node, expr, from) {
 }
 
 function sortedLabelEntries(node) {
-  return [...node.labels.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  return [...node.labels.entries()].sort((a, b) => byCodepoint(a[0], b[0]));
 }
 
 /** A node clashes when its label set holds bottom, or holds both an
@@ -649,7 +658,7 @@ function applyOrRule(branch, kb) {
     for (const [key, { expr, from }] of sortedLabelEntries(node)) {
       if (expr.t !== "or") continue;
       if (node.branchedOn.has(key)) continue;
-      const cs = [...expr.cs].sort((a, b) => canonicalKey(a).localeCompare(canonicalKey(b)));
+      const cs = [...expr.cs].sort((a, b) => byCodepoint(canonicalKey(a), canonicalKey(b)));
       if (cs.some((c) => node.labels.has(canonicalKey(c)))) {
         node.branchedOn.add(key);
         continue;
@@ -840,7 +849,7 @@ function serializeBranch(branch) {
     .map((node) => ({
       id: node.id,
       parent: node.parent,
-      labels: [...node.labels.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, { expr, from }]) => ({ expr, from })),
+      labels: [...node.labels.entries()].sort((a, b) => byCodepoint(a[0], b[0])).map(([, { expr, from }]) => ({ expr, from })),
     }));
   const edges = branch.edges.map(({ from, r, to, fromFacts }) => ({ from, r, to, fromFacts: fromFacts.slice() }));
   return { nodes, edges };
@@ -1147,7 +1156,7 @@ export function buildTableauKb(rows) {
   // truncation is deterministic rather than arrival-ordered.
   const roleAssertions = roleAssertionCandidates
     .filter((r) => isIndividualTerm(r.subject) && isIndividualTerm(r.object))
-    .sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object))
+    .sort((a, b) => byCodepoint(a.subject, b.subject) || byCodepoint(a.predicate, b.predicate) || byCodepoint(a.object, b.object))
     .slice(0, MAX_ROLE_ASSERTIONS)
     .map((r) => ({ a: r.subject, r: r.predicate, b: r.object, from: [r.id] }));
 
@@ -1203,7 +1212,7 @@ export function buildTableauKb(rows) {
   for (const r of negTypeRows) assertions.push({ ind: r.subject, expr: toNNF(notE(atom(r.object))), from: [r.id] });
 
   for (const [unionId, memberRows] of unionMembersOf) {
-    const sorted = [...memberRows].sort((a, b) => String(a.object).localeCompare(String(b.object)));
+    const sorted = [...memberRows].sort((a, b) => byCodepoint(String(a.object), String(b.object)));
     const cs = sorted.map((mr) => atom(mr.object));
     const ids = sorted.map((mr) => mr.id);
     const orExpr = toNNF(orE(cs));
@@ -1225,7 +1234,7 @@ export function buildTableauKb(rows) {
   // merge rule has a real carrier of the nominal to merge an outsider into.
   const nominalIndividuals = new Map(); // ind -> fact ids that declared it
   for (const [classId, memberRows] of oneOfMembersOf) {
-    const sorted = [...memberRows].sort((a, b) => String(a.object).localeCompare(String(b.object)));
+    const sorted = [...memberRows].sort((a, b) => byCodepoint(String(a.object), String(b.object)));
     const nomExprs = sorted.map((mr) => ({ t: "nom", ind: mr.object }));
     const ids = sorted.map((mr) => mr.id);
     axioms.push(mkAxiom(atom(classId), toNNF(orE(nomExprs)), ids));
@@ -1238,7 +1247,7 @@ export function buildTableauKb(rows) {
 
   const differentFrom = differentFromRows
     .map((r) => ({ a: r.subject, b: r.object, from: [r.id] }))
-    .sort((a, b) => a.a.localeCompare(b.a) || a.b.localeCompare(b.b));
+    .sort((a, b) => byCodepoint(a.a, b.a) || byCodepoint(a.b, b.b));
 
   // owl:inverseOf is stored symmetrically by the grammar (both directions
   // minted), but this reads either direction alone too, defensively.
@@ -1254,15 +1263,15 @@ export function buildTableauKb(rows) {
 
   const subPropertyEdges = subPropertyRows
     .map((r) => [r.subject, r.object])
-    .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+    .sort((a, b) => byCodepoint(a[0], b[0]) || byCodepoint(a[1], b[1]));
   const roleNames = new Set([...roles, ...subPropertyEdges.flat(), ...inverseOf.keys(), ...inverseOf.values()]);
   const roleClosure = buildRoleClosure(subPropertyEdges, roleNames);
 
   axioms.sort((a, b) =>
-    canonicalKey(a.sub).localeCompare(canonicalKey(b.sub)) ||
-    canonicalKey(a.sup).localeCompare(canonicalKey(b.sup)) ||
-    a.from.join(",").localeCompare(b.from.join(",")));
-  assertions.sort((a, b) => a.ind.localeCompare(b.ind) || canonicalKey(a.expr).localeCompare(canonicalKey(b.expr)));
+    byCodepoint(canonicalKey(a.sub), canonicalKey(b.sub)) ||
+    byCodepoint(canonicalKey(a.sup), canonicalKey(b.sup)) ||
+    byCodepoint(a.from.join(","), b.from.join(",")));
+  assertions.sort((a, b) => byCodepoint(a.ind, b.ind) || byCodepoint(canonicalKey(a.expr), canonicalKey(b.expr)));
 
   const individuals = [...new Set([
     ...assertions.map((a) => a.ind),
@@ -1318,7 +1327,7 @@ export function findTableauViolations(kb, subjects = null, opts = {}) {
     const premises = sortedUnique(result.closedClashes.flatMap((c) => c?.premises || []));
     violations.push({ subject, premises, kind: describeClashKind(result.closedClashes[0]) });
   }
-  violations.sort((a, b) => a.subject.localeCompare(b.subject));
+  violations.sort((a, b) => byCodepoint(a.subject, b.subject));
   return violations;
 }
 

@@ -32,6 +32,15 @@
 import { normFactTerm, factIdForTriple } from "./hash.mjs";
 import { buildSenseGate } from "./sense-gate.mjs";
 
+/** Codepoint order, never localeCompare. Every candidate list below is sorted
+ *  and then cut at the budget, so the comparator decides WHICH entailments a
+ *  pass derives, not just what order it lists them in — and the `via` slot of
+ *  a surviving derivation is whichever middle term sorted first, so it also
+ *  decides which premise the proof cites. Sorting those by the reader's OS
+ *  locale would let two machines forward-chain one graph into two different
+ *  fact sets. */
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** The two persisting entry points (syllogise, retractSubClassOf) take the
  *  memory store's read/write functions through a required `store` option —
  *  this module never imports the store. A missing function is a loud
@@ -168,7 +177,7 @@ export function deriveSubClassClosure(edges, { depth = 32, budget = 50, focus = 
       }
     }
     if (!additions.length) break; // fixpoint reached
-    additions.sort((x, y) => x[0].localeCompare(y[0]) || x[2].localeCompare(y[2]) || x[1].localeCompare(y[1]));
+    additions.sort((x, y) => byCodepoint(x[0], y[0]) || byCodepoint(x[2], y[2]) || byCodepoint(x[1], y[1]));
     let progressed = false;
     for (const [a, b, c, key] of additions) {
       if (derivedKeys.has(key)) continue; // an earlier addition this round covered it
@@ -237,7 +246,7 @@ export function deriveSubClassClosureDelta(allEdges, deltaEdges, { depth = 32, b
       for (const z of pred.get(a) || []) consider(z, a, b);   // R∘Δ
     }
     if (!additions.length) break; // fixpoint reached
-    additions.sort((x, y) => x[0].localeCompare(y[0]) || x[2].localeCompare(y[2]) || x[1].localeCompare(y[1]));
+    additions.sort((x, y) => byCodepoint(x[0], y[0]) || byCodepoint(x[2], y[2]) || byCodepoint(x[1], y[1]));
     let progressed = false;
     const nextDelta = [];
     for (const [a, b, c, key] of additions) {
@@ -380,7 +389,7 @@ export function deriveTypePropagation(typeEdges, subClassEdges, { budget = 50, f
       candidates.push([x, c, d, key]);
     }
   }
-  candidates.sort((p, q) => p[0].localeCompare(q[0]) || p[2].localeCompare(q[2]) || p[1].localeCompare(q[1]));
+  candidates.sort((p, q) => byCodepoint(p[0], q[0]) || byCodepoint(p[2], q[2]) || byCodepoint(p[1], q[1]));
   const derived = [];
   const derivedKeys = new Set();
   for (const [x, c, d, key] of candidates) {
@@ -446,7 +455,7 @@ export function deriveDisjointViolations(typeEdges, subClassEdges, disjointEdges
       }
     }
   }
-  candidates.sort((p, q) => p[0].localeCompare(q[0]) || p[3].localeCompare(q[3]) || p[2].localeCompare(q[2]) || p[1].localeCompare(q[1]));
+  candidates.sort((p, q) => byCodepoint(p[0], q[0]) || byCodepoint(p[3], q[3]) || byCodepoint(p[2], q[2]) || byCodepoint(p[1], q[1]));
   const derived = [];
   const derivedKeys = new Set();
   for (const [x, c, d, e, key] of candidates) {
@@ -526,7 +535,7 @@ export function deriveSomeValuesFromApplication(propertyEdges, typeEdges, subCla
       }
     }
   }
-  candidates.sort((a, b) => a[0].localeCompare(b[0]) || a[6].localeCompare(b[6]) || a[1].localeCompare(b[1]) || a[3].localeCompare(b[3]));
+  candidates.sort((a, b) => byCodepoint(a[0], b[0]) || byCodepoint(a[6], b[6]) || byCodepoint(a[1], b[1]) || byCodepoint(a[3], b[3]));
   const derived = [];
   const derivedKeys = new Set();
   for (const [x, p, pKey, y, c, target, r, key] of candidates) {
@@ -575,7 +584,7 @@ export function buildCardinalityRestrictions(rows) {
     if (!onClass) continue;
     restrictions.push({ restriction, kind, n, onClass });
   }
-  restrictions.sort((a, b) => a.restriction.localeCompare(b.restriction));
+  restrictions.sort((a, b) => byCodepoint(a.restriction, b.restriction));
   return restrictions;
 }
 
@@ -627,7 +636,7 @@ export function deriveSomeValuesFromSubsumption(restrictionEdges, subClassEdges,
       }
     }
   }
-  candidates.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+  candidates.sort((a, b) => byCodepoint(a[0], b[0]) || byCodepoint(a[1], b[1]));
   const derived = [];
   const derivedKeys = new Set();
   for (const [c1, c2, y1, y2, key] of candidates) {
@@ -795,7 +804,7 @@ export function findConsistencyViolations(typeEdges, subClassEdges, disjointEdge
       }
     }
   }
-  candidates.sort((p, q) => p[0].localeCompare(q[0]) || p[1].localeCompare(q[1]) || p[2].localeCompare(q[2]));
+  candidates.sort((p, q) => byCodepoint(p[0], q[0]) || byCodepoint(p[1], q[1]) || byCodepoint(p[2], q[2]));
   const derived = [];
   for (const [x, ta, tb, viaA, viaB] of candidates) {
     if (derived.length >= budget) break;
@@ -1146,7 +1155,7 @@ export async function syllogise(repoDir, {
       environments: environmentsOf(r), provenance: r.provenance,
     }));
   const alternateCandidates = [...conclusionCandidates, ...storedCandidates]
-    .sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
+    .sort((a, b) => byCodepoint(a.subject, b.subject) || byCodepoint(a.predicate, b.predicate) || byCodepoint(a.object, b.object));
   let environmentsAdded = 0;
   let alternatesTruncated = false;
   let examined = 0;
@@ -1430,7 +1439,7 @@ function buildSupportEnumerator(rows) {
       if (rec) {
         const edges = [...(propertyEdgesOf.get(row.subject) || [])]
           .filter(([p]) => normFactTerm(p) === rec.propertyKey)
-          .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+          .sort((a, b) => byCodepoint(a[0], b[0]) || byCodepoint(a[1], b[1]));
         for (const [p, y] of edges) {
           if (out.length >= maxEnvironments) break;
           for (const c of [...(typesOf.get(y) || [])].sort()) {
@@ -1457,7 +1466,7 @@ function buildSupportEnumerator(rows) {
           if ((disjointOf.get(d) || new Set()).has(row.object)) pairs.push([c, d]);
         }
       }
-      pairs.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+      pairs.sort((a, b) => byCodepoint(a[0], b[0]) || byCodepoint(a[1], b[1]));
       for (const [c, d] of pairs) {
         if (out.length >= maxEnvironments) break;
         const dwStoredForward = disjointForward.has(`${d}${SEP}${row.object}`);
@@ -1653,7 +1662,7 @@ export async function retractSubClassOf(repoDir, subject, object, {
         }
       }
       const candidates = [...candidateIds].map((id) => byId.get(id))
-        .sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
+        .sort((a, b) => byCodepoint(a.subject, b.subject) || byCodepoint(a.predicate, b.predicate) || byCodepoint(a.object, b.object));
       if (!candidates.length) break; // fixpoint — nothing cites what just fell
 
       // The surviving fact set for THIS round excludes every candidate's own
@@ -1719,7 +1728,7 @@ export async function retractSubClassOf(repoDir, subject, object, {
   if (appendFactsFn) {
     const regroundWrites = [...reground.entries()]
       .filter(([id]) => !removed.has(id))
-      .sort((a, b) => a[0].localeCompare(b[0]))
+      .sort((a, b) => byCodepoint(a[0], b[0]))
       .map(([id, environments]) => {
         const row = byId.get(id);
         return {
