@@ -40,6 +40,7 @@ import {
 export { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "../../domain/memory/trust.mjs";
 import { NEG_PREDICATE_PREFIX, negatedPredicate } from "../../domain/memory/capability.mjs";
 import { factOrderKey } from "../../domain/memory/fact-order.mjs";
+import { partitionAttributions } from "../../domain/news-feed.mjs";
 import {
   planHeadRollup, planChainRollup, mergeRollups,
   isHeadRollupId, isChainRollupId, isRollupId, headRollupTypeOf,
@@ -4181,7 +4182,47 @@ function foldFactRows(memory, ctx, opts = {}) {
   // holds the two to the same answer.
   const keyed = rows.map((row) => ({ key: factOrderKey(row), row }));
   keyed.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-  return keyed.map((entry) => entry.row);
+  return attachSpeakers(keyed.map((entry) => entry.row));
+}
+
+// What every fact id starts with, and nothing a source ever writes as a term:
+// the prefix factIdFor mints and normFactTerm's carve-out keeps whole.
+const FACT_ID_PREFIX = "fact:";
+
+/** Hangs each attributed claim's speakers on the claim's own row, as
+ *  `attributedTo` — absent, never empty, the same way `extraction` is.
+ *
+ *  A report's claim and the speaker it was attributed to are two rows: the
+ *  claim, and `fact:<claimId> | mgx:attributedTo | <speaker>` beside it. A
+ *  surface that cannot render the attribution must not render the claim, so
+ *  resolving the pair belongs here rather than in each reader — the fold is the
+ *  one place every fact read passes through, and a reader that renders a row
+ *  inherits its speaker without asking for it.
+ *
+ *  news-feed.mjs's partitionAttributions owns which rows are attributions and
+ *  how one claim's speakers are ordered; only its map is wanted here, because a
+ *  fold hides no row from its readers — the news card suppresses attributions
+ *  from its own lanes, the store still holds and reads them.
+ *
+ *  Pure: the speakers come back sorted, so a claim two outlets attributed reads
+ *  the same whichever order the attributions arrived in, and an attribution
+ *  whose claim the fold never saw simply hangs on nothing — which is the case
+ *  every time rows arrive over p2p out of order. */
+function attachSpeakers(rows) {
+  // An attribution names its claim as its SUBJECT, and a claim's own subject is
+  // a term, so the prefix rules nearly every row out on one comparison. The
+  // fold is the hottest fact read there is, and the full test costs two
+  // lowercased copies and two regexes per row — on a store no report has ever
+  // written to, that is the whole price of a feature it does not use.
+  const referring = rows.filter((row) => row.subject.startsWith(FACT_ID_PREFIX));
+  if (!referring.length) return rows;
+  const { speakersByClaimId } = partitionAttributions(referring);
+  if (!speakersByClaimId.size) return rows;
+  for (const row of rows) {
+    const speakers = speakersByClaimId.get(row.id);
+    if (speakers?.length) row.attributedTo = speakers;
+  }
+  return rows;
 }
 
 /** Everything a group fold reads out of a payload, gathered in one pass: each

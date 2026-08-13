@@ -8151,9 +8151,10 @@ function citationProvenance(provenance) {
 }
 
 /** What every rendered fact line ends with: the extractor's caveat, when the
- *  row carries a finding worth declaring, then the source citation. The order
- *  is fixed — a reader sees how the sentence was read, then who said it — and
- *  both halves are optional, so a clean untraced row ends with nothing at all.
+ *  row carries a finding worth declaring, then the speaker a report attributed
+ *  the claim to, then the source citation. The order is fixed — a reader sees
+ *  how the sentence was read, then who said it, then where it came from — and
+ *  every part is optional, so a clean untraced row ends with nothing at all.
  *
  *  A row whose extractor recorded a finding stays answerable (no lane declines
  *  a stored fact); the caveat is how the answer says which reading it leans
@@ -8162,7 +8163,24 @@ function citationProvenance(provenance) {
 function factLineTail(f) {
   const caveat = findingCaveat(f);
   const cite = f.provenance ? ` (source: ${citationProvenance(f.provenance)})` : "";
-  return `${caveat ? ` ${caveat}` : ""}${cite}`;
+  return `${caveat ? ` ${caveat}` : ""}${attributionClause(f)}${cite}`;
+}
+
+/** "(president trump said)" — the speaker a report attributed this claim to,
+ *  off the `attributedTo` the fold hangs on an attributed row. A claim stays
+ *  grounded and answerable either way; naming the speaker is what keeps the
+ *  answer from reading as tmct's own assertion.
+ *
+ *  Two speakers on one claim both get named: two outlets attributing one claim
+ *  to two people corroborate it, they do not disagree. Sorted and deduped, so
+ *  the line reads the same however the rows arrived. */
+function attributionClause(f) {
+  const speakers = [...new Set((Array.isArray(f?.attributedTo) ? f.attributedTo : []).filter(Boolean))].sort();
+  if (!speakers.length) return "";
+  const named = speakers.length === 1
+    ? speakers[0]
+    : `${speakers.slice(0, -1).join(", ")} and ${speakers[speakers.length - 1]}`;
+  return ` (${named} said)`;
 }
 
 /** Every extraction finding the rows behind ONE composed sentence carry. A
@@ -8170,6 +8188,14 @@ function factLineTail(f) {
  *  the line declares what any of them was read from. */
 function composedExtraction(rows) {
   return rows.filter(Boolean).flatMap((r) => (Array.isArray(r.extraction) ? r.extraction : []));
+}
+
+/** Every speaker the rows behind ONE composed sentence were attributed to,
+ *  gathered the same way and for the same reason as the findings above: a
+ *  surface that cannot name the speaker must not print the claim, and a
+ *  composed sentence prints several rows at once. */
+function composedAttribution(rows) {
+  return rows.filter(Boolean).flatMap((r) => (Array.isArray(r.attributedTo) ? r.attributedTo : []));
 }
 
 /** One fact as an uncited-framing citation step: the phrase, its caveat and
@@ -8226,7 +8252,11 @@ function renderUnionLine(node, members) {
   const sorted = [...members].sort((a, b) => a.object.localeCompare(b.object));
   // One sentence states every arm, so its caveat covers every row it was
   // composed from, not just the one the citation came off.
-  const tail = factLineTail({ ...node, extraction: composedExtraction([node, ...sorted]) });
+  const tail = factLineTail({
+    ...node,
+    extraction: composedExtraction([node, ...sorted]),
+    attributedTo: composedAttribution([node, ...sorted]),
+  });
   const arms = sorted.map((m) => `${indefiniteArticleFor(m.object)} ${m.object}`).join(" or ");
   return `every ${node.subject} is ${arms}${tail}`;
 }
@@ -8246,7 +8276,11 @@ function renderEnumerationLine(cls, members) {
     ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
     : names.join("");
   const citeSource = sorted.find((m) => m.provenance)?.provenance;
-  const tail = factLineTail({ provenance: citeSource || "", extraction: composedExtraction(sorted) });
+  const tail = factLineTail({
+    provenance: citeSource || "",
+    extraction: composedExtraction(sorted),
+    attributedTo: composedAttribution(sorted),
+  });
   const plural = thirdPersonSingularSurface(String(cls || "").replace(/-/g, " "));
   return `the ${plural} are exactly ${list}${tail}`;
 }
@@ -8262,7 +8296,11 @@ function renderEnumerationLine(cls, members) {
 function renderUniversalRestrictionLine(node, rows) {
   const onProperty = rows.find((r) => r.predicate === "owl:onProperty");
   const allValuesFrom = rows.find((r) => r.predicate === "owl:allValuesFrom");
-  const tail = factLineTail({ ...node, extraction: composedExtraction([node, onProperty, allValuesFrom]) });
+  const tail = factLineTail({
+    ...node,
+    extraction: composedExtraction([node, onProperty, allValuesFrom]),
+    attributedTo: composedAttribution([node, onProperty, allValuesFrom]),
+  });
   const filler = thirdPersonSingularSurface(String(allValuesFrom?.object || "").replace(/-/g, " "));
   return `every ${node.subject} ${onProperty?.object || ""} only ${filler}${tail}`;
 }
