@@ -34,14 +34,14 @@ async function ctxAwaiting(term, { kbSources = ["wikidata"] } = {}) {
 
 /** A KB answering for one term. `facts` is what the structured seam licenses;
  *  `summary` is the body, in whichever of the two shapes the case is about. */
-function kbAnswering(term, { summary, isa = "", facts = null }) {
+function kbAnswering(term, { summary, isa = "", facts = null, title = term }) {
   return ({ source }) => ({
     name: source,
     origin: "https://example.org",
     provenanceTag: (t) => `research:${source}:${t}`,
     async lookup(asked) {
       if (asked !== term) return null;
-      const article = { term, title: term, text: summary, summary, url: `https://example.org/${term}`, revid: 1 };
+      const article = { term, title, text: summary, summary, url: `https://example.org/${term}`, revid: 1 };
       if (isa) article.isa = isa;
       if (facts) {
         article.facts = facts.map(([predicate, object]) => ({
@@ -108,6 +108,106 @@ test("a body that states relations still gives them up, even where the lookup al
   assert.ok(
     rows.some((r) => r.predicate === "mgx:hasA" && r.object.includes("lighthouse")),
     `and the relation the body states is read: ${JSON.stringify(rows.map(triple))}`,
+  );
+});
+
+test("a claim about another term the body only mentions in passing is not written", async () => {
+  const ctx = await ctxAwaiting("solar eclipse", { kbSources: ["simple-wikipedia"] });
+  ctx.providers.getResearchProvider = kbAnswering("solar eclipse", {
+    summary: "As seen from earth, a solar eclipse happens when the moon is directly between the earth and the sun. "
+      + "Every year there are about two solar eclipses.",
+  });
+
+  await enrichTopTerms(ctx);
+  const rows = readFactRows(await loadMemory(ctx.memoryDir)).map(triple);
+  assert.deepEqual(rows, [], `a year is not a kind of eclipse: ${JSON.stringify(rows)}`);
+});
+
+test("the strict tier's own reading is held to the term as well", async () => {
+  const ctx = await ctxAwaiting("earthquake", { kbSources: ["simple-wikipedia"] });
+  ctx.providers.getResearchProvider = kbAnswering("earthquake", {
+    summary: "An earthquake shakes the ground. Strong earthquakes damage buildings.",
+    isa: "tremor",
+  });
+
+  await enrichTopTerms(ctx);
+  const rows = readFactRows(await loadMemory(ctx.memoryDir)).map(triple);
+  assert.ok(rows.includes("earthquake | rdfs:subClassOf | tremor"), `the licensed class stands: ${JSON.stringify(rows)}`);
+  assert.equal(
+    rows.some((r) => r.startsWith("strong | ")),
+    false,
+    `"Strong earthquakes damage buildings" says nothing about a thing called strong: ${JSON.stringify(rows)}`,
+  );
+});
+
+test("a class the body denies is never minted as one it states", async () => {
+  const ctx = await ctxAwaiting("puerto rico", { kbSources: ["simple-wikipedia"] });
+  ctx.providers.getResearchProvider = kbAnswering("puerto rico", {
+    summary: "Puerto Rico is not an independent country, but like all populated U.S. territories, "
+      + "it has more autonomy than U.S. states.",
+  });
+
+  await enrichTopTerms(ctx);
+  const rows = readFactRows(await loadMemory(ctx.memoryDir)).map(triple);
+  assert.equal(
+    rows.some((r) => r.endsWith("| country")),
+    false,
+    `the sentence denies the class it would be read from: ${JSON.stringify(rows)}`,
+  );
+});
+
+test("a class read out of the clause a copula opens is not the class the body states", async () => {
+  const ctx = await ctxAwaiting("earthquake", { kbSources: ["simple-wikipedia"] });
+  ctx.providers.getResearchProvider = kbAnswering("earthquake", {
+    summary: "An earthquake is when Earth's tectonic plates shake and move Earth's surface.",
+  });
+
+  await enrichTopTerms(ctx);
+  const rows = readFactRows(await loadMemory(ctx.memoryDir)).map(triple);
+  assert.equal(
+    rows.includes("earthquake | rdfs:subClassOf | earth"),
+    false,
+    `"is when tectonic plates shake" states no class: ${JSON.stringify(rows)}`,
+  );
+});
+
+test("a class stated behind its own modifiers still lands", async () => {
+  const ctx = await ctxAwaiting("tsunami", { kbSources: ["simple-wikipedia"] });
+  ctx.providers.getResearchProvider = kbAnswering("tsunami", {
+    summary: "A tsunami is a natural disaster, a series of fast-moving waves in the ocean.",
+  });
+
+  await enrichTopTerms(ctx);
+  const rows = readFactRows(await loadMemory(ctx.memoryDir)).map(triple);
+  assert.ok(
+    rows.includes("tsunami | rdfs:subClassOf | disaster"),
+    `"is a natural disaster" states the class it is read as: ${JSON.stringify(rows)}`,
+  );
+});
+
+test("the body may name the term by the title the source answered with, or in the plural", async () => {
+  const byTitle = await ctxAwaiting("rottnest", { kbSources: ["simple-wikipedia"] });
+  byTitle.providers.getResearchProvider = kbAnswering("rottnest", {
+    title: "Rottnest Island",
+    summary: "A rottnest island is an island.",
+  });
+  await enrichTopTerms(byTitle);
+  const titleRows = readFactRows(await loadMemory(byTitle.memoryDir)).map(triple);
+  assert.ok(
+    titleRows.includes("rottnest island | rdfs:subClassOf | island"),
+    `the title is the same thing the term is: ${JSON.stringify(titleRows)}`,
+  );
+
+  const inPlural = await ctxAwaiting("quokka", { kbSources: ["simple-wikipedia"] });
+  inPlural.providers.getResearchProvider = kbAnswering("quokka", {
+    summary: "A quokka is a marsupial. Quokkas have a tail.",
+    isa: "marsupial",
+  });
+  await enrichTopTerms(inPlural);
+  const pluralRows = readFactRows(await loadMemory(inPlural.memoryDir)).map(triple);
+  assert.ok(
+    pluralRows.includes("quokkas | mgx:hasA | tail"),
+    `a body says "quokkas" for the same animal: ${JSON.stringify(pluralRows)}`,
   );
 });
 
