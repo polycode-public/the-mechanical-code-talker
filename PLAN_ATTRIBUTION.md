@@ -224,13 +224,20 @@ which an attributed claim renders bare.
 ## 6. Risks
 
 1. **`normFactTerm` eats the prefix.** Everything else compounds from it.
-2. **The news fact cap evicts the two halves independently.** An attribution
-   carries the same `news:` tag, so each attributed claim costs two of the 4000
-   slots, and eviction sorts by `observedAt` then id — the pair share an
-   `observedAt` but not an id, so it routinely keeps one and drops the other.
-   `evictNewsFacts` must treat a claim and its attributions as one unit. Stripping
-   the tag instead is worse: the attribution escapes the cap entirely and grows
-   unbounded.
+2. **The news fact cap evicts the two halves independently, and it is worse than
+   this section first said.** An attribution carries the same `news:` tag, so
+   each attributed claim costs two of the 4000 slots. But `evictNewsFacts` reads
+   `r.observedAt` straight off the row, and `readFactRows` keeps `observedAt` on
+   the assertion records — `rowObservedMs`, sitting 1500 lines above it, exists
+   for exactly that reason and eviction does not call it. So every news row
+   scores 0 and the whole sort collapses to id order. The claim and its
+   attribution do not merely share a timestamp and differ by id; they tie at zero
+   and are ordered by two unrelated content hashes, so at the cap they split
+   routinely. `test/domain/news-feed.test.mjs`'s eviction test passes only
+   because it builds rows with an explicit top-level `observedAt`, which no real
+   row has. Fixing the ordering is its own item; `evictNewsFacts` must ALSO treat
+   a claim and its attributions as one unit. Stripping the tag instead is worse:
+   the attribution escapes the cap entirely and grows unbounded.
 3. **Retraction does not cascade.** `removeFacts` scrubs edges referencing a
    removed id, over `objectProperties` only. An attribution holds the claim id in
    an attribute value, so it is invisible to the scrub and survives its claim.

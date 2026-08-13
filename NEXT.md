@@ -46,8 +46,14 @@ state and does not.
 The work list, ranked by value against the plan's target card.
 
 1. [ ] **A report's claim is not attributed to its speaker** — the write path
-   and sibling resolution in flight on `worktree-agent-ad6f9b1744d17d6b2`.
-   Spec in
+   and sibling resolution are CODE COMPLETE on
+   `worktree-agent-ad6f9b1744d17d6b2` and DELIBERATELY UNMERGED. Merging them
+   before the card read side would break the spec's own invariant: the russia
+   card renders the claim with no speaker, and on a store where the seed graph
+   does not out-rank it, `looksLikeEntityTerm` accepts `fact:285cf16183…` as a
+   one-word term and heads a card with the hex id. `news-feed.mjs` has no
+   `attributedTo` and no `startsWith("fact:")` anywhere. So commit 4 lands
+   first, then both merge together. Spec in
    `PLAN_ATTRIBUTION.md`. Commits 1, 2, 5 and 6 are merged: the `normFactTerm`
    carve-out, the phrase layer, the chat caveat, and every vocabulary site with
    an estate guard that parses all five live. What remains is the write path
@@ -95,7 +101,18 @@ The work list, ranked by value against the plan's target card.
    individuals; skipping it needs the object-identity work the index change
    deliberately left alone, since three of the five index maps can't be reused
    precisely because every individual gets a new identity per mutation.
-5. [ ] **`localeCompare` over fact rows, in ten places** — a locale-divergence
+5. [ ] **The news fact cap evicts by content hash, not by age** —
+   `evictNewsFacts` reads `r.observedAt` off the row, but `readFactRows` keeps
+   `observedAt` on the assertion records; `rowObservedMs` exists for exactly
+   that and eviction does not call it, though three other readers in the same
+   file do. Every news row therefore scores 0 and the sort collapses to id
+   order, so the cap drops whichever facts happen to hash low rather than the
+   oldest. `test/domain/news-feed.test.mjs`'s eviction test passes only
+   because its fixture sets a top-level `observedAt` that no real row
+   carries — so the test needs fixing alongside the code, or it will keep
+   passing over the bug. Found while measuring the attribution write's
+   eviction hazard; separate from it, and live today.
+6. [ ] **`localeCompare` over fact rows, in ten places** — a locale-divergence
    class rather than an arrival-order one: two readers on machines with
    different locales sort the same rows differently, which breaks the same
    pure-function-of-the-fact-set invariant by another route. `fact-order.mjs`
@@ -104,7 +121,7 @@ The work list, ranked by value against the plan's target card.
    `findContradictions` and its store-row listing, `digest/select.mjs`,
    `digest/compose.mjs` and `ledger-viz.mjs` — left deliberately rather than
    half-sweeping five files mid-task.
-6. [ ] **Wikidata** — the pinned dated dump is DOWNLOADED and on disk:
+7. [ ] **Wikidata** — the pinned dated dump is DOWNLOADED and on disk:
    `/Users/antony/tmct-dumps/wikidata-20260810-all.json.gz`,
    155,457,882,747 bytes, completed 2026-08-13 05:02 BST.
    Nothing has been done with it, by instruction. Plan §5.5 gates the bulk band
