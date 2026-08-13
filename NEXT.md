@@ -46,23 +46,21 @@ state and does not.
 
 The work list, ranked by value against the plan's target card.
 
-1. [ ] **Reshape the seed's band set** — in flight on
-   `worktree-agent-ad2f045618b8944e8`. Add `child`, `namenet`, `prose` and
+1. [ ] **Reshape the seed's band set** — add `child`, `namenet`, `prose` and
    `domains/code` to what seeds the store; delete and purge `aws`, `python` and
    `java` from the repo entirely. The band set is read from `package.json`'s own
    `init:xl`, so the browser seed and the CLI cannot drift on it. The seed is a
    generated artifact many things pin — README transcripts and the demo pages
    answer out of it — so expect moved pins, and a demo that can no longer answer
    its own question is a real loss to report, not a pin to rewrite.
-2. [ ] **Serve `wordnet-complete` to the news worker from DynamoDB** — in flight
-   on `worktree-agent-a728a7b713c9d1137`. The worker already has the client, the
-   row backend and the band rows in its table; it never calls
-   `termQueryOverDocumentClient`. One import and a call site, no IAM change and
-   no seed rebuild. Two things decide whether it ships on by default: the added
-   latency against the 60 s poll cap (~62 s wall per cycle today), and whether
-   background drift widens — the band carries `PartOf`, `HasProperty`, `MadeOf`,
-   `Causes`, `SimilarTo` and `RelatedTo`, none of which the seed has, so the
-   sense scope will be filtering relation types it has never seen.
+2. [ ] **Serve `wordnet-complete` to the news worker from DynamoDB** — the worker
+   already has the client, the row backend and the band rows in its table; it
+   never calls `termQueryOverDocumentClient`. One import and a call site, wired
+   on by default, no IAM change and no seed rebuild. It goes out with the next
+   deploy and the live feed shows what it does. The band carries `PartOf`,
+   `HasProperty`, `MadeOf`, `Causes`, `SimilarTo` and `RelatedTo`, none of which
+   the seed has, so the sense scope will be filtering relation types it has
+   never seen.
 
 ## Discipline
 
