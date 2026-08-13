@@ -68,7 +68,7 @@ import { loadMemory, readFactRows, appendFacts, removeFacts } from "../adapters/
 import { loadConfig } from "../adapters/config.mjs";
 import { touchedFactRows } from "../domain/memory/touched-facts.mjs";
 import { INGEST_SESSION_MARKER } from "../domain/memory/trust.mjs";
-import { normFactTerm } from "../domain/hash.mjs";
+import { normFactTerm, factIdForTriple } from "../domain/hash.mjs";
 import { splitIdentifierWords } from "../domain/prose.mjs";
 import { baseVerbSurface } from "../domain/fact-phrase.mjs";
 import { winkInstance } from "../adapters/wink-model.mjs";
@@ -1318,19 +1318,21 @@ export function clauseCandidates(sentence, { nlp } = {}) {
 const REPORTED_SPEECH_VERB_SRC = "said|says|told|reported|reports|announced|announces|stated|states|confirmed|confirms|added|wrote|writes";
 // "<claim>, President Trump said." — the attribution rides the tail after a
 // comma and closes the sentence. A closing quote mark may sit between them.
+// Group 1 is the speaker.
 const TRAILING_ATTRIBUTION_RE = new RegExp(
-  `,\\s*["'“”‘’]?\\s*[\\w.'’-]+(?:\\s+[\\w.'’-]+){0,3}\\s+(?:${REPORTED_SPEECH_VERB_SRC})\\s*[.!?]?\\s*$`,
+  `,\\s*["'“”‘’]?\\s*([\\w.'’-]+(?:\\s+[\\w.'’-]+){0,3})\\s+(?:${REPORTED_SPEECH_VERB_SRC})\\s*[.!?]?\\s*$`,
   "i",
 );
 // "President Trump said (that) <claim>", "Mr. Gilman's family had said <claim>"
-// — the attribution leads and the claim is everything past it.
+// — the attribution leads and the claim is everything past it. Group 1 is the
+// speaker, group 2 the claim.
 const LEADING_ATTRIBUTION_RE = new RegExp(
-  `^\\s*[\\w.'’-]+(?:\\s+[\\w.'’-]+){0,4}\\s+(?:has\\s+|had\\s+|have\\s+)?(?:${REPORTED_SPEECH_VERB_SRC})\\s+(?:that\\s+)?(\\S.*)$`,
+  `^\\s*([\\w.'’-]+(?:\\s+[\\w.'’-]+){0,4})\\s+(?:has\\s+|had\\s+|have\\s+)?(?:${REPORTED_SPEECH_VERB_SRC})\\s+(?:that\\s+)?(\\S.*)$`,
   "i",
 );
 
 /**
- * The claim a sentence attributes to a speaker, or the sentence unchanged. A
+ * The claim a sentence attributes to a speaker, and the speaker it names. A
  * report states most of what it knows this way, and the recognizer reading the
  * WHOLE sentence reads the attribution as the claim: "Officials said the quake
  * killed more than 100 people." came back as `officials mgx:say quake killed
@@ -1338,16 +1340,20 @@ const LEADING_ATTRIBUTION_RE = new RegExp(
  * attribution leaves the claim the article is making, which is the thing worth
  * grounding.
  *
- * The speaker is dropped rather than stored beside the claim: a fact row holds
- * one triple, and every row this module writes already rides its article's own
- * provenance.
+ * Returns { claim, speaker }. `speaker` is "" when no attribution frame fired,
+ * or when the claim left behind is too short to be one — the sentence comes
+ * back whole in that case, so there is nothing the speaker would hang off.
+ * Where both frames fire ("Officials said X, police reported."), the LEADING
+ * speaker wins: it is the one attached to the clause that survived.
  */
 export function reportedClauseOf(sentence) {
   const text = String(sentence ?? "").trim();
-  const trailingStripped = text.replace(TRAILING_ATTRIBUTION_RE, ".");
+  const trailing = TRAILING_ATTRIBUTION_RE.exec(text);
+  const trailingStripped = trailing ? text.replace(TRAILING_ATTRIBUTION_RE, ".") : text;
   const leading = LEADING_ATTRIBUTION_RE.exec(trailingStripped);
-  const claim = leading ? leading[1].trim() : trailingStripped;
-  return claim.split(/\s+/).length >= 3 ? claim : text;
+  const claim = leading ? leading[2].trim() : trailingStripped;
+  if (claim.split(/\s+/).length < 3) return { claim: text, speaker: "" };
+  return { claim, speaker: (leading?.[1] ?? trailing?.[1] ?? "").trim() };
 }
 
 // A stored term names a thing. These words open a predicate remainder or a new
@@ -1546,6 +1552,24 @@ function findingsForRow(fact, readingFindings, identifierTerms) {
   return named;
 }
 
+const REPORTED_SPEECH_FINDING = "reported-speech";
+const ATTRIBUTED_TO_PREDICATE = "mgx:attributedTo";
+
+/** The reified attribution beside a claim row: `fact:<claimHash> |
+ *  mgx:attributedTo | <speaker>`. A fact is content-addressed by its own
+ *  triple, so naming the claim's group id costs no read back. Null when the
+ *  sentence attributed nothing. */
+function attributionRowFor(fact, { speaker, tag, observedAt }) {
+  if (!speaker) return null;
+  return {
+    subject: factIdForTriple(fact.subject, fact.predicate, fact.object),
+    predicate: ATTRIBUTED_TO_PREDICATE,
+    object: speaker,
+    provenance: tag,
+    observedAt,
+  };
+}
+
 // A host that shares one thread with a UI hands the thread back through this;
 // a Node run leaves it unset and pays nothing.
 let ingestYield = null;
@@ -1603,6 +1627,11 @@ function canonicalLines(facts, storeRows) {
  * A sentence that attributes its claim to a speaker is handed to the recognizer
  * as the claim alone (`reportedClauseOf`); the ungrounded-term scan still reads
  * the sentence as written, so the speaker keeps reaching the enrichment queue.
+ * Under `findings` the speaker is also stored, twice over: the claim carries the
+ * `reported-speech` finding, and a reified `fact:<claimId> | mgx:attributedTo |
+ * <speaker>` row goes into the same batch. The finding is the half that must
+ * survive — a reader that loses the attribution still sees the claim say which
+ * reading it came from, so the two are written together or not at all.
  *
  *   text     the raw string to ground.
  *   options:
@@ -1626,13 +1655,15 @@ function canonicalLines(facts, storeRows) {
  *     lexicon     a loaded lexicon; the core vocabulary when absent.
  *     findings    record how each sentence read: mint the edge a definitional
  *                 frame states (`mgx:nameFor`) where the false isa was
- *                 declined, and attach the kept findings (`identifier-token`,
- *                 `clause-fallback`, `pronoun-carry`, `definitional-frame`) to
- *                 the assertions this call writes. Off by default; the declines
- *                 themselves are reported either way.
+ *                 declined, attach the kept findings (`identifier-token`,
+ *                 `clause-fallback`, `pronoun-carry`, `definitional-frame`,
+ *                 `reported-speech`) to the assertions this call writes, and
+ *                 write the attribution row beside each reported-speech claim.
+ *                 Off by default; the declines themselves are reported either
+ *                 way.
  *
- * Returns { sentences, recognized, extracted, optimistic, skipped, declined,
- * minted, canonical? }.
+ * Returns { sentences, recognized, extracted, optimistic, attributions, skipped,
+ * declined, minted, canonical? }.
  *   recognized — strict-recognized sentence count.
  *   extracted  — strict fact rows ({subject, predicate, object, provenance,
  *                quantifier, sentence}), plus `extraction` when the row was
@@ -1640,6 +1671,11 @@ function canonicalLines(facts, storeRows) {
  *   optimistic — fuzzy candidate rows ({subject, predicate, object, provenance,
  *                sentence}, same optional `extraction`); always [] unless
  *                options.optimistic.
+ *   attributions
+ *              — the attribution rows written beside the two arrays above, in
+ *                the same shape. Reported apart from them because they are not
+ *                facts the article stated, so nothing counting what an article
+ *                taught should count them.
  *   skipped    — sentences neither tier grounded.
  *   declined   — every candidate a detector turned down, as
  *                { sentence, finding, candidate }.
@@ -1685,6 +1721,12 @@ export async function ingestText(text, {
 
   const extracted = [];
   const optimisticFacts = [];
+  // The reified attributions written beside the claim rows above. Kept out of
+  // `extracted`/`optimistic` on purpose: those two arrays are what the article
+  // stated, and they feed a snapshot's fact ids and the bench's own score. An
+  // attribution says who said one of them, which is not another fact the
+  // article stated.
+  const attributions = [];
   // How each sentence read: the candidates a detector turned down, and the
   // edges minted where one was declined.
   const declined = [];
@@ -1764,22 +1806,28 @@ export async function ingestText(text, {
         // the article named still reaches the enrichment queue; only the
         // recognizer reads the claim on its own.
         cleanedSentences.push(asWritten);
-        const cleaned = reportedClauseOf(asWritten);
+        const { claim: cleaned, speaker } = reportedClauseOf(asWritten);
         // The stored term keys this sentence names with an identifier-shaped
         // token, read off the surface before normFactTerm folds the shape away.
         // Null when this run records no findings.
         const identifierTerms = findings ? identifierTermsIn(cleaned) : null;
+        // The finding every row off this sentence carries, and the speaker each
+        // one is attributed to. Both halves ride the same switch: the finding is
+        // what a reader falls back on when the attribution is gone, so writing
+        // one without the other would invert the fallback.
+        const attributedTo = identifierTerms && speaker ? speaker : "";
+        const speechFindings = attributedTo ? [REPORTED_SPEECH_FINDING] : [];
         // How the strict tier reached its rows, when it did: the whole sentence
         // carries nothing, a later candidate is a clause fragment, and the
         // pronoun retry carried its subject in from an earlier sentence.
-        let readingFindings = [];
+        let readingFindings = [...speechFindings];
         // Whole sentence first, then each closed-marker clause as a fallback.
         let rows = null;
         const candidates = clauseCandidates(cleaned, { nlp });
         for (let i = 0; i < candidates.length; i += 1) {
           rows = await strictRows(candidates[i]);
           if (!rows) continue;
-          if (i > 0) readingFindings = ["clause-fallback"];
+          if (i > 0) readingFindings = [...speechFindings, "clause-fallback"];
           break;
         }
         // Bounded pronoun carry: a "they/it/these/those/this …" sentence the
@@ -1792,7 +1840,7 @@ export async function ingestText(text, {
         const threaded = stripLeadingDiscourseAdverb(cleaned);
         if (!rows && carrySubject && PRONOUN_LEAD_RE.test(threaded)) {
           rows = await strictRows(threaded.replace(PRONOUN_LEAD_RE, `${articledSubject(carrySubject)} `));
-          if (rows) readingFindings = ["pronoun-carry"];
+          if (rows) readingFindings = [...speechFindings, "pronoun-carry"];
         }
         if (rows) {
           recognizedSentences += 1;
@@ -1817,6 +1865,8 @@ export async function ingestText(text, {
               ...(extraction.length ? { extraction } : {}),
             });
             taggedIds.add(row.id);
+            const attribution = attributionRowFor(row, { speaker: attributedTo, tag, observedAt });
+            if (attribution) { writes.push(attribution); attributions.push({ ...attribution, sentence }); }
           }
           await appendFacts(dir, writes);
           continue;
@@ -1846,12 +1896,15 @@ export async function ingestText(text, {
         const tag = `optimistic-extract:${sourceTag}`;
         const candidateWrites = [];
         for (const t of keptCandidates) {
-          const extraction = findingsForRow(t, mintFindings.has(t) ? [mintFindings.get(t)] : [], identifierTerms);
+          const mintFinding = mintFindings.has(t) ? [mintFindings.get(t)] : [];
+          const extraction = findingsForRow(t, [...speechFindings, ...mintFinding], identifierTerms);
           candidateWrites.push({
             subject: t.subject, predicate: t.predicate, object: t.object, provenance: tag, observedAt,
             ...(extraction.length ? { extraction } : {}),
           });
           optimisticFacts.push({ ...t, provenance: tag, sentence, ...(extraction.length ? { extraction } : {}) });
+          const attribution = attributionRowFor(t, { speaker: attributedTo, tag, observedAt });
+          if (attribution) { candidateWrites.push(attribution); attributions.push({ ...attribution, sentence }); }
         }
         const { ids } = await appendFacts(dir, candidateWrites);
         for (const id of ids) taggedIds.add(id);
@@ -1885,6 +1938,7 @@ export async function ingestText(text, {
       recognized: recognizedSentences,
       extracted,
       optimistic: optimisticFacts,
+      attributions,
       skipped: sentenceCount - recognizedSentences - optimisticSentences,
       ungroundedTerms: [...ungroundedTerms],
       ungroundedCounts,
