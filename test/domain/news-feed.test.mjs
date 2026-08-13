@@ -26,6 +26,8 @@ import {
   knownFactRows,
   renderKnownFactsParagraph,
   isDerivedRow,
+  partitionAttributions,
+  isFactReferenceRow,
 } from "../../src/domain/news-feed.mjs";
 
 const NOW = "2026-08-08T12:00:00.000Z";
@@ -208,6 +210,113 @@ test("the one-act fold answers the same paragraph whichever order the two rows a
     printedParagraphRows("russia", rows).map((r) => r.id),
     printedParagraphRows("russia", [...rows].reverse()).map((r) => r.id),
   );
+});
+
+// ---- attributions: who a report said its claim came from -------------------
+
+// A claim is named by its own group id, so an attribution's subject is "fact:"
+// and sixteen hex — the one term shape normFactTerm leaves alone.
+const CLAIM_FREE = "fact:00000000000000a1";
+const CLAIM_RELEASE = "fact:00000000000000a2";
+const CLAIM_KILL = "fact:00000000000000a4";
+const CLAIM_WOUND = "fact:00000000000000a5";
+
+const attribution = (id, claimId, speaker, extra = {}) => row(id, claimId, "mgx:attributedTo", speaker, extra);
+
+test("partitionAttributions keeps every fact-reference row out of the claims and sorts each claim's speakers", () => {
+  const rows = [
+    attribution("fact:00000000000000b2", CLAIM_RELEASE, "the kremlin"),
+    row(CLAIM_RELEASE, "russia", "tmct:releases", "robert gilman"),
+    attribution("fact:00000000000000b1", CLAIM_RELEASE, "president trump"),
+  ];
+  const { claims, speakersByClaimId } = partitionAttributions(rows);
+  assert.deepEqual(claims.map((r) => r.id), [CLAIM_RELEASE], "only the claim survives into the claim set");
+  assert.deepEqual(speakersByClaimId.get(CLAIM_RELEASE), ["president trump", "the kremlin"]);
+  assert.ok(isFactReferenceRow(rows[0]), "a row whose subject names a fact is apparatus, not a claim");
+  assert.ok(!isFactReferenceRow(rows[1]), "and a row about the world is not");
+});
+
+test("an attribution row never heads a card, even when it is the only row naming its own subject", () => {
+  const rows = [
+    row(CLAIM_RELEASE, "russia", "tmct:releases", "robert gilman"),
+    attribution("fact:00000000000000b1", CLAIM_RELEASE, "president trump"),
+  ];
+  // The hole this closes: the hex reads as a perfectly good one-word entity
+  // term, so the gate scores it a hub whenever nothing else out-ranks it.
+  const reported = reportedRows(rows, { now: NOW, windowMs: 6 * HOUR });
+  assert.ok(
+    newsworthyHubs(rows, reported, { now: NOW, windowMs: 6 * HOUR }).some((hub) => hub.term === CLAIM_RELEASE),
+    "the ungated hub scorer does score the fact id",
+  );
+
+  const items = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR });
+  assert.deepEqual(items.map((item) => item.hub), ["russia"], "and no card is headed by it");
+  for (const item of items) {
+    assert.ok(!item.factIds.includes("fact:00000000000000b1"), "no card cites the attribution as one of its facts");
+    assert.ok(!item.background.includes("fact:00000000000000b1"), "and none carries it as background");
+    assert.ok(!item.paragraph.includes("fact:"), `no paragraph prints a fact id: ${item.paragraph}`);
+    assert.ok(!item.backgroundParagraph.includes("fact:"), "and no disclosure does either");
+  }
+});
+
+test("a claim's speaker rides its own sentence, read off the row the one-act fold moved rather than the first", () => {
+  // The kept sentence comes from the headline row, which nobody was quoted for;
+  // the speaker sits on the description row the fold swallowed.
+  const rows = [
+    row(CLAIM_FREE, "russia", "mgx:free", "robert gilman"),
+    row(CLAIM_RELEASE, "russia", "tmct:releases", "robert gilman"),
+    attribution("fact:00000000000000b1", CLAIM_RELEASE, "president trump"),
+  ];
+  const card = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR }).find((item) => item.hub === "russia");
+  assert.equal(card.paragraph, "russia frees robert gilman, president trump said.");
+  assert.deepEqual([...card.factIds].sort(), [CLAIM_FREE, CLAIM_RELEASE]);
+});
+
+test("several speakers on one claim join with and", () => {
+  const rows = [
+    row(CLAIM_RELEASE, "russia", "tmct:releases", "robert gilman"),
+    attribution("fact:00000000000000b1", CLAIM_RELEASE, "president trump"),
+    attribution("fact:00000000000000b2", CLAIM_RELEASE, "the kremlin"),
+  ];
+  const card = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR }).find((item) => item.hub === "russia");
+  assert.equal(card.paragraph, "russia releases robert gilman, president trump and the kremlin said.");
+});
+
+test("a sentence naming an object no speaker was quoted for drops the clause rather than misattributing it", () => {
+  const rows = [
+    row(CLAIM_KILL, "the strike", "mgx:hit", "a hospital"),
+    row(CLAIM_WOUND, "the strike", "mgx:hit", "a school"),
+    attribution("fact:00000000000000b1", CLAIM_KILL, "officials"),
+  ];
+  const { claims, speakersByClaimId } = partitionAttributions(rows);
+  assert.equal(
+    renderNewsParagraph("the strike", claims, { speakersByClaimId }),
+    "the strike hits a hospital and a school.",
+    "officials were quoted on the hospital alone, so the sentence naming both says nobody",
+  );
+});
+
+test("a claim nothing attributed renders as a plain claim, and an attribution whose claim is absent renders as nothing", () => {
+  const plain = [row(CLAIM_RELEASE, "russia", "tmct:releases", "robert gilman")];
+  const plainCard = buildNewsItems(plain, { now: NOW, windowMs: 6 * HOUR }).find((item) => item.hub === "russia");
+  assert.equal(plainCard.paragraph, "russia releases robert gilman.");
+
+  const orphan = [attribution("fact:00000000000000b1", CLAIM_RELEASE, "president trump")];
+  assert.deepEqual(buildNewsItems(orphan, { now: NOW, windowMs: 6 * HOUR }), [], "no card, no error, no hex id");
+});
+
+test("a feed is byte-identical whichever order a claim and its attribution arrive in", () => {
+  const rows = [
+    row(CLAIM_FREE, "russia", "mgx:free", "robert gilman"),
+    attribution("fact:00000000000000b2", CLAIM_RELEASE, "the kremlin"),
+    row(CLAIM_RELEASE, "russia", "tmct:releases", "robert gilman"),
+    attribution("fact:00000000000000b1", CLAIM_RELEASE, "president trump"),
+    row("fact:00000000000000c1", "russia", "rdfs:subClassOf", "country", { provenance: "corpus:conceptnet" }),
+  ];
+  const forward = buildNewsItems(rows, { now: NOW, windowMs: 6 * HOUR });
+  const backward = buildNewsItems([...rows].reverse(), { now: NOW, windowMs: 6 * HOUR });
+  assert.equal(JSON.stringify(forward), JSON.stringify(backward));
+  assert.ok(forward[0].paragraph.includes(", president trump and the kremlin said"), forward[0].paragraph);
 });
 
 test("renderNewsParagraph caps the report at four relation sentences and the whole paragraph at six", () => {
