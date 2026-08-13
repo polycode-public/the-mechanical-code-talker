@@ -45,7 +45,9 @@ state and does not.
 
 The work list, ranked by value against the plan's target card.
 
-1. [ ] **A report's claim is not attributed to its speaker** — spec in
+1. [ ] **A report's claim is not attributed to its speaker** — the write path
+   and sibling resolution in flight on `worktree-agent-ad6f9b1744d17d6b2`.
+   Spec in
    `PLAN_ATTRIBUTION.md`. Commits 1, 2, 5 and 6 are merged: the `normFactTerm`
    carve-out, the phrase layer, the chat caveat, and every vocabulary site with
    an estate guard that parses all five live. What remains is the write path
@@ -57,7 +59,9 @@ The work list, ranked by value against the plan's target card.
    exported and pinned, so that signature change is a real edit. The invariant
    to hold throughout: a surface that cannot render the attribution must not
    render the claim.
-2. [ ] **One event, two verbs, two rows on the card** — the russia card reads
+2. [ ] **One event, two verbs, two rows on the card** — in flight on
+   `worktree-agent-a2ed151e88e6c10f0`, at paragraph assembly where the whole row
+   set is in view. The russia card reads
    "russia frees robert gilman. russia releases robert gilman." because the
    headline says "Freed by Russia" and the description says "released". Both
    rows are true and the graph is right to hold both; the card is wrong to say
@@ -67,7 +71,9 @@ The work list, ranked by value against the plan's target card.
    paragraph assembly, where the whole row set is in view, not at extraction
    where one row is. Against the plan's §2 target card this is now the most
    visible defect on the best card.
-3. [ ] **"hackernews discuss" reads as a plural** — live on 6 of 14 cards.
+3. [ ] **"hackernews discuss" reads as a plural** — in flight on
+   `worktree-agent-a2ed151e88e6c10f0`, same agent as item 2 since both land in
+   paragraph rendering. Live on 6 of 14 cards.
    `isSubjectPlural` reads a naive `-s` suffix, so a singular site name spelled
    with a trailing `-s` renders bare. The fix is one entry in the existing
    `SINGULAR_NOUNS_ENDING_S` closed set, but it moves 5 pinned assertions across
@@ -79,7 +85,9 @@ The work list, ranked by value against the plan's target card.
    as plural — needs the lexicon's declared plurals, and `fact-phrase.mjs` is
    deliberately import-free so it can be stringified into the browser. That
    cost is the real one, and it is bigger than the typing.
-4. [ ] **The rest of a 300 ms write** — the index was 18% of it and is now
+4. [ ] **The rest of a 300 ms write** — in flight on
+   `worktree-agent-a53f47beb71dc2734`, briefed to profile first rather than take
+   the previous agent's three names as a work list. The index was 18% of it and is now
    carried across writes (appendFact −15.6%, appendUtterance −16.1%,
    removeFacts −11.7% at 60k facts). The profile puts the remaining ~85% in
    `cacheUpsertEdge`'s per-edge filter, `sqlitePayloadStoreRows`, and
@@ -96,7 +104,8 @@ The work list, ranked by value against the plan's target card.
    `findContradictions` and its store-row listing, `digest/select.mjs`,
    `digest/compose.mjs` and `ledger-viz.mjs` — left deliberately rather than
    half-sweeping five files mid-task.
-6. [ ] **`mud-editor.mjs` has the adventure editor's old loose contract** —
+6. [ ] **`mud-editor.mjs` has the adventure editor's old loose contract** — in
+   flight on `worktree-agent-a4d08057fea9418e4`.
    `planMudEditorSync` returns bare triples and `mud-browser-entry.mjs` stamps
    them at the call site, exactly as the adventure pair did before the fix. Its
    one production caller stamps correctly, so there is no live break — this is
