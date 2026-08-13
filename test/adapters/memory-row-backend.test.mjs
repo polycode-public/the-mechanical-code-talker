@@ -755,7 +755,7 @@ function factRecordsByGroupOf(payload) {
   const byGroup = new Map();
   for (const ind of payload.individuals || []) {
     if (!ind?.id || ind.class !== FACT_CLASS) continue;
-    const groupId = String(ind.id).includes("@") ? String(ind.id).split("@")[0] : String(ind.id);
+    const groupId = String(ind.id).split("@")[0];
     const held = byGroup.get(groupId);
     if (held) held.push(ind.id);
     else byGroup.set(groupId, [ind.id]);
@@ -839,11 +839,10 @@ async function walkTheWritePath(handleFor, step = async () => {}) {
   await appendFact(handleFor(), { subject: "hall", predicate: "IsA", object: "room", quantifier: "every" });
   await step("a write naming no source, onto a triple already asserted");
 
+  const hallFact = readFactRows(await loadMemory(handleFor())).find((r) => r.subject === "hall");
+  assert.ok(hallFact, "the triple the canonicalise link names is there to link to");
   await appendCanonicalisedFromEdges(handleFor(), [{
-    factId: readFactRows(await loadMemory(handleFor())).find((r) => r.subject === "hall")?.id,
-    uttId: utterances.ids[0],
-    factLabel: "hall IsA room",
-    uttLabel: "where is kim",
+    factId: hallFact.id, uttId: utterances.ids[0], factLabel: "hall IsA room", uttLabel: "where is kim",
   }]);
   await step("a canonicalised-from edge, drawn per record asserting the triple");
 
@@ -861,7 +860,7 @@ async function walkTheWritePath(handleFor, step = async () => {}) {
 // keeps the seed's examples array and the carried map with it. A handle with no
 // seed owns that group itself, rewrites its row on every fact write, and takes
 // a fresh examples array back each time — which is the identity the guard
-// watches. Both routes have to end up saying what a rebuild says.
+// watches. Reused or rebuilt, the map has to say what a rebuild says.
 const HANDLE_SHAPES = [
   ["a sqlite seed", (seed) => wrapRowBackendOverSqliteSeed(createRowMemoryBackend(), seed.store)],
   ["a parsed-payload seed", (seed) => wrapRowBackend(createRowMemoryBackend(), { basePayload: seed.payload })],
