@@ -73,6 +73,72 @@ export function newsWindowRows(rows, { now, windowMs }) {
 }
 
 // ---------------------------------------------------------------------------
+// Attributions: who a report said its claim came from.
+// ---------------------------------------------------------------------------
+
+// A reified attribution names its claim by that claim's own group id, so its
+// subject is "fact:" and sixteen hex — normFactTerm's own carve-out shape, and
+// nothing a source ever writes as a term.
+const FACT_REFERENCE_TERM_RE = /^fact:[0-9a-f]{16}$/;
+
+// A fact id is minted lowercase, and both the claim's own `id` and the
+// attribution's subject go through this before either is used as a key — a
+// speaker matched on one spelling and stored under another is a silent drop.
+const factIdKey = (term) => String(term ?? "").trim().toLowerCase();
+
+const namesAFactRow = (term) => FACT_REFERENCE_TERM_RE.test(factIdKey(term));
+
+/** The fact `row` is ABOUT, when either of its sides names one rather than a
+ *  thing, else "". */
+function referencedFactId(row) {
+  const subject = factIdKey(row?.subject);
+  if (namesAFactRow(subject)) return subject;
+  const object = factIdKey(row?.object);
+  return namesAFactRow(object) ? object : "";
+}
+
+/** True when `row` is about another row rather than about the world. Every card
+ *  lane scores, walks and prints terms, and `looksLikeEntityTerm` reads a bare
+ *  `fact:285cf1618315591b` as a perfectly good one-word name, so a row like this
+ *  loose in a lane can head a card with a hex id. */
+export function isFactReferenceRow(row) {
+  return Boolean(referencedFactId(row));
+}
+
+const ATTRIBUTED_TO_PREDICATE = "mgx:attributedTo";
+
+/** Splits a fact set once, at the door: the claims a card may read, and the
+ *  speakers each claim was attributed to (claim group id -> speaker[], sorted).
+ *  Everything downstream — the hub gate, the adjacency index, the walk, the
+ *  sentences, a card's own `factIds` — takes `claims`, so an attribution reaches
+ *  no lane at all and the suppression cannot be missed one lane at a time.
+ *
+ *  Pure and order-independent: one claim's speakers come back in the same sorted
+ *  order whichever order the attributions arrived in, and a claim the fact set
+ *  never names simply has no entry — an attribution can arrive before its claim,
+ *  after it, or without it. */
+export function partitionAttributions(rows) {
+  const claims = [];
+  const named = new Map();
+  for (const row of rows) {
+    if (!isFactReferenceRow(row)) {
+      claims.push(row);
+      continue;
+    }
+    if (row.predicate !== ATTRIBUTED_TO_PREDICATE) continue;
+    const claimId = factIdKey(row.subject);
+    const speaker = String(row.object ?? "").trim();
+    if (!claimId || !speaker) continue;
+    let speakers = named.get(claimId);
+    if (!speakers) named.set(claimId, (speakers = new Set()));
+    speakers.add(speaker);
+  }
+  const speakersByClaimId = new Map();
+  for (const [claimId, speakers] of named) speakersByClaimId.set(claimId, [...speakers].sort());
+  return { claims, speakersByClaimId };
+}
+
+// ---------------------------------------------------------------------------
 // Item identity: what makes two fetched snapshots the same newsworthy item.
 // ---------------------------------------------------------------------------
 
@@ -688,6 +754,50 @@ function joinWithAnd(items) {
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
+/** The speakers `speakersByClaimId` attributes to `rows`, deduped and sorted.
+ *  Empty for rows nothing attributed, which is every row until a report stores
+ *  one. */
+function speakersFor(rows, speakersByClaimId) {
+  if (!(speakersByClaimId instanceof Map) || !speakersByClaimId.size) return [];
+  const named = new Set();
+  for (const row of rows) {
+    for (const speaker of speakersByClaimId.get(factIdKey(row.id)) ?? []) named.add(speaker);
+  }
+  return [...named].sort();
+}
+
+/** ", president trump said" — the article's own construction, folded onto the
+ *  end of the claim's own sentence rather than printed as apparatus beside it. */
+function speakerClause(speakers) {
+  return speakers.length ? `, ${joinWithAnd(speakers)} said` : "";
+}
+
+/** One row's whole sentence with its own speaker folded in. */
+function attributedFactSentence(row, speakersByClaimId) {
+  return `${factSentence(row)}${speakerClause(speakersFor([row], speakersByClaimId))}`;
+}
+
+/** The speaker clause a GROUPED sentence may carry. One sentence stands for
+ *  several rows, so the clause is only true where the attributed rows among them
+ *  already name every object the sentence prints. A group whose UNattributed row
+ *  brings an object of its own would put that object in a speaker's mouth, so
+ *  the clause drops whole rather than narrowing to a sentence it no longer
+ *  describes. */
+function groupSpeakerClause(rows, printedObjects, speakersByClaimId) {
+  if (!(speakersByClaimId instanceof Map) || !speakersByClaimId.size) return "";
+  const named = new Set();
+  const spokenObjects = new Set();
+  for (const row of rows) {
+    const speakers = speakersByClaimId.get(factIdKey(row.id));
+    if (!speakers?.length) continue;
+    for (const speaker of speakers) named.add(speaker);
+    spokenObjects.add(row.object);
+  }
+  if (!named.size) return "";
+  if (!printedObjects.every((object) => spokenObjects.has(object))) return "";
+  return speakerClause([...named].sort());
+}
+
 // ---------------------------------------------------------------------------
 // What one card reports, and whose neighbourhood it sits in.
 // ---------------------------------------------------------------------------
@@ -989,7 +1099,7 @@ function oneActKey(predicate) {
  *  that needs to know which facts a sentence came from (the bench's noisy-
  *  line scoring) reads them off the same grouping the sentence itself used,
  *  never a second derivation of it. */
-function groupedFactSentenceEntries(rows) {
+function groupedFactSentenceEntries(rows, speakersByClaimId = null) {
   const groups = new Map();
   for (const row of rows) {
     const key = `${row.subject} ${row.predicate}`;
@@ -1009,12 +1119,12 @@ function groupedFactSentenceEntries(rows) {
     const text = predicate === "rdf:type"
       ? `${subject} is ${joinObjects(sorted.map((object) => `${articleFor(object)} ${object}`))}`
       : `${subject} ${predicatePhrase(predicate, subject)} ${joinObjects(sorted)}`;
-    return { text, rows: groupRows };
+    return { text: `${text}${groupSpeakerClause(groupRows, sorted, speakersByClaimId)}`, rows: groupRows };
   });
 }
 
-function groupedFactSentences(rows) {
-  return groupedFactSentenceEntries(rows).map((entry) => entry.text);
+function groupedFactSentences(rows, speakersByClaimId = null) {
+  return groupedFactSentenceEntries(rows, speakersByClaimId).map((entry) => entry.text);
 }
 
 /** The sentences a card's paragraph is made of, as four ordered blocks: the
@@ -1026,7 +1136,7 @@ function groupedFactSentences(rows) {
  *  `renderNewsParagraph` itself slices, never a second derivation of it.
  *  Callers that render only one block — the "what the graph already knew"
  *  disclosure — read the block they want instead of re-deriving it. */
-function paragraphBlocks(hub, subgraphRows, { reportedIds = null, articleTerms = [] } = {}) {
+function paragraphBlocks(hub, subgraphRows, { reportedIds = null, articleTerms = [], speakersByClaimId = null } = {}) {
   const hubTerm = normFactTerm(hub);
   const isReported = idMembership(reportedIds);
   const hubRows = subgraphRows.filter((r) => normFactTerm(r.subject) === hubTerm);
@@ -1037,23 +1147,30 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null, articleTerms =
   // word a reader has not read — its rows join the sentence that says their
   // act, so a fact still counts as printed and the fold can lose nothing. A
   // predicate that brings a new name to the act keeps its own sentence.
-  const report = [];
+  const reportGroups = [];
   const statedActs = new Map();
   for (const predicate of predicatesInRenderOrder(reportedHubRows)) {
-    if (IDENTITY_PREDICATES.has(predicate) || report.length >= REPORT_SENTENCE_CAP) continue;
+    if (IDENTITY_PREDICATES.has(predicate) || reportGroups.length >= REPORT_SENTENCE_CAP) continue;
     const groupRows = reportedHubRows.filter((r) => r.predicate === predicate);
     const objects = groupRows.map((r) => r.object).sort();
     if (!objects.length) continue;
     const actKey = oneActKey(predicate);
     const stated = actKey ? statedActs.get(actKey) : null;
     if (stated && objects.every((object) => stated.objects.has(object))) {
-      stated.entry.rows.push(...groupRows);
+      stated.group.rows.push(...groupRows);
       continue;
     }
-    const entry = { text: `${hub} ${predicatePhrase(predicate, hub)} ${joinObjects(objects)}`, rows: groupRows };
-    report.push(entry);
-    if (actKey && !stated) statedActs.set(actKey, { entry, objects: new Set(objects) });
+    const group = { text: `${hub} ${predicatePhrase(predicate, hub)} ${joinObjects(objects)}`, rows: groupRows, objects };
+    reportGroups.push(group);
+    if (actKey && !stated) statedActs.set(actKey, { group, objects: new Set(objects) });
   }
+  // The speaker is read off the whole group, once the fold above has finished
+  // moving rows into it — the row an article attributed is often the FOLDED one,
+  // not the row whose words the sentence ended up wearing.
+  const report = reportGroups.map(({ text, rows: groupRows, objects }) => ({
+    text: `${text}${groupSpeakerClause(groupRows, objects, speakersByClaimId)}`,
+    rows: groupRows,
+  }));
 
   // A hub that only ever appears as an OBJECT — the place a quake struck, the
   // story a site discussed — has no subject-side row to build a sentence from,
@@ -1065,7 +1182,10 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null, articleTerms =
       .sort(byId)
       .slice(0, OBJECTS_PER_SENTENCE);
     if (aboutHubRows.length) {
-      report.push({ text: aboutHubRows.map((r) => factSentence(r)).join("; "), rows: aboutHubRows });
+      report.push({
+        text: aboutHubRows.map((r) => attributedFactSentence(r, speakersByClaimId)).join("; "),
+        rows: aboutHubRows,
+      });
     }
   }
 
@@ -1078,17 +1198,24 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null, articleTerms =
   const identityObjects = identityRows.map((r) => r.object).sort();
   const identityIsSingleSense = identityObjects.length > 0 && identityObjects.length <= IDENTITY_MAX_CLASSES;
   if (identityIsSingleSense) {
+    const said = groupSpeakerClause(identityRows, identityObjects, speakersByClaimId);
     identity.push({
-      text: `${hub} is ${joinObjects(identityObjects.map((object) => `${articleFor(object)} ${object}`))}`,
+      text: `${hub} is ${joinObjects(identityObjects.map((object) => `${articleFor(object)} ${object}`))}${said}`,
       rows: identityRows,
     });
   }
 
-  const known = groupedFactSentenceEntries(knownFactRows(hub, subgraphRows, { reportedIds, articleTerms }));
+  const known = groupedFactSentenceEntries(
+    knownFactRows(hub, subgraphRows, { reportedIds, articleTerms }),
+    speakersByClaimId,
+  );
 
   const neighbours = neighbourRows(hub, subgraphRows, { reportedIds });
   const around = neighbours.length
-    ? [{ text: `Around it: ${neighbours.map((r) => factSentence(r)).join("; ")}`, rows: neighbours }]
+    ? [{
+      text: `Around it: ${neighbours.map((r) => attributedFactSentence(r, speakersByClaimId)).join("; ")}`,
+      rows: neighbours,
+    }]
     : [];
 
   return { report, identity, known, around };
@@ -1099,8 +1226,8 @@ function paragraphBlocks(hub, subgraphRows, { reportedIds = null, articleTerms =
  *  (identity, known) and the paragraph-wide `SENTENCE_CAP` both applied.
  *  Shared by `renderNewsParagraph` and `printedParagraphRows` so the two can
  *  never drift: one reads `.text`, the other reads `.rows`. */
-function paragraphSentenceEntries(hub, subgraphRows, { reportedIds = null, articleTerms = [] } = {}) {
-  const { report, identity, known, around } = paragraphBlocks(hub, subgraphRows, { reportedIds, articleTerms });
+function paragraphSentenceEntries(hub, subgraphRows, { reportedIds = null, articleTerms = [], speakersByClaimId = null } = {}) {
+  const { report, identity, known, around } = paragraphBlocks(hub, subgraphRows, { reportedIds, articleTerms, speakersByClaimId });
   return [
     ...report,
     ...identity.slice(0, IDENTITY_SENTENCE_CAP),
@@ -1119,8 +1246,9 @@ function paragraphSentenceEntries(hub, subgraphRows, { reportedIds = null, artic
  *  into what was reported (the lead sentences) and what the graph already held
  *  (the background ones). Defaults to null, meaning every row counts as
  *  reported. */
-export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null, articleTerms = [] } = {}) {
-  const sentences = paragraphSentenceEntries(hub, subgraphRows, { reportedIds, articleTerms }).map((entry) => entry.text);
+export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null, articleTerms = [], speakersByClaimId = null } = {}) {
+  const sentences = paragraphSentenceEntries(hub, subgraphRows, { reportedIds, articleTerms, speakersByClaimId })
+    .map((entry) => entry.text);
   return sentences.length ? `${sentences.join(". ")}.` : "";
 }
 
@@ -1130,8 +1258,9 @@ export function renderNewsParagraph(hub, subgraphRows, { reportedIds = null, art
  *  computed but sliced away before render (an "Around it" clause cut by the
  *  overall cap, an identity class beyond `IDENTITY_MAX_CLASSES`) never
  *  appears here, because it never appears on the card either. */
-export function printedParagraphRows(hub, subgraphRows, { reportedIds = null, articleTerms = [] } = {}) {
-  return paragraphSentenceEntries(hub, subgraphRows, { reportedIds, articleTerms }).flatMap((entry) => entry.rows);
+export function printedParagraphRows(hub, subgraphRows, { reportedIds = null, articleTerms = [], speakersByClaimId = null } = {}) {
+  return paragraphSentenceEntries(hub, subgraphRows, { reportedIds, articleTerms, speakersByClaimId })
+    .flatMap((entry) => entry.rows);
 }
 
 /** The "what the graph already knew" disclosure: the same related facts the
@@ -1139,8 +1268,11 @@ export function printedParagraphRows(hub, subgraphRows, { reportedIds = null, ar
  *  card already reported. Empty when the graph held nothing about this card's
  *  own subjects — a card with no background says so rather than filling the
  *  space with whatever the two-hop walk happened to reach. */
-export function renderKnownFactsParagraph(hub, subgraphRows, { reportedIds = null, articleTerms = [] } = {}) {
-  const sentences = groupedFactSentences(knownFactRows(hub, subgraphRows, { reportedIds, articleTerms }));
+export function renderKnownFactsParagraph(hub, subgraphRows, { reportedIds = null, articleTerms = [], speakersByClaimId = null } = {}) {
+  const sentences = groupedFactSentences(
+    knownFactRows(hub, subgraphRows, { reportedIds, articleTerms }),
+    speakersByClaimId,
+  );
   return sentences.length ? `${sentences.join(". ")}.` : "";
 }
 
@@ -1547,18 +1679,24 @@ function cardArticleTerms(sources, articleEntityNames, { concepts, readsAsEntity
 export function buildNewsItems(rows, {
   now, windowMs, limit = 6, sourcesByFactId = new Map(), readsAsEntityTerm, articleEntityNames = null,
 } = {}) {
-  const reported = reportedRows(rows, { now, windowMs });
+  // Every lane below reads `claimRows`, never `rows`: the hub gate, the
+  // adjacency index both walks share, the prior/concept/sense reads, the
+  // sentences, and each card's own `factIds`. An attribution says something
+  // about a row rather than about the world, and a lane handed one can score it
+  // as a hub and head a card with a hex id.
+  const { claims: claimRows, speakersByClaimId } = partitionAttributions(rows);
+  const reported = reportedRows(claimRows, { now, windowMs });
   const reportedIds = new Set(reported.map((r) => r.id));
-  const adjacency = buildTermAdjacency(rows);
-  const prior = priorTerms(rows);
+  const adjacency = buildTermAdjacency(claimRows);
+  const prior = priorTerms(claimRows);
   const hubOptions = { now, windowMs, limit, adjacency, prior };
   if (readsAsEntityTerm) hubOptions.readsAsEntityTerm = readsAsEntityTerm;
   const rowsByTerm = reportedRowsByTerm(reported);
-  const hubs = titledHubs(newsworthyHubs(rows, reported, hubOptions), rows, reported, rowsByTerm);
+  const hubs = titledHubs(newsworthyHubs(claimRows, reported, hubOptions), claimRows, reported, rowsByTerm);
   const coverage = storyCoverage(hubs, rowsByTerm);
-  const concepts = conceptTerms(rows);
+  const concepts = conceptTerms(claimRows);
   const namesEntities = readsAsEntityTerm || looksLikeEntityTerm;
-  const senseScope = buildSenseScope(rows);
+  const senseScope = buildSenseScope(claimRows);
   const items = hubs.filter(({ term }) => coverage.get(term).mints).map(({ term, changed }) => {
     const coveredRowIds = coverage.get(term).coveredRowIds;
     const seeds = hubSeedTerms(term);
@@ -1572,7 +1710,7 @@ export function buildNewsItems(rows, {
     // walk that admits no background at all is enough to read them: a report on
     // the hub sits on a seed, and every scope admits those. So this pass and
     // the real one below hand `hubReportRows` the same rows.
-    const reportedRowsOnly = subgraphAround(rows, term, { ...hubWalk, inSense: () => false });
+    const reportedRowsOnly = subgraphAround(claimRows, term, { ...hubWalk, inSense: () => false });
     const sources = collectSources(hubReportRows(term, reportedRowsOnly, { reportedIds }), sourcesByFactId);
     const articleTerms = articleEntityNames
       ? cardArticleTerms(sources, articleEntityNames, { concepts, readsAsEntityTerm: namesEntities })
@@ -1586,10 +1724,10 @@ export function buildNewsItems(rows, {
     const hubSense = senseScope.hasPlacedSense(seeds)
       ? senseScope.sameSenseAs(seeds)
       : senseScope.sameSenseAs([...seeds, ...articleTerms], { admitAllWhenUnplaced: false });
-    const hubRows = subgraphAround(rows, term, { ...hubWalk, inSense: hubSense });
+    const hubRows = subgraphAround(claimRows, term, { ...hubWalk, inSense: hubSense });
     const heldIds = new Set(hubRows.map((r) => r.id));
     const articleRows = articleTerms.length
-      ? articleEntityRows(rows, articleTerms, {
+      ? articleEntityRows(claimRows, articleTerms, {
         adjacency,
         excludeIds: new Set([...coveredRowIds, ...reportedIds]),
         inSense: senseScope.sameSenseAs(articleTerms),
@@ -1607,11 +1745,11 @@ export function buildNewsItems(rows, {
         reportedIds, articleTerms, headlines: sources.map((s) => s.title),
       }),
       builtAt: now,
-      paragraph: renderNewsParagraph(term, subgraphRows, { reportedIds, articleTerms }),
+      paragraph: renderNewsParagraph(term, subgraphRows, { reportedIds, articleTerms, speakersByClaimId }),
       tier: tierOf(subgraphRows),
       sources,
       background: background.map((r) => r.id).sort(),
-      backgroundParagraph: renderKnownFactsParagraph(term, subgraphRows, { reportedIds, articleTerms }),
+      backgroundParagraph: renderKnownFactsParagraph(term, subgraphRows, { reportedIds, articleTerms, speakersByClaimId }),
     };
   });
   return items.sort((a, b) => (toMs(b.builtAt) - toMs(a.builtAt)) || bySubstance(a, b) || byId(a, b));
@@ -1627,19 +1765,42 @@ export function buildNewsItems(rows, {
 // is the deliberate exclusion the fixture-replay rows need.
 const NEWS_PROVENANCE_RE = /(?:^|[:|]\s*)news:/;
 
-/** News-tagged fact ids to retract, oldest observedAt first, ties by id —
- *  the eviction the service applies at ingest time so the graph cannot grow
- *  past `cap` unattended. Never selects a seed/taught/research/fixture-
- *  replay row. */
+/** News-tagged fact ids to retract, oldest observation first, ties by id — the
+ *  eviction the service applies at ingest time so the graph cannot grow past
+ *  `cap` unattended. Never selects a seed/taught/research/fixture-replay row.
+ *
+ *  A claim and the attributions naming it evict as ONE unit. They carry the same
+ *  news tag and the same stamp but not the same id, so choosing row by row
+ *  routinely kept one half and dropped the other, leaving a speaker with no
+ *  claim or a claim whose surface can no longer say who said it. A unit that
+ *  straddles the cap goes whole: the graph lands under `cap`, never on half a
+ *  pair.
+ *
+ *  The stamp comes from `rowObservedMs`, which is where a read row actually
+ *  carries it — `readFactRows` keeps observedAt on the assertion records, so
+ *  reading `row.observedAt` scored every real news row 0 and left the cap
+ *  evicting by id order. */
 export function evictNewsFacts(rows, { cap }) {
   const newsRows = rows.filter((r) => NEWS_PROVENANCE_RE.test(String(r.provenance || "")));
   if (newsRows.length <= cap) return [];
-  const sorted = newsRows.slice().sort((a, b) => {
-    const at = toMs(a.observedAt || "");
-    const bt = toMs(b.observedAt || "");
-    const an = Number.isFinite(at) ? at : 0;
-    const bn = Number.isFinite(bt) ? bt : 0;
-    return an - bn || byId(a, b);
-  });
-  return sorted.slice(0, newsRows.length - cap).map((r) => r.id);
+
+  const units = new Map();
+  for (const row of newsRows) {
+    const key = referencedFactId(row) || row.id;
+    let unit = units.get(key);
+    if (!unit) units.set(key, (unit = { key, ids: [], observedMs: Infinity }));
+    unit.ids.push(row.id);
+    const t = rowObservedMs(row);
+    unit.observedMs = Math.min(unit.observedMs, Number.isFinite(t) ? t : 0);
+  }
+
+  const target = newsRows.length - cap;
+  const evicted = [];
+  const oldestFirst = [...units.values()]
+    .sort((a, b) => a.observedMs - b.observedMs || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  for (const unit of oldestFirst) {
+    if (evicted.length >= target) break;
+    evicted.push(...unit.ids.slice().sort());
+  }
+  return evicted;
 }
