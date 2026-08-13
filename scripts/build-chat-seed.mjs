@@ -8,13 +8,11 @@
 // deploy, never committed.
 //
 // Contents: the SAME band set `npm run init:xl` gives the CLI — the large
-// human persona, SEON, ConceptNet, the tier-2 code corpuses (aws/python/java)
-// and WordNet-xl — read from package.json's own init:xl script and resolved
-// through the same name lookup `tmct import --corpus` uses, so the browser
-// and the CLI can never drift on WHICH corpuses seed, or at what scale — every
-// band ships whole EXCEPT ConceptNet, capped per SEED_BAND_CAPS below since
-// PLAN_FACT.md's per-assertion re-key. Measured at 63,470 facts, ~93.5 MB raw
-// JSON (~7.1 MB gzip).
+// human persona, the code domain pack, ConceptNet, WordNet-xl, NameNet and the
+// child vocabulary pack — read from package.json's own init:xl script and
+// resolved through the same name lookup `tmct import --corpus` uses, so the
+// browser and the CLI can never drift on WHICH corpuses seed. Every band ships
+// whole except the two capped per SEED_BAND_CAPS below.
 //
 // SEED_BAND_CAPS and SEED_BYTE_CEILING stay in the file as a backstop, not a
 // design limit: if a future corpus addition pushes the seed's byte count high
@@ -31,27 +29,29 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..");
 
 /** The largest chat-seed.json this builder will let through, in bytes. The
- *  full uncapped init:xl band set measures ~89.8 MB (89,774,669 bytes
- *  measured), so this ceiling sits at 100 MB — about 10 MB of headroom for
- *  corpus growth before the next measurement is due. A bigger asset than
- *  that is a bug in the seed selection: this is a backstop guard, not the
- *  band-set's normal operating margin — the page fetches the whole file
- *  before the chat can answer a seeded question, so a real breach should be
- *  investigated against the boot budget (test-e2e/pages-chat-boot-budget.test.mjs)
- *  before this number is raised again. */
+ *  full uncapped init:xl band set measures 182,666,238 bytes (174.2 MB, 14.2 MB
+ *  gzip); the caps below bring the shipped asset to 103,285,424 bytes (98.5 MB,
+ *  7.7 MB gzip), 1.5 MB under this ceiling. A bigger asset than that is a bug
+ *  in the seed selection: this is a backstop guard, not the band-set's normal
+ *  operating margin — the page fetches the whole file before the chat can
+ *  answer a seeded question, so a real breach should be investigated against
+ *  the boot budget (test-e2e/pages-chat-boot-budget.test.mjs) before this
+ *  number is raised again. */
 export const SEED_BYTE_CEILING = 100 * 1024 * 1024;
 
-/** Per-band fact caps, applied only to bands named here. PLAN_FACT.md's
- *  per-assertion re-key (`mgx:sourceId`, restructured `trustInputs`, etc. on
- *  every record) grew each fact's own byte cost even though corpus bands stay
- *  one record per triple — the full band set measured 106,413,353 bytes
- *  post-re-key, over SEED_BYTE_CEILING. ConceptNet is capped at 28,000 (was
- *  36,328 uncapped), seeding definitional-predicates-first through the same
- *  `prefer` order it already used, so the cut buys the IsA (subClassOf)
- *  backbone rather than trivia — 93,496,025 bytes, ~10.8 MB headroom
- *  restored, matching this file's own documented norm. Re-measure before
- *  changing this number again. */
-export const SEED_BAND_CAPS = Object.freeze({ conceptnet: 28000 });
+/** Per-band fact caps, applied only to bands named here. A capped band seeds
+ *  definitional-predicates-first through the same `prefer` order the ConceptNet
+ *  band already used, so the cut buys the IsA (subClassOf) backbone rather than
+ *  trivia.
+ *
+ *  ConceptNet is capped at 28,000 (36,328 uncapped). The child pack is the
+ *  band the ceiling actually binds: 69,140 triples, 58,552 of them new against
+ *  the bands ahead of it, at roughly 1.4 KB a fact — 77.9 MB against the 3.7 MB
+ *  the other bands leave under SEED_BYTE_CEILING. The CLI's own `init:xl` seeds
+ *  it whole; this cap is the browser's share of it. Raising it means raising
+ *  the ceiling, which means re-measuring the page's boot budget first.
+ *  Re-measure before changing either number. */
+export const SEED_BAND_CAPS = Object.freeze({ conceptnet: 28000, child: 2000 });
 
 // `tmct init --persona-size <size>` activates these additive human-persona
 // size bands on top of the always-active `human` (same ladder bin/tmct.mjs

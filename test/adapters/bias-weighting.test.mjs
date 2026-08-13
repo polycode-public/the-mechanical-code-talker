@@ -23,9 +23,9 @@ import { clearCache } from "../../src/adapters/source.mjs";
 // ---- pure unit tests --------------------------------------------------------
 
 test("biasForSourceId: src:corpus:<name> resolves against biasByBundle; unconfigured/non-corpus -> 1", () => {
-  const bias = { seon: 1.5, "tier2-aws": 0.5 };
+  const bias = { seon: 1.5, "tier2-general": 0.5 };
   assert.equal(biasForSourceId("src:corpus:seon", bias), 1.5);
-  assert.equal(biasForSourceId("src:corpus:tier2-aws", bias), 0.5);
+  assert.equal(biasForSourceId("src:corpus:tier2-general", bias), 0.5);
   assert.equal(biasForSourceId("src:corpus:conceptnet", bias), 1, "unconfigured bundle -> neutral 1");
   assert.equal(biasForSourceId("src:operator-chat", bias), 1, "a non-corpus source id is never a bundle");
   assert.equal(biasForSourceId("src:teach-chat", bias), 1);
@@ -42,9 +42,9 @@ test("biasForSourceId: a non-numeric configured value is ignored (neutral), neve
 });
 
 test("biasForRow: the MAX bias across a row's sourceIds; empty/absent -> neutral 1", () => {
-  const bias = { seon: 2, "tier2-aws": 0.5 };
-  assert.equal(biasForRow({ sourceIds: ["src:corpus:tier2-aws", "src:corpus:seon"] }, bias), 2, "max, not averaged down");
-  assert.equal(biasForRow({ sourceIds: ["src:corpus:tier2-aws"] }, bias), 0.5);
+  const bias = { seon: 2, "tier2-general": 0.5 };
+  assert.equal(biasForRow({ sourceIds: ["src:corpus:tier2-general", "src:corpus:seon"] }, bias), 2, "max, not averaged down");
+  assert.equal(biasForRow({ sourceIds: ["src:corpus:tier2-general"] }, bias), 0.5);
   assert.equal(biasForRow({ sourceIds: [] }, bias), 1);
   assert.equal(biasForRow({}, bias), 1);
   assert.equal(biasForRow(null, bias), 1);
@@ -101,16 +101,16 @@ const tmp = () => mkdtemp(join(tmpdir(), "tmct-bias-e2e-"));
 /** Seed one conflicting-fact pair — "widget x" mgx:hasProperty {red|blue} —
  *  from two DIFFERENT provenancePrefixes, the exact shape two active
  *  corpus-kind extension bundles (src/services/extensions.mjs) produce via seedMemory.
- *  "red" (tier2-aws) is seeded FIRST, "blue" (seon) SECOND, and both are equally
+ *  "red" (tier2-general) is seeded FIRST, "blue" (seon) SECOND, and both are equally
  *  corpus-trusted — so with no bias configured the pair ties on everything a
  *  rank reads and falls to its own content. `seedFirst` flips which one arrives
  *  first, for the reader that has to prove arrival stopped counting. */
 async function seedConflictingPair(dir, seedFirst = "red") {
-  const sliceA = join(dir, "aws.jsonl");
+  const sliceA = join(dir, "general.jsonl");
   const sliceB = join(dir, "seon.jsonl");
   await writeFile(sliceA, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/red", weight: 1 }) + "\n");
   await writeFile(sliceB, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/blue", weight: 1 }) + "\n");
-  const red = () => seedMemory(dir, { slicePath: sliceA, provenancePrefix: "corpus:tier2-aws" });
+  const red = () => seedMemory(dir, { slicePath: sliceA, provenancePrefix: "corpus:tier2-general" });
   const blue = () => seedMemory(dir, { slicePath: sliceB, provenancePrefix: "corpus:seon" });
   if (seedFirst === "red") { await red(); await blue(); } else { await blue(); await red(); }
 }
@@ -121,13 +121,13 @@ test("end-to-end: a higher-bias bundle's fact renders FIRST; the lower-bias fact
     clearCache();
     await seedConflictingPair(dir);
     const config = { graphFile: join(dir, ".tmct", "graph.json") }; // empty bootstrap graph
-    const biasByBundle = { seon: 5 }; // seon (blue) outweighs tier2-aws (red, default 1)
+    const biasByBundle = { seon: 5 }; // seon (blue) outweighs tier2-general (red, default 1)
     const r = await runTurn("what do you know about widget x", { config, memoryDir: dir, biasByBundle });
     const redIdx = r.answer.indexOf("widget x is red");
     const blueIdx = r.answer.indexOf("widget x is blue");
     assert.ok(redIdx >= 0 && blueIdx >= 0, `both facts are present/cited: ${r.answer}`);
     assert.ok(blueIdx < redIdx, `the higher-bias (seon) fact renders FIRST: ${r.answer}`);
-    assert.match(r.answer, /\(source: corpus:tier2-aws/, "the lower-bias fact still carries its own provenance");
+    assert.match(r.answer, /\(source: corpus:tier2-general/, "the lower-bias fact still carries its own provenance");
     assert.match(r.answer, /\(source: corpus:seon/, "the higher-bias fact carries its own provenance");
   } finally {
     clearCache();
@@ -141,11 +141,11 @@ test("end-to-end: flipping the bias flips the render order — bias only REORDER
     clearCache();
     await seedConflictingPair(dir);
     const config = { graphFile: join(dir, ".tmct", "graph.json") };
-    const r = await runTurn("what do you know about widget x", { config, memoryDir: dir, biasByBundle: { "tier2-aws": 5 } });
+    const r = await runTurn("what do you know about widget x", { config, memoryDir: dir, biasByBundle: { "tier2-general": 5 } });
     const redIdx = r.answer.indexOf("widget x is red");
     const blueIdx = r.answer.indexOf("widget x is blue");
     assert.ok(redIdx >= 0 && blueIdx >= 0, `both facts still present: ${r.answer}`);
-    assert.ok(redIdx < blueIdx, `now the higher-bias (tier2-aws) fact renders FIRST: ${r.answer}`);
+    assert.ok(redIdx < blueIdx, `now the higher-bias (tier2-general) fact renders FIRST: ${r.answer}`);
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

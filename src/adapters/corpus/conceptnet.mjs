@@ -25,7 +25,7 @@ export const MAP_FILE = join(PKG_ROOT, "src", "adapters", "corpus", "conceptnet-
 // The tier-1 curated Software-Engineering ontology (SEON): concepts.jsonl shares
 // ConceptNet's slice shape and loads through the same loadSlice/loadMap/toFacts path.
 // definitions.jsonl is a separate {term, definition, sense} list for lexicon lookups.
-// Tier-2 corpuses (aws/python/java) share the slice shape too. The data lives under
+// Tier-2 corpuses share the slice shape too. The data lives under
 // corpus/domains/code/ (the code domain pack's own directory); the bundle name
 // "seon" and its "corpus:seon" provenance prefix are unchanged by the move —
 // both are declared literally in src/services/extensions.mjs, not derived from
@@ -127,35 +127,30 @@ export function toFacts(assertions, map, provenancePrefix = "corpus:conceptnet")
   return facts;
 }
 
-/** Seed a repo's memory graph (<dir>/.tmct/memory/graph.json) from the committed slice.
- *  `limit` caps the facts written; `prefer` stable-partitions facts by predicate (so a
- *  capped seed favors the definitional band over whatever trivia the slice opens with).
- *  Idempotent: pre-reads the store to skip triples already there, then writes survivors
- *  in one batched appendFacts call. Returns { appended, skipped, total }.
- *  `provenancePrefix` tags facts (default "corpus:conceptnet").
- *
- *  `captureUnknownContext` (default false): also runs unknown-ingest.mjs's
- *  ingestUnknownFromAssertions so a term that only appears in an `ace="none"` row (never
- *  reified as a Fact) still lands in memory, tagged with the passage it was found in.
- *  `unknownContextLimit` bounds how many distinct terms one call captures (default 500).
- *  Loaded dynamically to avoid a load-time import cycle with unknown-ingest.mjs. */
-export async function seedMemory(dir, {
-  limit, slicePath = SLICE_FILE, mapPath = MAP_FILE, prefer, provenancePrefix,
-  captureUnknownContext = false, unknownContextLimit,
-} = {}) {
-  const [assertions, map] = await Promise.all([loadSlice(slicePath), loadMap(mapPath)]);
-  let facts = toFacts(assertions, map, provenancePrefix);
+/** Stable-partition `facts` so the `prefer` predicates come first, then take the
+ *  first `limit` of them. A capped band therefore buys its definitional backbone
+ *  before it buys trivia. Either argument may be absent. */
+export function preferThenLimit(facts, prefer, limit) {
+  let out = facts;
   if (Array.isArray(prefer) && prefer.length) {
     const rank = new Map(prefer.map((p, i) => [p, i]));
-    facts = facts.slice().sort((a, b) => (rank.get(a.predicate) ?? prefer.length) - (rank.get(b.predicate) ?? prefer.length));
+    out = out.slice().sort((a, b) => (rank.get(a.predicate) ?? prefer.length) - (rank.get(b.predicate) ?? prefer.length));
   }
-  if (limit !== undefined) facts = facts.slice(0, limit);
+  return limit === undefined ? out : out.slice(0, limit);
+}
 
-  // Keyed with normFactTerm so it matches the store's own normalized read-back.
-  const factKey = (s, p, o) => `${normFactTerm(s)} ${p} ${normFactTerm(o)}`;
+// Keyed with normFactTerm so it matches the store's own normalized read-back.
+const factKey = (s, p, o) => `${normFactTerm(s)} ${p} ${normFactTerm(o)}`;
+
+/** Write every fact `dir`'s store does not already hold, in one batched append,
+ *  so re-seeding a band is idempotent and a term shared by two bands converges
+ *  to one fact. `memory` is the store's already-loaded contents (callers that
+ *  need it for their own work pass theirs rather than paying a second read).
+ *  Returns { appended, skipped }. */
+export async function appendNewFacts(dir, facts, memory) {
+  const store = memory ?? await loadMemory(dir);
   const existing = new Set();
-  const memory = await loadMemory(dir);
-  for (const ind of memory.individuals || []) {
+  for (const ind of store.individuals || []) {
     if (ind?.class !== "Fact") continue;
     const get = (key) => (ind.attributes || []).find((x) => x.key === key)?.value;
     existing.add(factKey(get("subject"), get("predicate"), get("object")));
@@ -173,6 +168,30 @@ export async function seedMemory(dir, {
     toWrite.push(fact);
   }
   const res = await appendFacts(dir, toWrite);
+  return { appended: res.appended, skipped: skipped + res.skipped };
+}
+
+/** Seed a repo's memory graph (<dir>/.tmct/memory/graph.json) from the committed slice.
+ *  `limit` caps the facts written; `prefer` stable-partitions facts by predicate (so a
+ *  capped seed favors the definitional band over whatever trivia the slice opens with).
+ *  Idempotent: pre-reads the store to skip triples already there, then writes survivors
+ *  in one batched appendFacts call. Returns { appended, skipped, total }.
+ *  `provenancePrefix` tags facts (default "corpus:conceptnet").
+ *
+ *  `captureUnknownContext` (default false): also runs unknown-ingest.mjs's
+ *  ingestUnknownFromAssertions so a term that only appears in an `ace="none"` row (never
+ *  reified as a Fact) still lands in memory, tagged with the passage it was found in.
+ *  `unknownContextLimit` bounds how many distinct terms one call captures (default 500).
+ *  Loaded dynamically to avoid a load-time import cycle with unknown-ingest.mjs. */
+export async function seedMemory(dir, {
+  limit, slicePath = SLICE_FILE, mapPath = MAP_FILE, prefer, provenancePrefix,
+  captureUnknownContext = false, unknownContextLimit,
+} = {}) {
+  const [assertions, map] = await Promise.all([loadSlice(slicePath), loadMap(mapPath)]);
+  const facts = preferThenLimit(toFacts(assertions, map, provenancePrefix), prefer, limit);
+
+  const memory = await loadMemory(dir);
+  const { appended, skipped } = await appendNewFacts(dir, facts, memory);
 
   let unknown;
   if (captureUnknownContext) {
@@ -185,7 +204,7 @@ export async function seedMemory(dir, {
   }
 
   return {
-    appended: res.appended, skipped: skipped + res.skipped, total: facts.length,
+    appended, skipped, total: facts.length,
     ...(unknown ? { unknown } : {}),
   };
 }

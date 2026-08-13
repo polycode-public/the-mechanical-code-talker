@@ -3,9 +3,9 @@
 // INIT_XL_BANDS band set — the same bands `npm run init:xl` gives the CLI and
 // `public/chat-seed.json` serves the demo page, seeded through the same
 // resolveExtensions + seedActiveCorpusEntries path scripts/build-chat-seed.mjs
-// uses. Nothing else is imported. The child pack is reached the way chat
-// reaches it: lazily, per source term, through the choice lane's own probe —
-// this rig never bulk-imports it.
+// uses. Nothing else is imported. The child pack now seeds as one of those
+// bands, capped by SEED_BAND_CAPS like any other; the choice lane's own
+// per-term probe still runs on top of it, the way chat reaches it.
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

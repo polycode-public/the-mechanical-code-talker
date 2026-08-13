@@ -424,7 +424,7 @@ tmct> /exit
 **[Try it live in your browser →](https://tmct.polycode.co.uk/)**
 runs the actual query engine client-side. No server, no install. The landing
 page answers codebase questions live, and six more pages each ground their
-own domain: a full chat seeded with 63,470 facts (the same nine bands as
+own domain: a full chat seeded with 70,453 facts (the same eight bands as
 `npm run init:xl`), the
 **memory ledger** (every fact as a readable sentence; drill by clicking the
 terms inside), and a Towers-of-Hanoi **plan** replayed move by move. A 3D
@@ -1065,15 +1065,13 @@ provenance record. Most of its flags choose what gets seeded and where config is
   tmct init [--repo <abs>]     initialize a repo for tmct (default: cwd): .tmct/,
        [--force]               tmct.toml, .tmct/TOOLS.md (the cold-tool catalog),
                                tier-1 corpus seed, provenance record
-       [--corpus <id|path>]    also seed a corpus — a tier-2 manifest id (aws|python|java|
-                               general) or a jsonl file path — opt-in, offline, $0
+       [--corpus <id|path>]    also seed a corpus — a bundle name (code|conceptnet|child|
+                               namenet|general) or a jsonl file path — opt-in, offline, $0
        [--ontology <name|path>]  activate+seed an ontology bundle (a recognized name or a path)
        [--lexicon <name|path>]  activate a lexicon bundle (recognized name or a path;
                                merged read-time, never seeded — see mergedLexiconExtra)
        [--graph <path>]        set graph_file/graph_files in tmct.toml (repeatable)
        [--config <path>]       write to an alternate tmct.toml location
-       [--detect]              suggest a tier-2 corpus from the repo's manifests
-                               (pyproject.toml → python, pom.xml → java); never seeds unasked
        [--with-persona <name>]  write an explicit [extensions]/[bias] preset into tmct.toml
                                ("code" — today's implicit default, made explicit)
        [--persona-size <medium|large>]  grow the default "human" persona's fact count
@@ -1259,28 +1257,27 @@ once with `tmct init --memory-backend <...>` and every later `tmct chat` in that
 repo picks it up with no flag needed.
 ```
 
-`npm run init` in `package.json` chains one `init` and five `import --corpus`
-calls to combine every shipped bundle (human persona + seon + conceptnet +
-aws/python/java) into ~37,800 facts on the default sqlite backend, a working
+`npm run init` in `package.json` chains one `init` and two `import --corpus`
+calls to combine the human persona, the code domain pack and conceptnet
+into ~37,700 facts on the default sqlite backend, a working
 example to copy from (`init:large` is now just an alias for it). `npm run
 init:small` is the lighter variant: a bare `tmct init`, default persona only,
 no big corpora, 688 facts. It's what a first `npm run chat` in an
 uninitialized repo bootstraps automatically, so no init command is required
 just to start talking; running `init:small` explicitly (after `rm -rf
 tmct.toml .tmct`) gets you back to that same minimal state on purpose.
-`init:xl` starts from the large persona tier and adds the wordnet-xl corpus
-(~72,000 facts); `init:xxl` swaps wordnet-xl for the full WordNet slice plus
-namenet (~239,000 facts, the biggest committed vocabulary, so expect its
-imports to take a minute). The xl chain, spelled out:
+`init:xl` starts from the large persona tier and adds wordnet-xl, namenet and
+the child vocabulary pack (~127,000 facts); `init:xxl` swaps wordnet-xl for the
+full WordNet slice (~296,000 facts, the biggest committed vocabulary, so expect
+its imports to take a few minutes). The xl chain, spelled out:
 
 ```bash e2e heavy
 npx tmct init --persona-size large   # npm run init:xl runs this whole chain from a clone
-npx tmct import --corpus seon
+npx tmct import --corpus code
 npx tmct import --corpus conceptnet
-npx tmct import --corpus aws
-npx tmct import --corpus python
-npx tmct import --corpus java
-npx tmct import --corpus wordnet-xl  # init:xxl instead ends with wordnet-full and namenet
+npx tmct import --corpus wordnet-xl  # init:xxl uses wordnet-full here instead
+npx tmct import --corpus namenet
+npx tmct import --corpus child
 ```
 
 ### tmct.toml reference
@@ -1321,8 +1318,8 @@ capture_unknown_context = true   # keep the sentence around an unrecognized term
 unknown_context_limit = 200      # cap how many of those contexts are kept
 
 # One [extensions.<name>] table per bundle. A recognized name (human, seon,
-# conceptnet, human-medium, human-large, tier2-aws, tier2-python, tier2-java,
-# tier2-general, wordnet-xl, wordnet-full, namenet) overrides that bundle's
+# code, conceptnet, human-medium, human-large, tier2-general, wordnet-xl,
+# wordnet-full, namenet, child) overrides that bundle's
 # shipped defaults. Any other name declares a new bundle and must set `kind`.
 [extensions.human]
 active = true
@@ -1333,7 +1330,7 @@ active = true
 [extensions.conceptnet]
 active = true
 
-[extensions.tier2-aws]
+[extensions.tier2-general]
 active = true
 
 [extensions.my-custom-pack]

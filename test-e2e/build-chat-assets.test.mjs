@@ -19,9 +19,8 @@ const DEPLOYED_ORIGIN = process.env.TMCT_E2E_BASE_URL?.replace(/\/+$/, "");
 
 const INIT_XL_BANDS = [
   "human", "human-medium", "human-large",
-  "seon", "conceptnet",
-  "tier2-aws", "tier2-python", "tier2-java",
-  "wordnet-xl",
+  "code", "conceptnet",
+  "wordnet-xl", "namenet", "child",
 ];
 
 test("build-chat-seed: the payload answers 'what is a dog' with provenance, carries the init:xl band set, and holds its byte ceiling", async () => {

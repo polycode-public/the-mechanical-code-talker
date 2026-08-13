@@ -119,22 +119,22 @@ test("`tmct init`'s zero-flag (default) seed: the human persona only; seon/conce
   }
 });
 
-test("a tmct.toml activating tier2-aws: `tmct init`'s unified seed loop also seeds the tier-2 bundle", async () => {
+test("a tmct.toml activating tier2-general: `tmct init`'s unified seed loop also seeds the tier-2 bundle", async () => {
   const dir = await tmp();
   try {
-    // pre-write a tmct.toml with tier2-aws active (Part 1's [extensions] table) —
+    // pre-write a tmct.toml with tier2-general active (Part 1's [extensions] table) —
     // initRepo must PRESERVE it (not force) and honour it during the seed step.
-    const toml = renderTomlConfig({ ...defaultConfig(), extensions: { "tier2-aws": { active: true } } });
+    const toml = renderTomlConfig({ ...defaultConfig(), extensions: { "tier2-general": { active: true } } });
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, "tmct.toml"), toml);
     const res = await initRepo(dir, { seed: true });
     assert.equal(res.seeded, true);
-    assert.ok(res.seedResult.perBundle["tier2-aws"], "the tier-2 bundle ran in the same loop");
-    assert.ok(res.seedResult.perBundle["tier2-aws"].appended > 0, "tier2-aws facts landed");
+    assert.ok(res.seedResult.perBundle["tier2-general"], "the tier-2 bundle ran in the same loop");
+    assert.ok(res.seedResult.perBundle["tier2-general"].appended > 0, "tier2-general facts landed");
     const mem = await readRoutedMemory(dir);
     const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
-    const awsFact = facts.find((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
-    assert.ok(awsFact, "a fact provenance-tagged corpus:tier2-aws is in memory");
+    const generalFact = facts.find((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-general")));
+    assert.ok(generalFact, "a fact provenance-tagged corpus:tier2-general is in memory");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -617,30 +617,30 @@ test("bin/tmct.mjs: `tmct init --memory-backend sqlite` then a flagless `tmct ch
   }
 });
 
-test("bin/tmct.mjs REGRESSION: `tmct init --corpus aws --memory-backend sqlite` (combined in one call) seeds BOTH the default corpus AND aws into sqlite — write-ordering fix", async () => {
+test("bin/tmct.mjs REGRESSION: `tmct init --corpus general --memory-backend sqlite` (combined in one call) seeds BOTH the default corpus AND general into sqlite — write-ordering fix", async () => {
   const { spawnSync } = await import("node:child_process");
 
   const dir = await tmp();
   try {
     // Kept a real seed on purpose (not TMCT_NO_SEED) — this test's own
-    // assertions are ABOUT seed content (fact counts, aws provenance tags
+    // assertions are ABOUT seed content (fact counts, general-corpus provenance tags
     // landing in sqlite). Not shrunk further: since the persona flip, the
     // default bundle here is `human` (corpus/tier2/human.jsonl, ~660 facts)
-    // plus aws (corpus/tier2/aws.jsonl, ~39 facts) — already small, unlike
+    // plus general (corpus/tier2/general.jsonl, ~49 facts) — already small, unlike
     // the seon+conceptnet band the --with-persona code test above avoids.
-    const r = spawnSync(process.execPath, [BIN, "init", "--corpus", "aws", "--memory-backend", "sqlite"], { encoding: "utf8", cwd: dir });
+    const r = spawnSync(process.execPath, [BIN, "init", "--corpus", "general", "--memory-backend", "sqlite"], { encoding: "utf8", cwd: dir });
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /Seeded \d+ corpus facts/);
-    assert.match(r.stdout, /seeded tier-2 corpus "aws"/);
+    assert.match(r.stdout, /seeded tier-2 corpus "general"/);
 
     const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
     const { dir: handle, close } = await openMemoryBackend(dir, "sqlite");
     const mem = await loadMemory(handle);
     await close();
     const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
-    const awsFacts = facts.filter((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
-    assert.ok(awsFacts.length > 0, "the --corpus flag's seed landed in sqlite too, even combined with --memory-backend in the same call");
-    assert.ok(facts.length > awsFacts.length, "the default corpus seed ALSO landed in sqlite, not just aws");
+    const generalFacts = facts.filter((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-general")));
+    assert.ok(generalFacts.length > 0, "the --corpus flag's seed landed in sqlite too, even combined with --memory-backend in the same call");
+    assert.ok(facts.length > generalFacts.length, "the default corpus seed ALSO landed in sqlite, not just general");
     assert.equal(await exists(join(dir, ".tmct", "memory", "graph.json")), false, "the flat-file backend was never even created");
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -654,23 +654,23 @@ test("bin/tmct.mjs REGRESSION: a later `tmct import --corpus <id>` (no --memory-
   try {
     // The init call's own seed content is never checked below (only status),
     // so it skips the default corpus seed via TMCT_NO_SEED. The `import
-    // --corpus aws` call keeps a real seed — its aws-provenance assertion
+    // --corpus general` call keeps a real seed — its general-corpus provenance assertion
     // below is exactly what this regression is about.
     const init = spawnSync(process.execPath, [BIN, "init", "--memory-backend", "sqlite"], {
       encoding: "utf8", cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" },
     });
     assert.equal(init.status, 0, init.stderr);
-    const imp = spawnSync(process.execPath, [BIN, "import", "--corpus", "aws"], { encoding: "utf8", cwd: dir });
+    const imp = spawnSync(process.execPath, [BIN, "import", "--corpus", "general"], { encoding: "utf8", cwd: dir });
     assert.equal(imp.status, 0, imp.stderr);
-    assert.match(imp.stdout, /seeded tier-2 corpus "aws"/);
+    assert.match(imp.stdout, /seeded tier-2 corpus "general"/);
 
     const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
     const { dir: handle, close } = await openMemoryBackend(dir, "sqlite");
     const mem = await loadMemory(handle);
     await close();
     const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
-    const awsFacts = facts.filter((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
-    assert.ok(awsFacts.length > 0, "aws facts landed in the ALREADY-configured sqlite backend, not a stale flat-file default");
+    const generalFacts = facts.filter((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-general")));
+    assert.ok(generalFacts.length > 0, "general-corpus facts landed in the ALREADY-configured sqlite backend, not a stale flat-file default");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -685,32 +685,29 @@ test("bin/tmct.mjs REGRESSION: a later `tmct import --corpus <id>` (no --memory-
 // everything in-process (no disk churn between bundles); seeded CONTENT is
 // backend-independent, so the resulting fact count matches a real disk-backed
 // `npm run init:xl`/`init:xxl` run exactly. Real total, measured via this
-// same in-process seed: init:xl = 63,971 facts (`human` + persona-size
-// large's human-medium/human-large + seon + conceptnet + aws/python/java +
-// wordnet-xl); init:xxl = same base with wordnet-full swapping in for
-// wordnet-xl, plus namenet. ±10% tolerance below — corpora drift slightly as
-// they evolve; an exact pin would bit-rot on the next refresh.
+// same in-process seed: init:xl = 127,404 facts (`human` + persona-size
+// large's human-medium/human-large + the code pack + conceptnet + wordnet-xl
+// + namenet + the child pack); init:xxl = same base with wordnet-full swapping
+// in for wordnet-xl. ±10% tolerance below — corpora drift slightly as they
+// evolve; an exact pin would bit-rot on the next refresh.
 const INIT_XL_BUNDLES = {
   "human-medium": { active: true },
   "human-large": { active: true },
-  seon: { active: true },
+  code: { active: true },
   conceptnet: { active: true },
-  "tier2-aws": { active: true },
-  "tier2-python": { active: true },
-  "tier2-java": { active: true },
   "wordnet-xl": { active: true },
+  namenet: { active: true },
+  child: { active: true },
 };
 
 const INIT_XXL_BUNDLES = {
   "human-medium": { active: true },
   "human-large": { active: true },
-  seon: { active: true },
+  code: { active: true },
   conceptnet: { active: true },
-  "tier2-aws": { active: true },
-  "tier2-python": { active: true },
-  "tier2-java": { active: true },
   "wordnet-full": { active: true },
   namenet: { active: true },
+  child: { active: true },
 };
 
 /** Seed one bundle-set into a fresh scratch dir via the real
@@ -732,9 +729,9 @@ async function seedBundleSet(extensions) {
   }
 }
 
-test("npm run init:xl's exact bundle set seeds within ±10% of the real measured total (63,971 facts)", async () => {
+test("npm run init:xl's exact bundle set seeds within ±10% of the real measured total (127,404 facts)", async () => {
   const count = await seedBundleSet(INIT_XL_BUNDLES);
-  const EXPECTED = 63971;
+  const EXPECTED = 127404;
   assert.ok(
     count >= EXPECTED * 0.9 && count <= EXPECTED * 1.1,
     `init:xl's bundle set seeded ${count} facts, expected ~${EXPECTED} (±10%)`,
@@ -752,8 +749,8 @@ test("npm run init:xl's exact bundle set seeds within ±10% of the real measured
 // `init:xxl` activates is a recognized, activatable BUILTIN_EXTENSIONS entry
 // (the actual wiring check — instant), and (2) seeds a `limit`-capped slice of
 // wordnet-full plus the full (small, ~7,260-fact) namenet bundle, so the real
-// corpus/map conversion pipeline is exercised end to end for both of
-// `init:xxl`'s NEW bundles over `init:xl`, without paying the full-scale cost.
+// corpus/map conversion pipeline is exercised end to end for the one bundle
+// `init:xxl` swaps in over `init:xl`, without paying the full-scale cost.
 test("npm run init:xxl's bundle set: every named bundle is a recognized, activatable BUILTIN_EXTENSIONS entry", async () => {
   const dir = await tmp();
   try {
@@ -770,7 +767,7 @@ test("npm run init:xxl's bundle set: every named bundle is a recognized, activat
   }
 });
 
-test("npm run init:xxl's NEW bundles over init:xl (wordnet-full, namenet) really seed real facts via the same seedActiveCorpusEntries mechanism, at a bounded scale", async () => {
+test("wordnet-full, the bundle init:xxl swaps in over init:xl, really seeds real facts via the same seedActiveCorpusEntries mechanism, at a bounded scale", async () => {
   const dir = await tmp();
   try {
     const toml = renderTomlConfig({

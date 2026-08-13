@@ -2,8 +2,8 @@
 // corpus/tier2/generate.mjs — the TIER-2 specialised-corpus generator + manifest
 // writer. NOT part of the product path — a maintainer tool. Offline, $0.
 //
-// Tier-2 corpuses are LANGUAGE- or DOMAIN-specific fact sets (aws, python,
-// java, …) that tmct fetches/generates into `.tmct/` at init time so it can
+// Tier-2 corpuses are DOMAIN-specific fact sets (general, human, …) that tmct
+// fetches/generates into `.tmct/` at init time so it can
 // "expand into a concept for an applicable codebase". They are NOT shipped in
 // the npm package the way the tier-1 ConceptNet slice is — they are opt-in,
 // selected per repo. See ../README.md for the full tier-1/2/3 policy.
@@ -39,143 +39,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // turns "/c/en/hash_table" into "hash table". Keep terms <= 3 words (the tier-1
 // quality-filter rule) — curated data is clean by construction.
 export const CORPUSES = {
-  aws: {
-    kind: "domain",
-    description: "Amazon Web Services core services and primitives (S3, Lambda, DynamoDB, EC2, IAM, SQS) mapped to general cloud/CS concepts.",
-    facts: [
-      ["aws", "/r/IsA", "cloud_platform"],
-      ["aws", "/r/IsA", "cloud"],
-      ["aws", "/r/CapableOf", "host_applications"],
-      // S3
-      ["s3", "/r/IsA", "object_storage"],
-      ["s3", "/r/IsA", "storage_service"],
-      ["s3", "/r/PartOf", "aws"],
-      ["s3", "/r/HasA", "bucket"],
-      ["s3", "/r/UsedFor", "storing_files"],
-      ["s3", "/r/CapableOf", "store_objects"],
-      ["bucket", "/r/IsA", "container"],
-      ["bucket", "/r/PartOf", "s3"],
-      ["bucket", "/r/UsedFor", "storing_objects"],
-      // Lambda
-      ["lambda", "/r/IsA", "compute_service"],
-      ["lambda", "/r/IsA", "function"],
-      ["lambda", "/r/PartOf", "aws"],
-      ["lambda", "/r/UsedFor", "running_code"],
-      ["lambda", "/r/CapableOf", "run_code"],
-      ["lambda", "/r/HasProperty", "serverless"],
-      // DynamoDB
-      ["dynamodb", "/r/IsA", "database"],
-      ["dynamodb", "/r/IsA", "nosql_database"],
-      ["dynamodb", "/r/PartOf", "aws"],
-      ["dynamodb", "/r/HasA", "table"],
-      ["dynamodb", "/r/UsedFor", "storing_data"],
-      ["dynamodb", "/r/HasProperty", "managed"],
-      // EC2
-      ["ec2", "/r/IsA", "compute_service"],
-      ["ec2", "/r/IsA", "virtual_machine"],
-      ["ec2", "/r/PartOf", "aws"],
-      ["ec2", "/r/HasA", "instance"],
-      ["ec2", "/r/UsedFor", "running_servers"],
-      // IAM
-      ["iam", "/r/IsA", "access_control"],
-      ["iam", "/r/PartOf", "aws"],
-      ["iam", "/r/UsedFor", "managing_permissions"],
-      ["iam", "/r/HasA", "role"],
-      ["iam", "/r/HasA", "policy"],
-      // SQS + queue
-      ["sqs", "/r/IsA", "message_queue"],
-      ["sqs", "/r/IsA", "queue"],
-      ["sqs", "/r/PartOf", "aws"],
-      ["sqs", "/r/UsedFor", "decoupling_services"],
-      ["queue", "/r/IsA", "data_structure"],
-    ],
-  },
-
-  python: {
-    kind: "language",
-    description: "Python language constructs and stdlib types mapped to the shared CS concept vocabulary (list->array, dict->hash table, …).",
-    facts: [
-      ["python", "/r/IsA", "programming_language"],
-      ["python", "/r/HasProperty", "interpreted"],
-      ["python", "/r/HasProperty", "dynamically_typed"],
-      ["python", "/r/UsedFor", "scripting"],
-      // built-in types → shared concepts
-      ["list", "/r/IsA", "array"],
-      ["list", "/r/IsA", "sequence"],
-      ["list", "/r/IsA", "data_structure"],
-      ["dict", "/r/IsA", "hash_table"],
-      ["dict", "/r/IsA", "dictionary"],
-      ["dict", "/r/IsA", "mapping"],
-      ["tuple", "/r/IsA", "sequence"],
-      ["tuple", "/r/HasProperty", "immutable"],
-      ["set", "/r/IsA", "collection"],
-      ["set", "/r/HasProperty", "unordered"],
-      ["str", "/r/IsA", "string"],
-      // language constructs
-      ["decorator", "/r/IsA", "function"],
-      ["decorator", "/r/UsedFor", "modifying_functions"],
-      ["generator", "/r/IsA", "iterator"],
-      ["generator", "/r/UsedFor", "lazy_evaluation"],
-      ["comprehension", "/r/IsA", "expression"],
-      ["comprehension", "/r/UsedFor", "building_collections"],
-      ["exception", "/r/IsA", "error"],
-      ["module", "/r/IsA", "file"],
-      ["package", "/r/IsA", "module"],
-      ["method", "/r/IsA", "function"],
-      // tooling / runtime
-      ["pip", "/r/IsA", "package_manager"],
-      ["pip", "/r/UsedFor", "installing_packages"],
-      ["gil", "/r/IsA", "lock"],
-      ["gil", "/r/PartOf", "interpreter"],
-      ["cpython", "/r/IsA", "interpreter"],
-    ],
-  },
-
-  java: {
-    kind: "language",
-    description: "Java language and JVM constructs mapped to the shared CS concept vocabulary (ArrayList->list, HashMap->hash table, …).",
-    facts: [
-      ["java", "/r/IsA", "programming_language"],
-      ["java", "/r/HasProperty", "compiled"],
-      ["java", "/r/HasProperty", "statically_typed"],
-      ["java", "/r/UsedFor", "building_applications"],
-      // types → shared concepts
-      ["arraylist", "/r/IsA", "list"],
-      ["arraylist", "/r/IsA", "data_structure"],
-      ["hashmap", "/r/IsA", "hash_table"],
-      ["hashmap", "/r/IsA", "dictionary"],
-      ["hashmap", "/r/IsA", "map"],
-      ["interface", "/r/IsA", "type"],
-      ["interface", "/r/IsA", "contract"],
-      ["class", "/r/IsA", "type"],
-      ["object", "/r/IsA", "instance"],
-      // JVM / runtime
-      ["jvm", "/r/IsA", "virtual_machine"],
-      ["jvm", "/r/UsedFor", "running_bytecode"],
-      ["jvm", "/r/CapableOf", "execute_bytecode"],
-      ["bytecode", "/r/IsA", "code"],
-      ["garbage_collector", "/r/PartOf", "jvm"],
-      ["garbage_collector", "/r/UsedFor", "freeing_memory"],
-      // packaging / tooling
-      ["jar", "/r/IsA", "archive"],
-      ["jar", "/r/IsA", "file"],
-      ["jar", "/r/UsedFor", "packaging_classes"],
-      ["maven", "/r/IsA", "build_tool"],
-      ["maven", "/r/IsA", "package_manager"],
-      ["gradle", "/r/IsA", "build_tool"],
-      // language features
-      ["thread", "/r/IsA", "process"],
-      ["thread", "/r/UsedFor", "concurrency"],
-      ["generics", "/r/UsedFor", "type_safety"],
-      ["annotation", "/r/IsA", "metadata"],
-      ["exception", "/r/IsA", "error"],
-      ["method", "/r/IsA", "function"],
-    ],
-  },
-
-  // The wider general-knowledge seed set: the
-  // three corpuses above are all code-domain-specific (a LANGUAGE or a cloud
-  // DOMAIN); this one deliberately is NOT — everyday-knowledge concepts (the
+  // The wider general-knowledge seed set: everyday-knowledge concepts (the
   // natural world, weather, food, common objects) with zero code-domain
   // framing, proving the extension-pack seam generalizes to a seed set that
   // isn't code at all (the operator's own framing: tmct's code specialization
@@ -14911,9 +14775,9 @@ export async function fetchCorpus(url, expectedSha) {
  * object (e.g. "treating_illness", "growing_into_a_plant") to also become a
  * parseable ACE noun, contradicting the "breadth over depth, no
  * over-modeling" discipline this whole batch was built under, and breaking
- * with EVERY other tier2 corpus's own long-standing precedent (aws.jsonl's
- * "object_storage"/"cloud_platform" concept objects were never lexicon
- * nouns either, and no such stricter check exists for them). The `lexicon`
+ * with EVERY other tier2 corpus's own long-standing precedent (general.jsonl's
+ * concept objects were never lexicon nouns either, and no such stricter check
+ * exists for them). The `lexicon`
  * sub-key's OWN declared words (the genuinely teachable/askable common
  * words this corpus's curation deliberately picked out) are what this
  * check verifies both ends of. */

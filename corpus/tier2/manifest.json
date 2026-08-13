@@ -3,48 +3,6 @@
   "generated": "by corpus/tier2/generate.mjs",
   "corpuses": [
     {
-      "id": "aws",
-      "kind": "domain",
-      "description": "Amazon Web Services core services and primitives (S3, Lambda, DynamoDB, EC2, IAM, SQS) mapped to general cloud/CS concepts.",
-      "source": {
-        "kind": "curated",
-        "tool": "corpus/tier2/generate.mjs"
-      },
-      "file": "aws.jsonl",
-      "facts": 39,
-      "bytes": 4802,
-      "sha256": "7ab3e656bc4bc717be3c50d97af030e8592d6597cde182b15390a1dfaca9755a",
-      "license": "MPL-2.0"
-    },
-    {
-      "id": "python",
-      "kind": "language",
-      "description": "Python language constructs and stdlib types mapped to the shared CS concept vocabulary (list->array, dict->hash table, …).",
-      "source": {
-        "kind": "curated",
-        "tool": "corpus/tier2/generate.mjs"
-      },
-      "file": "python.jsonl",
-      "facts": 30,
-      "bytes": 3794,
-      "sha256": "009245d024357bc4285e967fba486e32349ccec8fbe2796ba13011cb2be4c19c",
-      "license": "MPL-2.0"
-    },
-    {
-      "id": "java",
-      "kind": "language",
-      "description": "Java language and JVM constructs mapped to the shared CS concept vocabulary (ArrayList->list, HashMap->hash table, …).",
-      "source": {
-        "kind": "curated",
-        "tool": "corpus/tier2/generate.mjs"
-      },
-      "file": "java.jsonl",
-      "facts": 31,
-      "bytes": 3920,
-      "sha256": "d089426833c393f6f1574fe75c4ac94a1483ee80f72f79bd7fd32aaaa24a6e44",
-      "license": "MPL-2.0"
-    },
-    {
       "id": "general",
       "kind": "domain",
       "description": "General-purpose everyday-knowledge concepts (animals, weather, the natural world, common objects) — a non-code-domain seed set, deliberately outside tmct's own code-domain bias.",

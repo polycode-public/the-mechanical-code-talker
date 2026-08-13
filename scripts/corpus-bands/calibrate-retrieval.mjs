@@ -30,16 +30,13 @@ import { retrieveSubgraph, termQueryOverDocumentClient, RETRIEVAL_BUDGETS } from
 export const WORDNET_BAND = "wordnet-complete";
 export const CONCEPTNET_BAND = "conceptnet-slice";
 
-/** The corpora the turn tier bundles: the three human persona tiers, the code
- *  concept pack and the three small language/domain packs. A calibration case
- *  that claims to test a moved band has to name a term none of these hold. */
+/** The corpora the turn tier bundles: the three human persona tiers and the
+ *  code concept pack. A calibration case that claims to test a moved band has
+ *  to name a term none of these hold. */
 const MID_BUNDLE_FILES = [
   join(TIER2_DIR, "human.jsonl"),
   join(TIER2_DIR, "human-medium.jsonl"),
   join(TIER2_DIR, "human-large.jsonl"),
-  join(TIER2_DIR, "aws.jsonl"),
-  join(TIER2_DIR, "python.jsonl"),
-  join(TIER2_DIR, "java.jsonl"),
   SEON_CONCEPTS_FILE,
 ];
 

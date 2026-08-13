@@ -31,27 +31,6 @@
       "notice": "corpus/namenet/LICENSE-NOTICE"
     },
     {
-      "path": "corpus/tier2/aws.jsonl",
-      "upstream": "first-party (curated in corpus/tier2/generate.mjs)",
-      "license": "MPL-2.0",
-      "shareAlike": false,
-      "notice": "corpus/tier2/manifest.json"
-    },
-    {
-      "path": "corpus/tier2/python.jsonl",
-      "upstream": "first-party (curated in corpus/tier2/generate.mjs)",
-      "license": "MPL-2.0",
-      "shareAlike": false,
-      "notice": "corpus/tier2/manifest.json"
-    },
-    {
-      "path": "corpus/tier2/java.jsonl",
-      "upstream": "first-party (curated in corpus/tier2/generate.mjs)",
-      "license": "MPL-2.0",
-      "shareAlike": false,
-      "notice": "corpus/tier2/manifest.json"
-    },
-    {
       "path": "corpus/tier2/general.jsonl",
       "upstream": "first-party (curated in corpus/tier2/generate.mjs)",
       "license": "MPL-2.0",

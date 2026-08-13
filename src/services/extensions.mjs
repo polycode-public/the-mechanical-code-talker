@@ -4,10 +4,10 @@
 //
 //   resolveExtensions(repoRoot) → { entries: Map<name, ResolvedEntry>, biasByBundle }
 //
-// `human` is the default active bundle (everyday-world vocabulary); `seon`/`conceptnet`
-// (code/tech-domain) and four tier-2 bundles ship inactive, activated via `tmct init
-// --with-persona`/`--corpus <id>` or a `[extensions.<name>] active = true` override.
-// `human-medium`/`human-large` are additive SIZE TIERS of `human`, not separate personas.
+// `human` is the default active bundle (everyday-world vocabulary); every other
+// bundle ships inactive, activated via `tmct init --with-persona`/`--corpus <id>`
+// or a `[extensions.<name>] active = true` override. `human-medium`/`human-large`
+// are additive SIZE TIERS of `human`, not separate personas.
 //
 // A `tmct.toml` `[extensions]` table-of-tables may override a recognized builtin, or
 // declare a new host entry with its own `kind` (corpus | lexicon | templates | pack |
@@ -20,7 +20,7 @@
 import { isAbsolute, join, resolve, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { CODE_VOCAB_DATA, EMPTY_VOCAB_DATA as TIER2_EMPTY_VOCAB_DATA } from "./lane-vocab-data.mjs";
+import { CODE_VOCAB_DATA } from "./lane-vocab-data.mjs";
 import { loadTomlConfig } from "../adapters/toml-config.mjs";
 import {
   SEON_CONCEPTS_FILE,
@@ -36,16 +36,14 @@ import {
 // corpus/namenet/generate.mjs's output — a single small top-up bundle.
 const NAMENET_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "corpus", "namenet");
 
+// The CHILD triples pack: gzipped shards plus a term index, not a slice file,
+// so its entry declares shard_pack_path and seeds through child-seed.mjs.
+const CHILD_PACK_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "corpus", "child");
+
 // The code domain pack's lane vocabulary — count nouns/class labels, help rows
 // and the miss-recovery pointer today's code-graph surfaces render, moved out
 // of chat.mjs so a bare install carries none of it (see mergedLaneVocab).
 const CODE_VOCAB_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "corpus", "domains", "code", "vocab.json");
-
-// Empty vocabulary file for tier2 packs: they are authored corpora with no
-// extraction adapter, so they need no lane-specific vocabulary, help rows, or
-// miss-recovery pointers. A pack entry can have an empty vocab (counts as having
-// one declared, but contributes nothing to the merged lane vocabulary).
-const TIER2_EMPTY_VOCAB_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "corpus", "tier2", "vocab-empty.json");
 
 export const EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
 
@@ -119,38 +117,6 @@ function builtinExtensions() {
       corpusPath: join(TIER2_DIR, "human-large.jsonl"),
       provenancePrefix: "corpus:human-large",
     },
-    // Tier2 packs: authored language-domain bundles (AWS, Python, Java) without
-    // extraction adapters (no tmct index for these domains yet). Each bundles
-    // its corpus unchanged and an empty lane vocabulary, so a bare install stays
-    // domain-neutral (no AWS/Python/Java vocabulary reaches banners or help text
-    // without explicit activation).
-    "tier2-aws": {
-      kind: "pack",
-      active: false,
-      corpusPath: join(TIER2_DIR, "aws.jsonl"),
-      provenancePrefix: "corpus:tier2-aws",
-      vocabPath: TIER2_EMPTY_VOCAB_FILE,
-      vocabData: TIER2_EMPTY_VOCAB_DATA,
-      groundingKind: "taught-only",
-    },
-    "tier2-python": {
-      kind: "pack",
-      active: false,
-      corpusPath: join(TIER2_DIR, "python.jsonl"),
-      provenancePrefix: "corpus:tier2-python",
-      vocabPath: TIER2_EMPTY_VOCAB_FILE,
-      vocabData: TIER2_EMPTY_VOCAB_DATA,
-      groundingKind: "taught-only",
-    },
-    "tier2-java": {
-      kind: "pack",
-      active: false,
-      corpusPath: join(TIER2_DIR, "java.jsonl"),
-      provenancePrefix: "corpus:tier2-java",
-      vocabPath: TIER2_EMPTY_VOCAB_FILE,
-      vocabData: TIER2_EMPTY_VOCAB_DATA,
-      groundingKind: "taught-only",
-    },
     "tier2-general": {
       kind: "corpus",
       active: false,
@@ -179,6 +145,16 @@ function builtinExtensions() {
       corpusPath: join(NAMENET_DIR, "namenet.jsonl"),
       provenancePrefix: "corpus:namenet",
     },
+    // scripts/fetch-child-corpus.mjs's output: the ConceptNet edges around the
+    // vocabulary a child has by about age eight. The clean-miss cascade already
+    // reads it one term at a time; activating it here seeds the whole pack, so
+    // the reasoning layers see the edges instead of only a miss lookup.
+    child: {
+      kind: "corpus",
+      active: false,
+      shardPackPath: CHILD_PACK_DIR,
+      provenancePrefix: "corpus:child",
+    },
   };
 }
 
@@ -196,8 +172,8 @@ export function validateExtensionEntry(name, entry) {
   if (entry.active !== undefined && typeof entry.active !== "boolean") {
     throw new Error(`extension "${name}": "active" must be a boolean`);
   }
-  if (entry.kind === "corpus" && !entry.corpusPath) {
-    throw new Error(`extension "${name}": a "corpus" entry needs corpus_path`);
+  if (entry.kind === "corpus" && !entry.corpusPath && !entry.shardPackPath) {
+    throw new Error(`extension "${name}": a "corpus" entry needs corpus_path or shard_pack_path`);
   }
   if (entry.kind === "ontology" && !entry.corpusPath) {
     throw new Error(`extension "${name}": an "ontology" entry needs ontology_path`);
@@ -208,8 +184,8 @@ export function validateExtensionEntry(name, entry) {
   if (entry.kind === "templates" && !entry.templatesPath) {
     throw new Error(`extension "${name}": a "templates" entry needs templates_path`);
   }
-  if (entry.kind === "pack" && !entry.corpusPath && !entry.lexiconPath && !entry.templatesPath && !entry.phrasebookPath) {
-    throw new Error(`extension "${name}": a "pack" entry needs at least one of corpus_path/lexicon_path/templates_path/phrasebook_path`);
+  if (entry.kind === "pack" && !entry.corpusPath && !entry.shardPackPath && !entry.lexiconPath && !entry.templatesPath && !entry.phrasebookPath) {
+    throw new Error(`extension "${name}": a "pack" entry needs at least one of corpus_path/shard_pack_path/lexicon_path/templates_path/phrasebook_path`);
   }
   if (entry.limit !== undefined && !Number.isFinite(entry.limit)) {
     throw new Error(`extension "${name}": "limit" must be a finite number`);
@@ -239,6 +215,7 @@ function mergeExtensionEntry(name, builtin, override, repoRoot) {
   const paths = [
     ["corpus_path", "corpusPath"],
     ["ontology_path", "corpusPath"], // alias: an "ontology" entry's own path key, same internal field as "corpus"
+    ["shard_pack_path", "shardPackPath"],
     ["lexicon_path", "lexiconPath"],
     ["templates_path", "templatesPath"],
     ["phrasebook_path", "phrasebookPath"],
@@ -307,6 +284,16 @@ export async function resolveExtensions(repoRoot, { configFile } = {}) {
 
 // ---- Part 2: the unified corpus loader loop ---------------------------------
 
+/** Whether this entry has corpus facts to write: a `corpus`/`ontology` entry, or
+ *  a `pack` entry that declares a corpus file. The one rule both the seeding
+ *  loop and `tmct init`/`tmct import`'s status line read, so a bundle can never
+ *  seed under one and read as "nothing to seed" under the other. */
+export function isSeedableEntry(entry) {
+  if (!entry) return false;
+  if (entry.kind === "corpus" || entry.kind === "ontology") return true;
+  return entry.kind === "pack" && Boolean(entry.corpusPath || entry.shardPackPath);
+}
+
 /** Seed every ACTIVE `corpus`/`ontology`-kind entry, plus any ACTIVE `pack`-kind entry
  *  that declares a `corpusPath`, into `repo`'s memory, one seedMemory() call per bundle.
  *  Shared by chat.mjs's first-run bootstrap, `tmct init`'s seed step, and
@@ -328,18 +315,24 @@ export async function seedActiveCorpusEntries(repo, entries, opts = {}) {
   let total = 0;
   for (const [name, entry] of entries instanceof Map ? entries : new Map()) {
     if (!entry.active) continue;
-    const seedable = entry.kind === "corpus" || entry.kind === "ontology" || (entry.kind === "pack" && entry.corpusPath);
-    if (!seedable) continue;
+    if (!isSeedableEntry(entry)) continue;
     try {
-      const res = await seedMemory(repo, {
-        slicePath: entry.corpusPath,
-        mapPath: entry.mapPath,
-        provenancePrefix: entry.provenancePrefix,
-        limit: entry.limit,
-        prefer: entry.prefer,
-        captureUnknownContext,
-        unknownContextLimit,
-      });
+      const res = entry.shardPackPath
+        ? await (await import("../adapters/corpus/child-seed.mjs")).seedChildPack(repo, {
+          packDir: entry.shardPackPath,
+          provenancePrefix: entry.provenancePrefix,
+          limit: entry.limit,
+          prefer: entry.prefer,
+        })
+        : await seedMemory(repo, {
+          slicePath: entry.corpusPath,
+          mapPath: entry.mapPath,
+          provenancePrefix: entry.provenancePrefix,
+          limit: entry.limit,
+          prefer: entry.prefer,
+          captureUnknownContext,
+          unknownContextLimit,
+        });
       perBundle[name] = { appended: res.appended, skipped: res.skipped, total: res.total };
       appended += res.appended;
       skipped += res.skipped;

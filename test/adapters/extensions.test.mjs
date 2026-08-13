@@ -25,7 +25,7 @@ test("bare/no-toml dir: resolves to exactly today's implicit `human` default (se
     const { entries, biasByBundle } = await resolveExtensions(dir);
     assert.deepEqual(biasByBundle, {});
     // fixed order: seon, conceptnet, then the rest sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "code", "human", "human-large", "human-medium", "namenet", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "child", "code", "human", "human-large", "human-medium", "namenet", "tier2-general", "wordnet-full", "wordnet-xl"]);
     const seon = entries.get("seon");
     assert.equal(seon.kind, "corpus");
     assert.equal(seon.active, false, "seon ships inactive now — opt-in via --with-persona code");
@@ -45,13 +45,6 @@ test("bare/no-toml dir: resolves to exactly today's implicit `human` default (se
     assert.equal(human.active, true, "human is the new default active bundle");
     assert.equal(human.corpusPath, join(TIER2_DIR, "human.jsonl"));
     assert.equal(human.provenancePrefix, "corpus:human");
-    // tier2-aws, tier2-python, tier2-java are now pack-kind entries (with empty
-    // vocab, taught-only grounding): bundles the corpus + lane vocab for domain.
-    for (const id of ["tier2-aws", "tier2-python", "tier2-java"]) {
-      assert.equal(entries.get(id).kind, "pack", `${id} is a pack-kind entry`);
-      assert.equal(entries.get(id).active, false, `${id} ships inactive`);
-      assert.equal(entries.get(id).groundingKind, "taught-only");
-    }
     // tier2-general remains a corpus-kind entry (no pack wrapper yet)
     assert.equal(entries.get("tier2-general").kind, "corpus");
     assert.equal(entries.get("tier2-general").active, false, "tier2-general ships inactive");
@@ -68,35 +61,31 @@ test("bare/no-toml dir: resolves to exactly today's implicit `human` default (se
 });
 
 test("BUILTIN_EXTENSIONS matches the resolved defaults' shape (kind/active for every shipped bundle)", () => {
-  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["code", "conceptnet", "human", "human-large", "human-medium", "namenet", "seon", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
+  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["child", "code", "conceptnet", "human", "human-large", "human-medium", "namenet", "seon", "tier2-general", "wordnet-full", "wordnet-xl"]);
   assert.equal(BUILTIN_EXTENSIONS.seon.active, false);
   assert.equal(BUILTIN_EXTENSIONS.code.active, false, "the code domain pack ships inactive — opt-in via --with-persona code or `tmct index`");
   assert.equal(BUILTIN_EXTENSIONS.code.kind, "pack");
   assert.equal(BUILTIN_EXTENSIONS.code.provenancePrefix, "corpus:seon", "the code pack keeps seon's own provenance prefix");
   assert.equal(BUILTIN_EXTENSIONS.conceptnet.active, false);
   assert.equal(BUILTIN_EXTENSIONS.human.active, true);
-  // tier2 language-domain packs: pack-kind entries with empty vocab, taught-only
-  // grounding (no extraction adapters yet for aws/python/java domains)
-  for (const id of ["tier2-aws", "tier2-python", "tier2-java"]) {
-    assert.equal(BUILTIN_EXTENSIONS[id].kind, "pack", `${id} is pack-kind`);
-    assert.equal(BUILTIN_EXTENSIONS[id].active, false, `${id} ships inactive`);
-    assert.equal(BUILTIN_EXTENSIONS[id].groundingKind, "taught-only", `${id} grounding is taught-only`);
-    assert.ok(BUILTIN_EXTENSIONS[id].vocabPath, `${id} has vocabPath`);
-  }
-  assert.equal(BUILTIN_EXTENSIONS["tier2-aws"].active, false);
+  assert.equal(BUILTIN_EXTENSIONS["tier2-general"].active, false);
   assert.equal(BUILTIN_EXTENSIONS["wordnet-xl"].active, false, "wordnet-xl ships inactive");
   assert.equal(BUILTIN_EXTENSIONS["wordnet-full"].active, false, "wordnet-full ships inactive");
   assert.equal(BUILTIN_EXTENSIONS.namenet.active, false, "namenet ships inactive");
+  assert.equal(BUILTIN_EXTENSIONS.child.active, false, "the child pack ships inactive");
+  assert.equal(BUILTIN_EXTENSIONS.child.kind, "corpus");
+  assert.ok(BUILTIN_EXTENSIONS.child.shardPackPath, "the child pack reads sharded files, not one slice");
+  assert.equal(BUILTIN_EXTENSIONS.child.provenancePrefix, "corpus:child");
 });
 
-test("a tmct.toml flipping tier2-aws active — recognized-name override, path/provenance untouched", async () => {
+test("a tmct.toml flipping tier2-general active — recognized-name override, path/provenance untouched", async () => {
   const dir = await tmp();
   try {
-    await writeFile(join(dir, "tmct.toml"), '[extensions.tier2-aws]\nactive = true\n');
+    await writeFile(join(dir, "tmct.toml"), '[extensions.tier2-general]\nactive = true\n');
     const { entries } = await resolveExtensions(dir);
-    assert.equal(entries.get("tier2-aws").active, true);
-    assert.equal(entries.get("tier2-aws").provenancePrefix, "corpus:tier2-aws");
-    assert.equal(entries.get("tier2-python").active, false, "sibling bundles untouched");
+    assert.equal(entries.get("tier2-general").active, true);
+    assert.equal(entries.get("tier2-general").provenancePrefix, "corpus:tier2-general");
+    assert.equal(entries.get("namenet").active, false, "sibling bundles untouched");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -116,7 +105,7 @@ test("a tmct.toml with an unrecognized-key host pack entry", async () => {
     assert.equal(e.corpusPath, join(dir, "corpus.jsonl"), "a relative path resolves against repoRoot");
     assert.equal(e.provenancePrefix, "corpus:seonix");
     // ordering: seon, conceptnet, then the rest (including the new one) sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "code", "human", "human-large", "human-medium", "namenet", "seonix", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "child", "code", "human", "human-large", "human-medium", "namenet", "seonix", "tier2-general", "wordnet-full", "wordnet-xl"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -230,10 +219,10 @@ test("[bias] non-numeric value throws, naming the bundle", async () => {
 test("[extensions] table-of-tables is DISTINCT from [bias] — bias never lives nested under extensions", async () => {
   const dir = await tmp();
   try {
-    await writeFile(join(dir, "tmct.toml"), "[extensions.tier2-aws]\nactive = true\n\n[bias]\ntier2-aws = 2.0\n");
+    await writeFile(join(dir, "tmct.toml"), "[extensions.tier2-general]\nactive = true\n\n[bias]\ntier2-general = 2.0\n");
     const { entries, biasByBundle } = await resolveExtensions(dir);
-    assert.equal(entries.get("tier2-aws").active, true);
-    assert.deepEqual(biasByBundle, { "tier2-aws": 2 });
+    assert.equal(entries.get("tier2-general").active, true);
+    assert.deepEqual(biasByBundle, { "tier2-general": 2 });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

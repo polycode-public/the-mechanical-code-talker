@@ -58,12 +58,11 @@ export const CLI_VERBS = [
     prose: ["initialize a repo for tmct (default: cwd): .tmct/,"],
     flags: [
       { flag: "[--force]", prose: ["tmct.toml, .tmct/TOOLS.md (the cold-tool catalog),", "tier-1 corpus seed, provenance record"] },
-      { flag: "[--corpus <id|path>]", prose: ["also seed a corpus — a tier-2 manifest id (aws|python|java|", "general) or a jsonl file path — opt-in, offline, $0"] },
+      { flag: "[--corpus <id|path>]", prose: ["also seed a corpus — a bundle name (code|conceptnet|child|", "namenet|general) or a jsonl file path — opt-in, offline, $0"] },
       { flag: "[--ontology <name|path>]", prose: ["activate+seed an ontology bundle (a recognized name or a path)"] },
       { flag: "[--lexicon <name|path>]", prose: ["activate a lexicon bundle (recognized name or a path;", "merged read-time, never seeded — see mergedLexiconExtra)"] },
       { flag: "[--graph <path>]", prose: ["set graph_file/graph_files in tmct.toml (repeatable)"] },
       { flag: "[--config <path>]", prose: ["write to an alternate tmct.toml location"] },
-      { flag: "[--detect]", prose: ["suggest a tier-2 corpus from the repo's manifests", "(pyproject.toml → python, pom.xml → java); never seeds unasked"] },
       { flag: "[--with-persona <name>]", prose: ["write an explicit [extensions]/[bias] preset into tmct.toml", "(\"code\" — today's implicit default, made explicit)"] },
       { flag: "[--persona-size <medium|large>]", prose: ["grow the default \"human\" persona's fact count", "beyond Small (the default): \"medium\" activates", "human-medium.jsonl (~1,608 facts total), \"large\" also", "activates human-large.jsonl (~13,600 facts total,", "with genuine multi-hop hypernym chains) — additive", "size tiers of the SAME bundle, not separate personas"] },
       { flag: "[--memory-backend <default|memory|sqlite>]", prose: ["write tmct.toml's [memory] backend", "(same flag name as `tmct chat`) — a later `tmct chat`", "in this repo picks it up with no flag needed"] },

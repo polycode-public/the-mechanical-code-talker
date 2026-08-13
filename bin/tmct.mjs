@@ -407,7 +407,7 @@ async function repoRelative(repoRoot, p) {
 /** Resolve a `--corpus`/`--ontology`/`--lexicon` value to something
  *  activatePluggableInput can act on: either a RECOGNIZED name (a
  *  BUILTIN_EXTENSIONS entry of the matching kind; for `--corpus` specifically,
- *  also a tier-2 manifest id like "aws" — today's `--corpus <id>` contract,
+ *  also a tier-2 manifest id like "general" — today's `--corpus <id>` contract,
  *  preserved byte-for-byte) or a filesystem PATH, to be declared as a brand
  *  new `[extensions.<slug>]` entry. Throws the same clear "unknown --corpus"
  *  error the original tier-2-only implementation gave (naming the available
@@ -415,8 +415,13 @@ async function repoRelative(repoRoot, p) {
  *  disk write — callers resolve every pluggable input BEFORE calling
  *  initRepo, so a bad name/path touches nothing. */
 async function resolvePluggableInput(kind, nameOrPath, { repoRoot }) {
-  const { BUILTIN_EXTENSIONS } = await import("../src/services/extensions.mjs");
-  if (Object.prototype.hasOwnProperty.call(BUILTIN_EXTENSIONS, nameOrPath) && BUILTIN_EXTENSIONS[nameOrPath].kind === kind) {
+  const { BUILTIN_EXTENSIONS, isSeedableEntry } = await import("../src/services/extensions.mjs");
+  const builtin = Object.prototype.hasOwnProperty.call(BUILTIN_EXTENSIONS, nameOrPath)
+    ? BUILTIN_EXTENSIONS[nameOrPath]
+    : null;
+  // A domain pack carries a corpus alongside its vocabulary, so `--corpus <pack>`
+  // is the same ask as `--corpus <corpus>` and answers to the same flag.
+  if (builtin && (builtin.kind === kind || (kind === "corpus" && builtin.kind === "pack" && isSeedableEntry(builtin)))) {
     return { known: true, name: nameOrPath };
   }
   let manifestIds = null;
@@ -469,11 +474,10 @@ async function activatePluggableInput(repoRoot, resolved) {
   cfg.extensions = { ...(cfg.extensions || {}), [name]: newEntry };
   await writeConfig(repoRoot, cfg);
 
-  const { resolveExtensions, seedActiveCorpusEntries } = await import("../src/services/extensions.mjs");
+  const { resolveExtensions, seedActiveCorpusEntries, isSeedableEntry } = await import("../src/services/extensions.mjs");
   const { entries } = await resolveExtensions(repoRoot);
   const entry = entries.get(name);
-  const seedable = entry.kind === "corpus" || entry.kind === "ontology" || (entry.kind === "pack" && entry.corpusPath);
-  if (!seedable) {
+  if (!isSeedableEntry(entry)) {
     return `activated "${name}" (${entry.kind}) in tmct.toml — no corpus facts to seed for this kind.\n`;
   }
   // Backend-aware seeding (same split-brain bug fix as src/services/init.mjs's own
@@ -867,11 +871,8 @@ async function main() {
     // record provenance. Idempotent; --force rewrites config + re-records.
     //
     // TIERING POLICY: init is OFFLINE, $0 and TIER-1-ONLY by default (seon +
-    // conceptnet — src/services/extensions.mjs's BUILTIN_EXTENSIONS). A tier-2 domain/
-    // language corpus (corpus/tier2/: aws, python, java) is added ONLY when
-    // explicitly asked via `--corpus <id>`. The `--detect` auto-detect is a
-    // documented STUB: it inspects the repo's manifests (pyproject.toml → python,
-    // pom.xml → java) and SUGGESTS the matching corpus, but never seeds it unasked.
+    // conceptnet — src/services/extensions.mjs's BUILTIN_EXTENSIONS). A tier-2 domain
+    // corpus (corpus/tier2/) is added ONLY when explicitly asked via `--corpus <id>`.
     //
     // `--repo <abs>` (NEW): init used to always hardcode process.cwd() — the only
     // subcommand without a --repo flag. It now takes one like every other
@@ -1116,24 +1117,6 @@ async function main() {
 
     if (anyActivation) return;
 
-    if (rest.includes("--detect")) {
-      // AUTO-DETECT STUB (documented, non-seeding): map a build manifest to the
-      // tier-2 corpus that fits, and tell the operator how to add it. Kept a stub on
-      // purpose — the $0/offline default never expands the corpus without an ask.
-      const { access } = await import("node:fs/promises");
-      const has = (f) => access(resolvePath(repoRoot, f)).then(() => true, () => false);
-      const DETECT = [["pyproject.toml", "python"], ["pom.xml", "java"]];
-      const found = [];
-      for (const [file, id] of DETECT) if (await has(file)) found.push([file, id]);
-      if (!found.length) {
-        process.stdout.write("no tier-2 corpus auto-detected (looked for pyproject.toml → python, pom.xml → java).\n");
-      } else {
-        for (const [file, id] of found) {
-          process.stdout.write(`detected ${file} — run \`tmct init --corpus ${id}\` to add the ${id} tier-2 corpus (offline, $0).\n`);
-        }
-      }
-      return;
-    }
     return;
   }
 
@@ -1238,9 +1221,9 @@ async function main() {
     // `--memory-backend` is written FIRST, before any --corpus/--ontology/
     // --lexicon activation below — the same split-brain bug fix as `tmct
     // init`'s ordering: activatePluggableInput seeds into whichever backend
-    // tmct.toml names AT THE TIME it runs, so `tmct import --corpus aws
+    // tmct.toml names AT THE TIME it runs, so `tmct import --corpus general
     // --memory-backend sqlite` in one call must have the new backend on disk
-    // BEFORE the aws seed step, not after.
+    // BEFORE the seed step, not after.
     if (memoryBackendVal) {
       const { cfg } = await readConfigForRewrite(repoRoot);
       cfg.memory = { ...(cfg.memory || {}), backend: memoryBackendVal };

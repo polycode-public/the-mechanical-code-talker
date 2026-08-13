@@ -203,16 +203,16 @@ test("`tmct import` with no flags at all: a clear usage error, exit non-zero", a
   }
 });
 
-test("`tmct import --corpus aws` into an already-initialized repo: activates+seeds tier2-aws", async () => {
+test("`tmct import --corpus general` into an already-initialized repo: activates+seeds tier2-general", async () => {
   const dir = await tmp();
   try {
     const init = runCli(["init"], { cwd: dir });
     assert.equal(init.status, 0, init.stderr);
-    const r = runCli(["import", "--corpus", "aws"], { cwd: dir });
+    const r = runCli(["import", "--corpus", "general"], { cwd: dir });
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /seeded tier-2 corpus "aws" \(domain\)/);
+    assert.match(r.stdout, /seeded tier-2 corpus "general" \(domain\)/);
     const toml = await readFile(join(dir, "tmct.toml"), "utf8");
-    assert.match(toml, /\[extensions\.tier2-aws\]/);
+    assert.match(toml, /\[extensions\.tier2-general\]/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -259,10 +259,10 @@ test("`tmct import --repo <dir>` targets that dir, not cwd", async () => {
   try {
     const init = runCli(["init", "--repo", target]);
     assert.equal(init.status, 0, init.stderr);
-    const r = runCli(["import", "--repo", target, "--corpus", "aws"], { cwd: dir });
+    const r = runCli(["import", "--repo", target, "--corpus", "general"], { cwd: dir });
     assert.equal(r.status, 0, r.stderr);
     const toml = await readFile(join(target, "tmct.toml"), "utf8");
-    assert.match(toml, /\[extensions\.tier2-aws\]/);
+    assert.match(toml, /\[extensions\.tier2-general\]/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

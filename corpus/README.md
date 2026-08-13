@@ -13,7 +13,7 @@ tmct's knowledge arrives in three tiers, distinguished by **when** it lands and
 | Tier | What | Ships in the package? | Lands when | Provenance |
 |---|---|---|---|---|
 | **1 — base** | the general English/tech ConceptNet slice + the response templates + the SE phrasebook — the vocabulary every tmct has out of the box | **yes**, committed here | `tmct init` seeds `.tmct/` from committed data (offline, $0) | `corpus:conceptnet /r/…` |
-| **2 — specialised** | LANGUAGE- or DOMAIN-specific fact sets (`aws`, `python`, `java`) plus one deliberately NON-code-domain "wider general-knowledge" bundle (`general`) so tmct can "expand into a concept for an applicable codebase" — or into a seed set that isn't code at all | **no** — selected per repo | activated via `src/services/extensions.mjs`'s `[extensions.tier2-<id>] active = true` (or `tmct init --corpus <id>`), inactive by default | `corpus:tier2-<id> /r/…` |
+| **2 — specialised** | DOMAIN-specific fact sets — today the deliberately NON-code-domain "wider general-knowledge" bundle (`general`) plus the `human` persona tiers — so tmct can "expand into a concept for an applicable codebase", or into a seed set that isn't code at all | **no** — selected per repo | activated via `src/services/extensions.mjs`'s `[extensions.tier2-<id>] active = true` (or `tmct init --corpus <id>`), inactive by default | `corpus:tier2-<id> /r/…` |
 | **3 — learned** | facts tmct writes from the actual conversation / the actual codebase it is pointed at | never committed | at runtime, into `.tmct/memory/` | `chat:…`, `codegraph:…` |
 
 **Offline / $0 is the default at every tier.** Tier-1 is committed. Tier-2's
@@ -42,7 +42,7 @@ notice}), guarded by `test/estate/corpus-licences.test.mjs`.
 | `conceptnet/README.md` | provenance, retrieval date, seed terms, filter rules, row counts | — | — |
 | `tier2/manifest.json` | tier-2: index of specialised corpuses (id, kind, description, source, sha256, size) | — | MPL-2.0 |
 | `tier2/generate.mjs` | tier-2: the curated-corpus generator + manifest writer (+ opt-in network-fetch path) | — | MPL-2.0 |
-| `tier2/{aws,python,java,general}.jsonl` | tier-2 SAMPLE corpuses — same fact shape as the tier-1 slice, loadable via the same path (`general` is the one deliberately non-code-domain bundle) | ~4-6 KB each | MPL-2.0 |
+| `tier2/general.jsonl` | a tier-2 SAMPLE corpus — same fact shape as the tier-1 slice, loadable via the same path, and deliberately non-code-domain | ~6 KB | MPL-2.0 |
 | `tier2/human.jsonl` | the DEFAULT active bundle: the everyday "human-world" persona, Small tier (664 facts) — hand-curated from Open English WordNet, bridged to Schema.org's top-level classes | ~80 KB | MPL-2.0 (hand-authored fact set; not a verbatim WordNet/Schema.org excerpt — see `tier2/generate.mjs`'s own header comment) |
 | `tier2/human-medium.jsonl` / `tier2/human-large.jsonl` | SIZE tiers of the SAME `human` bundle — each holds ONLY the facts that size adds beyond the previous one; both shipped INACTIVE by default, activated via `tmct init --persona-size medium\|large`. Built by `scripts/build-persona-tiers.mjs` from the same WordNet source, automatically curated (sense-ranked, blocklist/denylist-filtered) rather than hand-typed one at a time, given the scale (944 / ~12,000 facts) | ~111 KB / ~1.4 MB | MPL-2.0 (same "hand-authored in homage to the source's shape" basis as `human.jsonl`) |
 | `prose/sqlite/*.txt` | the frozen prose corpus, code half: plain-text extractions of 12 SQLite documentation pages | ~375 KB | **public domain** (see `prose/sqlite/LICENSE-NOTICE`) |
@@ -136,11 +136,9 @@ loads and seeds through the very same `loadSlice()`/`toFacts()` path as the
 tier-1 slice — `tier2/generate.mjs --verify` proves it (each sample loads and
 all its facts seed cleanly, no `ace=none` dead rows).
 
-The idea: a Python repo pulls the `python` corpus so tmct knows "a dict is a
-kind of hash table"; an AWS project pulls `aws` so it knows "S3 is object
-storage, a bucket is part of S3". Language terms unify onto the **shared CS
-concept vocabulary** (`list → array`, `hashmap → hash table`) so specialised
-knowledge connects to the tier-1 graph instead of floating apart.
+The idea: a repo pulls the bundle that matches what it is about, and that
+bundle's terms unify onto the **shared concept vocabulary** already in the
+tier-1 graph, so specialised knowledge connects instead of floating apart.
 
 **To add a corpus:** add an entry to `CORPUSES` in `tier2/generate.mjs` (a list
 of `[subject, relation, concept]` triples) and run `node tier2/generate.mjs
@@ -150,9 +148,9 @@ stays reviewable; a corpus too big to hand-curate is a `fetch` manifest entry
 (URL + sha256, opt-in network — `fetchCorpus()` is the reference downloader).
 
 **How tier-2 wires into `tmct init` (done — `src/services/extensions.mjs`):**
-`resolveExtensions(repoRoot)` ships all four tier-2 bundles as
-shipped-but-inactive `BUILTIN_EXTENSIONS` entries (`tier2-aws`/`tier2-python`/
-`tier2-java`/`tier2-general`); `[extensions.tier2-<id>] active = true` in
+`resolveExtensions(repoRoot)` ships every tier-2 bundle as a
+shipped-but-inactive `BUILTIN_EXTENSIONS` entry (`tier2-general`);
+`[extensions.tier2-<id>] active = true` in
 `tmct.toml` (or `tmct init --corpus <id>`) flips one on, and
 `seedActiveCorpusEntries` runs it through the exact same
 `loadSlice → toFacts → appendFacts` pipeline as tier-1, stamped
@@ -160,9 +158,8 @@ shipped-but-inactive `BUILTIN_EXTENSIONS` entries (`tier2-aws`/`tier2-python`/
 separate tier-2 code path. Idempotency is free (`seedMemory`'s content-hashed
 fact ids + pre-read skip). None of this touches `package.json` or the tier-1
 budget; tier-2 files are not shipped, so they do not count against the
-≤ 1.5 MB slice budget. Codebase auto-detection (a `requirements.txt` →
-`python`, a `pom.xml`/`build.gradle` → `java`, an AWS SDK dep → `aws`) is
-still unbuilt — activation today is config-only, never automatic.
+≤ 1.5 MB slice budget. Activation today is config-only: nothing reads a repo's
+own build manifests to pick a bundle for you.
 
 A term that would otherwise be silently dropped when a bundle is seeded (an
 `ace = "none"` relation like RelatedTo/HasContext, e.g. from a broader slice)
