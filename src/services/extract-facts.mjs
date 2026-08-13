@@ -265,13 +265,15 @@ const SUBJECT_CHAIN_PREPOSITIONS = new Set([
   "against", "between", "among", "across", "near", "behind", "around",
   "under", "inside", "outside", "amid",
 ]);
-// The of-frame heads a newswire event reads THROUGH to what it really touched:
-// "discovers hundreds of ancient amphorae" is a fact about the amphorae, and
-// "charged a group of Cuban men" about the men. Only counting and container
-// heads qualify (OF_PARTITIVE_HEADS and the bare numerals below, plus the
-// classifier heads a class rewrite already reads through) — every other of-
-// chain names its own head, so "restore the sacred glow of fireflies" restores
-// the glow, not the fireflies.
+// The counting words that head an of-frame the reader has to look through to
+// find what the sentence is about. "triggers hundreds of evacuations" is a fact
+// about the evacuations, and "discovers hundreds of ancient amphorae" about the
+// amphorae. Every relation frame here reads through these; the newswire event
+// frame widens the same climb to the container heads (OF_PARTITIVE_HEADS) and
+// the classifier ones, so "charged a group of Cuban men" is about the men.
+// Anything outside those sets names its own head, so "restore the sacred glow
+// of fireflies" restores the glow, not the fireflies, and "a piece of cake" is
+// about the piece.
 const OF_COUNT_HEADS = new Set(["hundred", "hundreds", "thousand", "thousands", "million", "millions", "dozen", "dozens", "score", "scores", "handful"]);
 // The count phrases newswire writes in front of what an event touched. Closed
 // by list, and each has to close on the number itself, so a bare preposition
@@ -658,10 +660,6 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     }
     return null;
   };
-  const nearestEntity = (idx, step, blocked = null) => {
-    const i = nearestEntityIndex(idx, step, blocked);
-    return i === null ? null : entityRunAt(i);
-  };
   // The subject-side mirror of the copula-object of-chain rule: when a found
   // subject run is the object of a preposition ("the weight of all of the
   // snow …", "frenzy for eclipse glasses …"), climb to the head that governs
@@ -721,8 +719,9 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
   // is IN the oceans", "land is grouped INTO continents") — none of them
   // class membership.
   // An of-chain on the object reads through a classifier head to the real
-  // class ("a type of mammal" → mammal); a partitive container head states
-  // composition, never a class ("a large body of ice" — no isa at all).
+  // class ("a type of mammal" → mammal). A container or counting head states
+  // quantity instead ("a large body of ice", "dozens of wolves"), and quantity
+  // is no class at all, so both decline the isa.
   const copulaObjectAt = (i) => {
     let sawDeterminer = false;
     for (let j = i + 1; j < values.length; j += 1) {
@@ -778,7 +777,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
       const nextIsOf = nextWord === "of";
       if (!nextIsOf) return { label: entityRunAt(j), hi };
       if (OF_CLASSIFIER_HEADS.has(headWord)) { i = hi + 1; j = hi + 1; continue; }
-      if (OF_PARTITIVE_HEADS.has(headWord)) return null;
+      if (OF_PARTITIVE_HEADS.has(headWord) || OF_COUNT_HEADS.has(headWord)) return null;
       return { label: entityRunAt(j), hi };
     }
     return null;
@@ -870,24 +869,44 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     while (k >= 0 && (pos[k] === "ADV" || pos[k] === "AUX" || pos[k] === "PART")) k -= 1;
     return k + 1;
   };
+  // A counting word alone. The lexicon arm reads through these and no others:
+  // a container head states what the thing is made of or held in, and a
+  // classifier rewrites a class, so neither one moves what a relation verb
+  // touched.
+  const readsThroughCountOf = (word) => OF_COUNT_HEADS.has(String(word ?? "").toLowerCase());
+  // The newswire event frame's wider read-through: the counting words, plus the
+  // container and classifier heads a headline writes its patient behind.
   const readsThroughOf = (word) => {
     const w = String(word ?? "").toLowerCase();
-    return OF_COUNT_HEADS.has(w) || OF_PARTITIVE_HEADS.has(w) || OF_CLASSIFIER_HEADS.has(w);
+    return readsThroughCountOf(w) || OF_PARTITIVE_HEADS.has(w) || OF_CLASSIFIER_HEADS.has(w);
   };
-  const countChainEntityIndex = (idx, step) => {
-    let at = nearestEntityIndex(idx, step, COPULA_FRAME_BLOCKERS);
+  // Walk a found run's of-chain to the noun the phrase is really about, at most
+  // two hops so a chain of prepositions can never wander into another clause.
+  // `readsThrough` says which heads qualify; a head outside that set stops the
+  // climb and keeps its own run.
+  const ofChainEntityIndex = (at, readsThrough) => {
     for (let hop = 0; at !== null && hop < 2; hop += 1) {
       let hi = at;
       while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
-      if (values[hi + 1]?.toLowerCase() !== "of" || !readsThroughOf(values[hi])) break;
+      if (values[hi + 1]?.toLowerCase() !== "of" || !readsThrough(values[hi])) break;
       const inner = nearestEntityIndex(hi + 1, +1);
       if (inner === null) break;
       at = inner;
     }
     return at;
   };
+  const countChainEntityIndex = (idx, step) =>
+    ofChainEntityIndex(nearestEntityIndex(idx, step, COPULA_FRAME_BLOCKERS), readsThroughOf);
   const countChainEntity = (idx, step) => {
     const at = countChainEntityIndex(idx, step);
+    return at === null ? null : entityRunAt(at);
+  };
+  // The object a lexicon relation verb takes: the nearest run rightward, on the
+  // arm's own blocker-free scan ("relies ON redis" has to read past the
+  // preposition), then climbed through a counting of-chain so the fact lands on
+  // what was counted rather than on the count word.
+  const relationVerbObject = (i) => {
+    const at = ofChainEntityIndex(nearestEntityIndex(i, +1), readsThroughCountOf);
     return at === null ? null : entityRunAt(at);
   };
   // The noun an event predicates about: the nearest run leftward, climbed out
@@ -1041,12 +1060,12 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
       if (phrasalVerbAt(i)) continue; // the phrasal frame reads the pair whole
       const relative = relativePronounBefore(i);
       if (relative >= 0 && relative - 1 !== copulaObjHi) {
-        decline("relative-clause-verb", { subject: copulaSubject, predicate: predicateOf(verb), object: nearestEntity(i, +1) });
+        decline("relative-clause-verb", { subject: copulaSubject, predicate: predicateOf(verb), object: relationVerbObject(i) });
         continue;
       }
       const subject = relative >= 0 ? copulaSubject : climbedSubjectAt(i);
       if (subject === null) continue;
-      push(subject, predicateOf(verb), nearestEntity(i, +1));
+      push(subject, predicateOf(verb), relationVerbObject(i));
     }
     readNewswireFrame();
     return { triples, declined, minted };
@@ -1066,11 +1085,11 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     if (phrasalVerbAt(i)) continue; // the phrasal frame reads the pair whole
     const subject = climbedSubjectAt(i);
     if (relativePronounBefore(i) >= 0) {
-      decline("relative-clause-verb", { subject, predicate: predicateOf(verb), object: nearestEntity(i, +1) });
+      decline("relative-clause-verb", { subject, predicate: predicateOf(verb), object: relationVerbObject(i) });
       continue;
     }
     if (subject === null) continue;
-    push(subject, predicateOf(verb), nearestEntity(i, +1));
+    push(subject, predicateOf(verb), relationVerbObject(i));
   }
   readNewswireFrame();
   return { triples, declined, minted };

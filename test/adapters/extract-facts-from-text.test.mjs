@@ -462,6 +462,59 @@ test("optimisticTriples: a copula-subject of-chain with no readable head abstain
   assert.deepEqual(optimisticTriples("The top of the mountain is a crater."), []);
 });
 
+test("optimisticTriples: a relation verb's object reads through a counting of-chain to the thing counted", () => {
+  // The count word heads the phrase; the evacuations are what the blast caused.
+  assert.deepEqual(
+    optimisticTriples("The blast triggers hundreds of evacuations."),
+    [{ subject: "blast", predicate: "tmct:triggers", object: "evacuation" }],
+  );
+  assert.deepEqual(
+    optimisticTriples("The army deploys dozens of drones."),
+    [{ subject: "army", predicate: "tmct:deploys", object: "drone" }],
+  );
+  // The same sentence in the past tense reads through the newswire frame
+  // instead, and both frames have to land on one edge.
+  assert.deepEqual(
+    optimisticTriples("The blast triggered hundreds of evacuations."),
+    optimisticTriples("The blast triggers hundreds of evacuations."),
+  );
+  // A determiner or an adjective inside the counted phrase changes nothing.
+  assert.deepEqual(
+    optimisticTriples("The team deploys hundreds of new drones."),
+    [{ subject: "team", predicate: "tmct:deploys", object: "drone" }],
+  );
+  // A digit count already reads past its own lead, and still does.
+  assert.deepEqual(
+    optimisticTriples("The blast triggers more than 200 evacuations."),
+    [{ subject: "blast", predicate: "tmct:triggers", object: "evacuation" }],
+  );
+});
+
+test("optimisticTriples: only a counting head reads through; a container or a plain head keeps its own noun", () => {
+  // "a lot of memory" names the lot, the way "a piece of cake" names the piece:
+  // a container states what is held, never what the verb touched.
+  assert.deepEqual(
+    optimisticTriples("The system uses a lot of memory."),
+    [{ subject: "system", predicate: "tmct:uses", object: "lot" }],
+  );
+  assert.deepEqual(
+    optimisticTriples("The army deploys a group of drones."),
+    [{ subject: "army", predicate: "tmct:deploys", object: "group" }],
+  );
+  // No of-chain and no number at all: the object scan is untouched.
+  assert.deepEqual(
+    optimisticTriples("The app relies on redis."),
+    [{ subject: "app", predicate: "tmct:reliesOn", object: "redis" }],
+  );
+});
+
+test("optimisticTriples: a counting head after a copula states quantity, so it declines the isa", () => {
+  // "dozens of wolves" is how many, not what kind — the same reading a
+  // partitive container already gets.
+  assert.deepEqual(optimisticTriples("A pack is dozens of wolves."), []);
+  assert.deepEqual(optimisticTriples("A crowd is hundreds of people."), []);
+});
+
 test("optimisticTriples: a non-relative multi-verb sentence contributes a fact per clause", () => {
   // Two coordinated clauses, each with its own nearest-entity-leftward subject:
   // one sentence, two facts, neither in a relative frame.
