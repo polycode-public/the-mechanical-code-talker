@@ -78,10 +78,6 @@ The work list, ranked by value against the plan's target card.
      only the caveat. And retraction does not cascade — `removeFacts` scrubs
      `objectProperties` edges, while an attribution holds the claim id in an
      attribute value, so retracting a claim leaves its attribution behind.
-   - Unverified, and worth checking before trusting: an attribution row's trust
-     behaviour is untraced (`trust.mjs` was never read), and whether attribution
-     rows should count toward the bench's grounded numbers needs
-     `scripts/news-bench/metrics.mjs`.
 2. [ ] **The news fact cap evicts by content hash, not by age** —
    `evictNewsFacts` reads `r.observedAt` off the row, but `readFactRows` keeps
    `observedAt` on the assertion records; `rowObservedMs` exists for exactly
