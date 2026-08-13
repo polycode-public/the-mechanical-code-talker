@@ -48,12 +48,19 @@ The work list, ranked by value against the plan's target card.
 
 1. [ ] **A report's claim is not attributed to its speaker** — the recognizer now
    unwraps "President Trump said X" to the claim X, but the row states X flatly
-   with no record of who said it. Naming the speaker on the row needs a new name
-   in the memory layer's closed findings vocabulary
+   with no record of who said it. Shape decided: a reified finding, a Fact about
+   a Fact, with a new name in the closed findings vocabulary
    (`src/adapters/memory/shacl.mjs`, `core.mjs`'s byte-pinned vocabulary note,
-   `docs/adapter-contract.md`). The speaker still reaches the enrichment queue,
-   and every row rides its article's provenance.
-2. [ ] **An unplaced hub turns the sense scope off entirely** — when `topsOf(hub)`
+   `docs/adapter-contract.md`) — chosen over reusing `statedBy` and over leaving
+   the speaker in provenance only. A design pass is running now to settle the
+   name, whether this store can carry a fact id in subject position at all, the
+   card rendering, and whether an attributed claim still counts as grounded.
+   Implementation waits on items 3 and 5 to free `extract-facts.mjs` and
+   `core.mjs`.
+2. [ ] **An unplaced hub turns the sense scope off entirely** — in flight on
+   `worktree-agent-a88fb2f1a0b11930f`, anchoring the scope on the terms the
+   article itself names when the hub is unplaced (chosen over admitting
+   nothing, accepting that a card naming few entities goes sparse). When `topsOf(hub)`
    is empty the bands never place it, the hub-anchored scope switches off, and
    every neighbour is admitted as filler. Iteration 11 killed the `bright`
    specimen by re-heading that card on `rescuers`, and the same cause
@@ -63,13 +70,18 @@ The work list, ranked by value against the plan's target card.
    off. One measured non-answer already: anchoring on the hub's seeds plus the
    far side of its reported rows reshuffles noise rather than cutting it.
 3. [ ] **The lexicon arm's object scan doesn't read through a count of-chain** —
+   in flight on `worktree-agent-ae96b58e71cd6d7ea`.
    "The blast triggers hundreds of evacuations." mints
    `blast | tmct:triggers | hundred`. The newswire frame reads through the count
    (`skipCountPhrase`); Pass 2a/2b's `nearestEntity(i, +1)` does not. Fixing it
    changes the object scan for every lexicon verb in every corpus lane, not just
    news, which is why it is its own item rather than a remainder of the frame
    work that found it.
-4. [ ] **`isaOf`'s window runs past the head noun** — `quokka ⊑ size`, from "a
+4. [ ] **`isaOf`'s window runs past the head noun** — in flight on
+   `worktree-agent-a77db95656aebdcee`. The reviewed-losses gate is handled by
+   the agent only where every loss was a false row anyway; a loss that looks
+   like a genuine definition stops the work for a human. The defect is
+   `quokka ⊑ size`, read out of "a
    small marsupial about the size of a large cat". `about`/`around`/`roughly`/
    `approximately` belong in `ISA_CLAUSE_CUT`, which would also fix "a book
    about dogs". Separate from the definition-body work that found it because
@@ -77,7 +89,9 @@ The work list, ranked by value against the plan's target card.
    stored `isa` values: changing it means re-running
    `scripts/recompute-reference-isa.mjs` over the pack, clearing its
    reviewed-losses gate, and re-measuring the chat reference lane.
-5. [ ] **`buildMemoryIndex` rebuilt per write** — worth ~74 ms of a ~280 ms
+5. [ ] **`buildMemoryIndex` rebuilt per write** — in flight on
+   `worktree-agent-a382d01858173b066`. A measured "this does not pay" is an
+   acceptable outcome. The prize is ~74 ms of a ~280 ms
    write. Two cheap restructurings measured neutral and were reverted. Making
    the index survive across writes needs a handle-level index beside
    `handle.cachedPayload` with a copy-on-write overlay per mutate — the copy
@@ -85,7 +99,8 @@ The work list, ranked by value against the plan's target card.
    reused as-is, and `factRecordsByGroup`'s values are arrays that call sites
    mutate in place, so the overlay must copy on read. ~15 call sites plus
    `patchAssembledPayload`.
-6. [ ] **The world editor supersedes a placement by arriving last** —
+6. [ ] **The world editor supersedes a placement by arriving last** — in flight
+   on `worktree-agent-a10784011d797633e`.
    `foldWorldState` ranks placements by `(epoch, turn)` with `turn >= prior.turn`,
    so at equal turn the row later in the array wins, and `adventure-editor.mjs`
    supersedes by appending an untimed duplicate that only wins by arrival order.
