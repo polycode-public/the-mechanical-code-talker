@@ -46,20 +46,32 @@ state and does not.
 
 The work list, ranked by value against the plan's target card.
 
-1. [ ] **`localeCompare` over fact data, everywhere the sweep did not reach** —
-   the closed item claimed ten sites. Ten is what was CONVERTED. Measured across
-   `src/` after the guard landed: **116 calls in 39 files**, the largest being
-   `tableau.mjs` (14), `syllogise.mjs` (13), `ask.mjs` (10), `domain.mjs` (8),
-   `chat.mjs` (4, all over fact-derived data — two render union and enumeration
-   sentences, one picks a someValuesFrom restriction, one lists taught action
-   families), and `blocks.mjs` (1, ranking retrieved memory blocks by an id
-   tiebreak, so two locales can retrieve different blocks). Not all 116 are fact
-   data — viz files and browser entries sort labels — so the job is triage
-   first, not a blind replace. `test/estate/fact-store-locale-compare.test.mjs`
-   guards the five swept files and names in its own report what it misses;
-   widen it as each group is cleared. The rule is in `fact-order.mjs`:
-   codepoint, never `localeCompare`, because two readers on machines with
-   different locales otherwise render different text from identical knowledge.
+1. [ ] **Reshape the seed's band set** — in flight on
+   `worktree-agent-ad2f045618b8944e8`. Add `child`, `namenet`, `prose` and
+   `domains/code` to what seeds the store; delete and purge `aws`, `python` and
+   `java` from the repo entirely. The band set is read from `package.json`'s own
+   `init:xl`, so the browser seed and the CLI cannot drift on it. The seed is a
+   generated artifact many things pin — README transcripts and the demo pages
+   answer out of it — so expect moved pins, and a demo that can no longer answer
+   its own question is a real loss to report, not a pin to rewrite.
+2. [ ] **Serve `wordnet-complete` to the news worker from DynamoDB** — in flight
+   on `worktree-agent-a728a7b713c9d1137`. The worker already has the client, the
+   row backend and the band rows in its table; it never calls
+   `termQueryOverDocumentClient`. One import and a call site, no IAM change and
+   no seed rebuild. Two things decide whether it ships on by default: the added
+   latency against the 60 s poll cap (~62 s wall per cycle today), and whether
+   background drift widens — the band carries `PartOf`, `HasProperty`, `MadeOf`,
+   `Causes`, `SimilarTo` and `RelatedTo`, none of which the seed has, so the
+   sense scope will be filtering relation types it has never seen.
+3. [ ] **`localeCompare` over fact data, everywhere the sweep did not reach** —
+   116 calls in 39 files were measured; the converted set now covers the fact
+   store, the derivation and query layers, chat, blocks, digest, viz and
+   completions, guarded by `test/estate/fact-store-locale-compare.test.mjs`
+   naming each clean file. What remains is triaged OUT and stays out unless the
+   call changes: the code graph (`.tmct/graph.json` — `codegraph.mjs`,
+   `graph-service.mjs`, `prose.mjs`, `codeplan/`, `router/`), npm tooling,
+   licence audits and config registries. Reopen only if a code-graph read turns
+   out to feed a fact-store answer.
 
 ## Discipline
 
