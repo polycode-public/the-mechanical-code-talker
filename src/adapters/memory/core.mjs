@@ -814,6 +814,7 @@ export function wrapRowBackend(impl, {
     backend: BACKEND_ROW,
     impl,
     cachedPayload: null,
+    cachedIndex: null,
     basePayload: cloneMemoryPayload(basePayload),
     sqliteSeedStore,
     sqliteSeedOverlayRows: sqliteSeedOverlayRows ? [...sqliteSeedOverlayRows] : null,
@@ -942,6 +943,7 @@ function dropAssembledRowPayload(handle) {
   if (!isRowHandle(handle)) return;
   stampStoreWrite(handle);
   handle.cachedPayload = null;
+  handle.cachedIndex = null;
   handle.storedRows = null;
   handle.baseRows = null;
   handle.baseRowKeys = null;
@@ -1022,11 +1024,16 @@ async function persistRowPayload(handle, payload) {
   for (const row of writes) next.set(row.rowKey, row);
   handle.storedRows = [...next.values()];
   const meta = { memory: payload.memory, prefixes: payload.prefixes };
-  if (patchAssembledPayload(handle.cachedPayload, meta, writes, removals, readOnlyLayerKeys(handle))) return;
+  if (patchAssembledPayload(handle.cachedPayload, meta, writes, removals, readOnlyLayerKeys(handle))) {
+    patchStoreWideIndex(handle, writes, removals);
+    return;
+  }
   // Dropped before the rebuild, not after it: the payload this replaces is the
   // largest object the handle holds, and keeping it reachable while the next
-  // one assembles doubles the peak for no reason.
+  // one assembles doubles the peak for no reason. The index goes with it for
+  // the same reason — it names the arrays that payload owned.
   handle.cachedPayload = null;
+  handle.cachedIndex = null;
   handle.cachedPayload = migrateStoredMemory(handle.sqliteSeedStore
     ? assembleSqliteSeededPayload(handle, meta)
     : rowsToPayload(overlayRows(handle.baseRows, handle.storedRows), { meta }));
@@ -1445,8 +1452,10 @@ function cacheDropGroups(cache, droppedProps) {
 const EDGE_GROUP_ROW_CLASS = "edge-group";
 const EDGE_GROUP_KEY_PREFIX = "edge-group:";
 
+const FACT_ROW_CLASS = "fact";
+
 const ROW_CLASS_BY_INDIVIDUAL_CLASS = new Map([
-  [FACT_CLASS, "fact"],
+  [FACT_CLASS, FACT_ROW_CLASS],
   [SOURCE_CLASS, "source"],
   [UTTERANCE_CLASS, "utterance"],
   [MEMORY_SESSION_CLASS, "session"],
@@ -2379,47 +2388,198 @@ export async function saveNodeId(dir, nodeId) {
  *  append goes through here, including the lazy legacy-provenance migration
  *  and actor-level Source reliability recompute. `fn` may be async (the
  *  SHACL ingest gate awaits validation before ever mutating `payload`). */
-// Per-call lookup index (individualsById/sourcesById/statedByBySubject),
-// attached to payload under a Symbol key (skipped by JSON.stringify) so
-// upsertIndividual/upsertSource/upsertEdge/appendFacts get O(1) lookups
-// instead of re-scanning; discarded when mutateMemory returns.
+// Per-call lookup index, attached to payload under a Symbol key (skipped by
+// JSON.stringify) so upsertIndividual/upsertSource/upsertEdge/appendFacts get
+// O(1) lookups instead of re-scanning; discarded when mutateMemory returns. On
+// a row handle the two id -> id-list halves read through a base the handle
+// keeps across writes (storeWideIndexOf), so only the three that hold
+// individuals are built per call.
 const MEMORY_INDEX = Symbol("mutateMemory lookup index");
 
-/** Build the three lookup Maps from the just-loaded payload and attach them
- *  under MEMORY_INDEX. */
-function buildMemoryIndex(payload) {
+/** Build the five lookup Maps from the just-loaded payload and attach them
+ *  under MEMORY_INDEX.
+ *
+ *  `base` is a store-wide index a row handle keeps across writes
+ *  (`storeWideIndexOf`). Its two maps are layered rather than rebuilt: this
+ *  mutation reads through them and writes only into its own layer, so the
+ *  handle's copy still describes the store when the mutation is over — or when
+ *  it throws. The other three hold INDIVIDUALS, and every individual this
+ *  mutation can reach is a fresh copy `mutablePayloadCopy` just made, so they
+ *  are always this payload's own. */
+function buildMemoryIndex(payload, base = null) {
   const individualsById = new Map();
   const sourcesById = new Map();
-  const statedByBySubject = new Map();
-  // groupId -> the record ids asserting that triple, so a write can ask "is
-  // anyone asserting this yet" and an edge can resolve a group id to the real
-  // nodes behind it, both without a scan.
-  const factRecordsByGroup = new Map();
   // groupId -> the retraction records standing over that triple, so the write
   // path can ask "was this source's assertion retracted" without a scan. Almost
   // always empty, which is why it is read before anything more expensive.
   const retractionsByGroup = new Map();
+  // groupId -> the record ids asserting that triple, so a write can ask "is
+  // anyone asserting this yet" and an edge can resolve a group id to the real
+  // nodes behind it, both without a scan.
+  const factRecordsByGroup = base ? new LayeredIdListMap(base.factRecordsByGroup) : new Map();
+  const statedByBySubject = base ? new LayeredIdListMap(base.statedByBySubject) : new Map();
   for (const ind of payload.individuals || []) {
     if (!ind?.id) continue;
     individualsById.set(ind.id, ind);
     if (ind.class === SOURCE_CLASS) sourcesById.set(ind.id, ind);
     if (ind.class === RETRACTION_CLASS) indexRetraction(retractionsByGroup, ind);
-    if (ind.class === FACT_CLASS) {
+    if (!base && ind.class === FACT_CLASS) {
       const groupId = factGroupId(ind.id);
       const held = factRecordsByGroup.get(groupId);
       if (held) held.push(ind.id);
       else factRecordsByGroup.set(groupId, [ind.id]);
     }
   }
-  const statedGroup = (payload.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
-  for (const e of statedGroup?.examples || []) {
-    if (!e?.subject) continue;
-    const list = statedByBySubject.get(e.subject);
-    if (list) list.push(e.object);
-    else statedByBySubject.set(e.subject, [e.object]);
+  if (!base) {
+    const statedGroup = (payload.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
+    for (const e of statedGroup?.examples || []) {
+      if (!e?.subject) continue;
+      const list = statedByBySubject.get(e.subject);
+      if (list) list.push(e.object);
+      else statedByBySubject.set(e.subject, [e.object]);
+    }
   }
   payload[MEMORY_INDEX] = { individualsById, sourcesById, statedByBySubject, factRecordsByGroup, retractionsByGroup };
   return payload[MEMORY_INDEX];
+}
+
+/** File one id under a key in an id -> id-list map the WRITE path holds, plain
+ *  or layered. Idempotent, so a map answering from a layer below cannot start
+ *  disagreeing with one answering from its own entry. */
+function fileIdUnderKey(map, key, id) {
+  if (map.push) { map.push(key, id); return; }
+  const held = map.get(key);
+  if (!held) map.set(key, [id]);
+  else if (!held.includes(id)) held.push(id);
+}
+
+/** An id -> id-list map read through a base map this layer may never change.
+ *  A key this layer has touched answers from its own entry, everything else
+ *  from the base, and `push` copies the base's list before adding to it — so
+ *  the base keeps the lists it had however the mutation ends. Copy-on-write at
+ *  the one granularity the write path mutates.
+ *
+ *  Only `get` and the three writers exist. Nothing folds either of the two maps
+ *  this covers, and a layered map cannot answer `size` or an iteration without
+ *  merging both layers, which is the walk the layering exists to avoid. */
+class LayeredIdListMap {
+  #base;
+  #own = new Map();
+
+  constructor(base) { this.#base = base; }
+
+  get(key) {
+    const own = this.#own.get(key);
+    if (own !== undefined) return own === null ? undefined : own;
+    return this.#base.get(key);
+  }
+
+  set(key, ids) { this.#own.set(key, ids); }
+
+  /** A tombstone rather than a removal: the base still holds the key, and this
+   *  layer is what says the mutation dropped it. */
+  delete(key) { this.#own.set(key, null); }
+
+  push(key, id) {
+    const held = this.get(key);
+    if (!held) this.#own.set(key, [id]);
+    else if (!held.includes(id)) this.#own.set(key, [...held, id]);
+  }
+}
+
+/** The two halves of the lookup index a ROW handle keeps across writes, beside
+ *  the assembled payload they describe. Both map an id to a list of ids, so
+ *  neither can hand a mutation an individual the cache also holds — that is
+ *  what makes them reusable where `individualsById` is not, since
+ *  `mutablePayloadCopy` gives every individual a new identity per mutation.
+ *
+ *  Each half is guarded on the identity of the container it was read from. An
+ *  individuals array or a statedBy examples list that was REPLACED describes a
+ *  different graph, so the half built from it is built again. That covers every
+ *  rebuild path at once: a fresh assembly, a payload dropped after a failed
+ *  write, and a patch that had to fall back to reassembling from rows.
+ *
+ *  The fact half also survives a write that keeps the same array, because
+ *  `patchStoreWideIndex` applies that write's own row delta to it. The statedBy
+ *  half needs no such patch: a write that changes an edge group rewrites the
+ *  group row, and the assembled payload takes a fresh examples array from it,
+ *  which the guard sees. */
+function storeWideIndexOf(handle) {
+  const payload = handle.cachedPayload;
+  if (!payload) return null;
+  let held = handle.cachedIndex;
+  if (!held) {
+    held = { individuals: null, factRecordsByGroup: null, statedByExamples: null, statedByBySubject: null };
+    handle.cachedIndex = held;
+  }
+  if (!held.factRecordsByGroup || held.individuals !== payload.individuals) {
+    const factRecordsByGroup = new Map();
+    for (const ind of payload.individuals || []) {
+      if (!ind?.id || ind.class !== FACT_CLASS) continue;
+      const groupId = factGroupId(ind.id);
+      const group = factRecordsByGroup.get(groupId);
+      if (group) group.push(ind.id);
+      else factRecordsByGroup.set(groupId, [ind.id]);
+    }
+    held.factRecordsByGroup = factRecordsByGroup;
+    held.individuals = payload.individuals;
+  }
+  const examples = (payload.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP)?.examples || null;
+  if (!held.statedByBySubject || held.statedByExamples !== examples) {
+    const statedByBySubject = new Map();
+    for (const e of examples || []) {
+      if (!e?.subject) continue;
+      const stated = statedByBySubject.get(e.subject);
+      if (stated) stated.push(e.object);
+      else statedByBySubject.set(e.subject, [e.object]);
+    }
+    held.statedByBySubject = statedByBySubject;
+    held.statedByExamples = examples;
+  }
+  return held;
+}
+
+/** Bring the store-wide fact half up to the write that just landed, from the
+ *  row delta the write itself carried. A row key IS the individual's id and the
+ *  row class says whether it is a Fact, so this reads the same delta
+ *  `patchAssembledPayload` applied to the payload and parses none of it.
+ *
+ *  Only called where that patch SUCCEEDED. A write that had to rebuild replaces
+ *  the individuals array, and the guard in `storeWideIndexOf` builds the half
+ *  again rather than trusting this. */
+function patchStoreWideIndex(handle, writes, removals) {
+  const cached = handle.cachedIndex;
+  if (!cached?.factRecordsByGroup) return;
+  const factRecordsByGroup = cached.factRecordsByGroup;
+  for (const key of removals) {
+    const id = String(key);
+    if (id.startsWith(EDGE_GROUP_KEY_PREFIX)) continue;
+    const groupId = factGroupId(id);
+    const kept = (factRecordsByGroup.get(groupId) || []).filter((recordId) => recordId !== id);
+    if (kept.length) factRecordsByGroup.set(groupId, kept);
+    else factRecordsByGroup.delete(groupId);
+  }
+  for (const row of writes) {
+    if (row.rowClass !== FACT_ROW_CLASS) continue;
+    const id = String(row.rowKey);
+    fileRecordIdInGroupOrder(factRecordsByGroup, factGroupId(id), id);
+  }
+  cached.individuals = handle.cachedPayload.individuals;
+}
+
+/** File a record id under its group where a REBUILD would put it. A group's
+ *  records sit in codepoint order on their ids in the assembled payload —
+ *  `sortFactIndividualsById` puts them there — so a build over that payload
+ *  reads them in that order. Appending in arrival order instead would leave the
+ *  carried map holding one order and a rebuild another, and every reader of the
+ *  list would then answer by which write came first. */
+function fileRecordIdInGroupOrder(factRecordsByGroup, groupId, id) {
+  const held = factRecordsByGroup.get(groupId);
+  if (!held) { factRecordsByGroup.set(groupId, [id]); return; }
+  if (held.includes(id)) return;
+  let at = 0;
+  while (at < held.length && held[at] < id) at += 1;
+  held.splice(at, 0, id);
 }
 
 /** File one retraction record under the triple it stands over, replacing any
@@ -2464,9 +2624,13 @@ async function mutateMemory(dir, fn) {
   // fold taken of it the moment `fn` starts changing it.
   stampStoreWrite(dir);
   try {
-    buildMemoryIndex(payload);
+    const layered = buildMemoryIndex(payload, overRowHandle ? storeWideIndexOf(dir) : null);
     const out = (await fn(payload)) ?? payload;
     migrateLegacyProvenance(out);
+    // The legacy-provenance migration re-keys records wholesale and indexes the
+    // result from scratch, so the ids the handle's own index names are no longer
+    // the store's. It goes rather than being reconciled against a re-key.
+    if (overRowHandle && memoryIndexOf(out) !== layered) dir.cachedIndex = null;
     recomputeSourceReliability(out);
     if (!overRowHandle) renormalizeProseIndex(out);
     await persistMemory(dir, out);
@@ -2832,12 +2996,7 @@ function upsertIndividual(payload, ind) {
     payload.individuals.push(ind);
     idx.individualsById.set(ind.id, ind);
     if (ind.class === RETRACTION_CLASS) indexRetraction(idx.retractionsByGroup, ind);
-    if (ind.class === FACT_CLASS) {
-      const groupId = factGroupId(ind.id);
-      const held = idx.factRecordsByGroup.get(groupId);
-      if (held) held.push(ind.id);
-      else idx.factRecordsByGroup.set(groupId, [ind.id]);
-    }
+    if (ind.class === FACT_CLASS) fileIdUnderKey(idx.factRecordsByGroup, factGroupId(ind.id), ind.id);
     return ind;
   }
   const i = payload.individuals.findIndex((x) => x?.id === ind.id);
@@ -2873,8 +3032,7 @@ function upsertEdge(payload, { predicate, prop }, edge) {
     if (!existing || !existing.includes(edge.object)) {
       group.examples.push({ ...edge, createdAt: edge.createdAt || nowIso() });
       group.count = group.examples.length;
-      if (existing) existing.push(edge.object);
-      else idx.statedByBySubject.set(edge.subject, [edge.object]);
+      fileIdUnderKey(idx.statedByBySubject, edge.subject, edge.object);
       return;
     }
     // Rare re-assert of the exact same (subject,object) pair — fall through
@@ -2891,11 +3049,7 @@ function upsertEdge(payload, { predicate, prop }, edge) {
   );
   group.examples.push({ ...edge, createdAt });
   group.count = group.examples.length;
-  if (idx) {
-    const list = idx.statedByBySubject.get(edge.subject) || [];
-    if (!list.includes(edge.object)) list.push(edge.object);
-    idx.statedByBySubject.set(edge.subject, list);
-  }
+  if (idx) fileIdUnderKey(idx.statedByBySubject, edge.subject, edge.object);
 }
 
 /** Recount `classes[]` from the individuals — every memory class stays counted
