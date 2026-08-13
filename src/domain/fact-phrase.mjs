@@ -60,6 +60,7 @@ export const FACT_PREDICATE_PHRASES = Object.freeze({
   "mgx:consumes": "eats",
   "mgx:vision-radius": "sees within",
   "mgx:guards": "guards",
+  "mgx:attributedTo": "is attributed to",
 });
 
 /** The closed participle set the relational teach frames read as "X is
@@ -273,6 +274,7 @@ export const FINDING_CAVEATS = Object.freeze({
   "clause-fallback": "(read from a clause fragment)",
   "pronoun-carry": "(subject carried from the previous sentence)",
   "identifier-token": "(identifier token)",
+  "reported-speech": "(read from reported speech)",
 });
 
 /**

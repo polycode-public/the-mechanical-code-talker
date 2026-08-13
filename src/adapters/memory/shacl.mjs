@@ -18,6 +18,7 @@ export const EXTRACTION_FINDINGS = Object.freeze([
   "clause-fallback",    // the row grounded from a clause fragment after the whole sentence declined
   "pronoun-carry",      // the subject was substituted from the paragraph's pronoun carry
   "definitional-frame", // the row came from a definitional copula frame ("X is the name for Y")
+  "reported-speech",    // the row was read from a reported-speech clause, its speaker attributed separately
 ]);
 const EXTRACTION_FINDING_SET = new Set(EXTRACTION_FINDINGS);
 const RULE_KINDS = new Set([
