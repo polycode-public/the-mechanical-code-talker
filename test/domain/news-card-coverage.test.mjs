@@ -54,7 +54,7 @@ test("a publication whose stories are partly covered carries only the ones nothi
   const publication = feed(rows).find((item) => item.hub === "hackernews");
 
   assert.ok(publication, "the story no other card covers still needs telling");
-  assert.match(publication.paragraph, /^hackernews discuss compiler\./);
+  assert.match(publication.paragraph, /^hackernews discusses compiler\./);
   assert.ok(!publication.paragraph.includes("deepseek"), "the covered story belongs to its own card");
   assert.ok(!publication.paragraph.includes("glaciers"), "the covered story belongs to its own card");
   assert.ok(!publication.factIds.includes("fact:hn-deepseek"));

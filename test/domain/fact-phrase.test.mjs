@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   FACT_PREDICATE_PHRASES, predicatePhrase, factSentence, phraseRendererSource,
-  baseVerbSurface, thirdPersonSingularSurface, isSubjectPlural,
+  baseVerbSurface, thirdPersonSingularSurface, isSubjectPlural, predicateVerb,
   FINDING_CAVEATS, findingCaveat,
 } from "../../src/domain/fact-phrase.mjs";
 
@@ -37,6 +37,34 @@ test("isSubjectPlural reads the head noun: regular plural, irregular plural, sin
   assert.equal(isSubjectPlural("the group of scientists"), false);
   assert.equal(isSubjectPlural(""), false);
   assert.equal(isSubjectPlural(undefined), false);
+});
+
+test("a compound built on a singular '-s' noun is singular too, and a word that merely ends in one stays plural", () => {
+  assert.equal(isSubjectPlural("hackernews"), false);
+  assert.equal(isSubjectPlural("subspecies"), false);
+  assert.equal(isSubjectPlural("miniseries"), false);
+  assert.equal(isSubjectPlural("geopolitics"), false);
+  assert.equal(isSubjectPlural("astrophysics"), false);
+  // Two letters in front of the noun is a prefix on one word, not a compound's
+  // first element, so these keep the plural reading the suffix rule gives them.
+  assert.equal(isSubjectPlural("sinews"), true);
+  assert.equal(isSubjectPlural("renews"), true);
+  assert.equal(isSubjectPlural("demeans"), true);
+});
+
+test("predicateVerb answers the act a predicate states, and nothing for a predicate that states no act", () => {
+  // The same act, minted down two paths: a bare lemma and the lexicon's own
+  // pre-inflected declared verb.
+  assert.deepEqual(predicateVerb("mgx:release"), { lemma: "release", particle: "" });
+  assert.deepEqual(predicateVerb("tmct:releases"), { lemma: "release", particle: "" });
+  assert.deepEqual(predicateVerb("mgx:free"), { lemma: "free", particle: "" });
+  assert.deepEqual(predicateVerb("mgx:strike-near"), { lemma: "strike", particle: "near" });
+  assert.deepEqual(predicateVerb("tmct:reliesOn"), { lemma: "rely", particle: "on" });
+  for (const predicate of [
+    "rdf:type", "rdfs:subClassOf", "mgx:causes", "mgxneg:causes",
+    "mgx:smaller-than", "mgx:released-from", "mgx:connected-with", "mgx:same-goal-as",
+  ]) assert.equal(predicateVerb(predicate), null, predicate);
+  assert.equal(predicateVerb(undefined), null);
 });
 
 test("predicatePhrase folds a minted verb onto its subject's number: a regular plural takes the bare form, an irregular plural takes it too, a singular subject keeps the third-person fold", () => {
@@ -229,4 +257,8 @@ test("phraseRendererSource carries everything the reader stands on", () => {
     "rescuers release a quake victim",
   );
   assert.equal(browserPhrase("tmct:reliesOn", "systems"), "rely on");
+  assert.equal(
+    browserSentence({ subject: "hackernews", predicate: "mgx:discuss", object: "a compiler" }),
+    "hackernews discusses a compiler",
+  );
 });
