@@ -80,16 +80,14 @@ The work list, ranked by value against the plan's target card.
    as plural — needs the lexicon's declared plurals, and `fact-phrase.mjs` is
    deliberately import-free so it can be stringified into the browser. That
    cost is the real one, and it is bigger than the typing.
-4. [ ] **`buildMemoryIndex` rebuilt per write** — in flight on
-   `worktree-agent-a382d01858173b066`. A measured "this does not pay" is an
-   acceptable outcome. The prize is ~74 ms of a ~280 ms
-   write. Two cheap restructurings measured neutral and were reverted. Making
-   the index survive across writes needs a handle-level index beside
-   `handle.cachedPayload` with a copy-on-write overlay per mutate — the copy
-   gives every individual a new object identity, so `individualsById` can't be
-   reused as-is, and `factRecordsByGroup`'s values are arrays that call sites
-   mutate in place, so the overlay must copy on read. ~15 call sites plus
-   `patchAssembledPayload`.
+4. [ ] **The rest of a 300 ms write** — the index was 18% of it and is now
+   carried across writes (appendFact −15.6%, appendUtterance −16.1%,
+   removeFacts −11.7% at 60k facts). The profile puts the remaining ~85% in
+   `cacheUpsertEdge`'s per-edge filter, `sqlitePayloadStoreRows`, and
+   `cloneJson`. The largest single item is `mutablePayloadCopy` copying all 60k
+   individuals; skipping it needs the object-identity work the index change
+   deliberately left alone, since three of the five index maps can't be reused
+   precisely because every individual gets a new identity per mutation.
 5. [ ] **The readers the content tiebreak couldn't reach** — in flight on
    `worktree-agent-a729ca045490445f1`, unblocked now the world editor stamps its
    edits. `news-feed.mjs`'s `tierOf` and `/memory`'s listing still order by
