@@ -115,7 +115,7 @@ test("a bare unquantified property claim on a corpus-anchored subject is still r
 
 test("a bare unquantified property claim on a lexicon-only subject is still refused", async () => {
   await withCorpusStore([], async (dir) => {
-    const r = await runTurn("module is curly", { memoryDir: dir, sessionId: "t7" });
+    const r = await runTurn("a module is curly", { memoryDir: dir, sessionId: "t7" });
     assert.doesNotMatch(r.answer, /noted — remembered/);
     assert.match(r.answer, /I don't recognize "curly" as a word I know/);
     assert.equal((await rows(dir)).length, 0);

@@ -27,10 +27,10 @@ async function pageTurn(line, { vocabHint = "", codeDomainActive = false } = {})
   return answer;
 }
 
-async function cliTurn(line, { vocabHint = "", codeDomainActive = false } = {}) {
+async function cliTurn(line, { vocabHint = "", codeDomainActive = false, codeGraphMode = false } = {}) {
   const memoryDir = createInMemoryStore();
   const { answer } = await runTurn(line, {
-    graph: emptyCodeGraph(), memoryDir, env: {}, vocabHint, codeDomainActive,
+    graph: emptyCodeGraph(), memoryDir, env: {}, vocabHint, codeDomainActive, codeGraphMode,
   });
   return answer;
 }
@@ -68,9 +68,10 @@ test("answerCount's empty-graph miss keeps the CLI remedy by default and drops i
   assert.doesNotMatch(answerCount(empty, "count soup", { ...opts, uiContext: "browser" }), CLI_COMMANDS);
 });
 
-test("the arithmetic decline offers a repo only in a terminal", async () => {
+test("the arithmetic decline offers a repo only in a terminal, and only once code-graph mode is declared", async () => {
   assert.doesNotMatch(await pageTurn("whats 2+2"), CLI_COMMANDS);
-  assert.match(await cliTurn("whats 2+2"), /--repo/);
+  assert.doesNotMatch(await cliTurn("whats 2+2"), CLI_COMMANDS, "nobody asked this session about code");
+  assert.match(await cliTurn("whats 2+2", { codeGraphMode: true }), /--repo/);
 });
 
 test("the personal-assistant nudge falls back to a teach pointer on a page, a seed command in a terminal", async () => {

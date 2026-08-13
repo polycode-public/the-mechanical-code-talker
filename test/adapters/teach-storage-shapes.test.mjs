@@ -241,7 +241,7 @@ test("'remember that saveStore is deprecated' reifies mgx:hasProperty with teach
 test("a bare property teach on an UNKNOWN subject stores with an empty quantifier — a property assertion is about ONE entity", async () => {
   const dir = await mem("bare-prop");
   try {
-    await runTurn("saveStore is deprecated", { config: CONFIG, memoryDir: dir, sessionId: "b1" });
+    await runTurn("the saveStore is deprecated", { config: CONFIG, memoryDir: dir, sessionId: "b1" });
     const rows = readFactRows(await loadMemory(dir));
     assert.equal(rows.length, 1);
     assert.equal(rows[0].predicate, "mgx:hasProperty");

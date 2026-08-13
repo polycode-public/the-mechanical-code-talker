@@ -49,7 +49,10 @@ test("mgx:capableOf reads back as 'can'", async () => {
 });
 
 test("mgx:causes reads back as 'causes'", async () => {
-  assert.match(await teachAndReadBack("fire causes smoke.", "fire"), /fire causes smoke/);
+  // A bare present-tense name-verb-name line is wrapper-required by design
+  // ("john likes mary" gets the same nudge), so this teaches through the
+  // wrapper. Every other row here carries an article and needs none.
+  assert.match(await teachAndReadBack("remember that fire causes smoke.", "fire"), /fire causes smoke/);
 });
 
 test("mgx:madeOf reads back as 'is made of'", async () => {

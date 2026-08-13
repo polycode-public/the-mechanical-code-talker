@@ -710,6 +710,11 @@ async function main() {
     // supplement on. Default OFF; `/wiki on`/`/wiki off` toggles it
     // mid-session.
     const liveReference = rest.includes("--live-wikipedia");
+    // `--code-graph` (or TMCT_CODE_GRAPH=1, read inside createSession): start
+    // the session reading every line as a question about the code graph.
+    // Default OFF; `/code-graph on`/`/code-graph off` toggles it mid-session.
+    // Nothing infers this from the graph or from what you type.
+    const codeGraphMode = rest.includes("--code-graph");
     // `--graph <path>` (repeatable) / `--config <path>` (src/services/cli-args.mjs): threaded
     // through as the new top tier of createSession's graph-resolution order (above
     // TMCT_GRAPH_FILE — see chat.mjs's own docblock at createSession). Omitted from
@@ -770,7 +775,7 @@ async function main() {
     if (prompt) {
       const { createSession } = await import("../src/services/chat.mjs");
       const { splitSentences } = await import("../src/services/sentences.mjs");
-      const session = await createSession({ repoPath, ephemeral, narrate, liveReference, ...extra });
+      const session = await createSession({ repoPath, ephemeral, narrate, liveReference, codeGraphMode, ...extra });
       let finalAnswer = "";
       let finalPlan = null;
       let parts;
@@ -812,10 +817,10 @@ async function main() {
     const plain = rest.includes("--plain") || !process.stdin.isTTY || !process.stdout.isTTY;
     if (plain) {
       const { runChat } = await import("../src/services/chat.mjs");
-      await runChat({ repoPath, ephemeral, narrate, liveReference, ...extra });
+      await runChat({ repoPath, ephemeral, narrate, liveReference, codeGraphMode, ...extra });
     } else {
       const { runTui } = await import("../src/surfaces/tui/app.mjs");
-      await runTui({ repoPath, ephemeral, narrate, liveReference, ...extra });
+      await runTui({ repoPath, ephemeral, narrate, liveReference, codeGraphMode, ...extra });
     }
     return;
   }
