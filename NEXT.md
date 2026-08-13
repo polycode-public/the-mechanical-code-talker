@@ -90,19 +90,12 @@ The work list, ranked by value against the plan's target card.
    individuals; skipping it needs the object-identity work the index change
    deliberately left alone, since three of the five index maps can't be reused
    precisely because every individual gets a new identity per mutation.
-5. [ ] **The readers the content tiebreak couldn't reach** — in flight on
-   `worktree-agent-a729ca045490445f1`, unblocked now the world editor stamps its
-   edits. `news-feed.mjs`'s `tierOf` and `/memory`'s listing still order by
-   arrival; reaching them means sorting `foldFactRows`' output at the root so
-   `readFactRows` hands out content order and every downstream reader inherits
-   it. Measured before the editor fix: 13 pins move, 4 already fixed, 8 benign
-   reorderings, 1 the editor break that is now gone.
-6. [ ] **`mud-editor.mjs` has the adventure editor's old loose contract** —
+5. [ ] **`mud-editor.mjs` has the adventure editor's old loose contract** —
    `planMudEditorSync` returns bare triples and `mud-browser-entry.mjs` stamps
    them at the call site, exactly as the adventure pair did before the fix. Its
    one production caller stamps correctly, so there is no live break — this is
    symmetry, and the same mechanical change of shape.
-7. [ ] **Wikidata** — the pinned dated dump
+6. [ ] **Wikidata** — the pinned dated dump
    (`wikidata-20260810-all.json.gz`, 155,457,882,747 bytes) is downloading in
    the operator's terminal via `bash scripts/resume-wikidata-dump.sh`, which
    resumes from wherever a break left it — re-run it after any interruption.

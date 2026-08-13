@@ -6,7 +6,11 @@
 `src/services/p2p-room.mjs`, `src/domain/p2p/facts.mjs`,
 `src/domain/p2p/provenance-relabel.mjs`, `src/services/adventure.mjs` (`foldWorldState`,
 `rulingTestimonyClaim`), `src/services/adventure-editor.mjs` (`planWorldEditorSync`),
-`PLAN_MUD_WEBRTC.md`.
+`src/services/mudiii-turn.mjs` and `src/services/predator-prey.mjs` (`foldTownSquareState`),
+`PLAN_MUD_WEBRTC.md`. Those are the replication layer. The read layer is wider — `inspect.mjs`
+(`/memory`), `news-feed.mjs`, `digest/select.mjs`, `completions/infer.mjs`,
+`tools/memory-fallthrough.mjs` and `chat.mjs`'s premise readers each take the first or the strongest
+of a group, so each would answer by row order if the fold did not sort before they see a row.
 **Retrieval date:** 2026-08-02. The 2011 Shapiro et al. artefacts, RFC 677, the CALM line and the
 delta-state paper were checked against primary sources: the report PDFs' own title pages and ISRN
 blocks, dblp, the ACM Digital Library, and the IETF datatracker. Four citations were not, and each
@@ -182,11 +186,15 @@ loser has to stay readable.
 **It moves the correctness burden.** A read-time resolver is only safe if it is a pure function of
 the replicated set. `foldWorldState` is not, on its own. `outranks` uses `turn >= prior.turn`, so at
 equal `(epoch, turn)` the row appearing **later in the array** wins. Two peers holding an identical
-fact set fold it differently while their arrival orders differ. `p2p-room.mjs`'s
-`sortFactIndividualsById` closes that: after every merge it sorts the Fact individuals by
-content-addressed id, in codepoint order and never `localeCompare`, and `readFactRows` reads them
-in that order. `rulingTestimonyClaim` needs no such help. Its comparator is a strict order over
-four fields, so its fold is order-independent by construction.
+fact set fold it differently while their arrival orders differ. Two sorts close that, one per layer.
+`p2p-room.mjs`'s `sortFactIndividualsById` sorts the stored Fact individuals by content-addressed
+id after every merge, in codepoint order and never `localeCompare`. `readFactRows` then sorts the
+rows it folds out of them by content — subject, predicate, object, provenance, the same codepoint
+rule — so a reader downstream of the fold gets content order whether or not the store has ever
+merged anything. That second sort is what a store nobody has synced needs: the first one only runs
+on a merge, so a single-browser store held its rows in write order and every "first of equals"
+reader answered by it. `rulingTestimonyClaim` needs no such help. Its comparator is a strict order
+over four fields, so its fold is order-independent by construction.
 
 **The writers keep off the tie.** The sort makes a tie land the same way everywhere; a writer that
 never ties needs no sort at all. Every write to a fold-versioned family stamps its own
@@ -197,7 +205,9 @@ triple. A bare triple folds as turn 0 of the current epoch, which ties with the 
 meant to replace and beats it only by sitting later in the array — so an edit to a world nobody
 had played yet was exactly that tie, and reversing the row order made the edit disappear. The
 "other" family (types, exits, the container and puzzle facts) keeps its bare subject, because every
-reader takes those raw and none of them ranks.
+reader takes those raw and none of them ranks. `mgx:placed-by` is the same lesson in the town
+square: `placeFood` writes the first placer bare when it mints an item, so `mudiii-turn.mjs` stamps
+a taught placer rather than letting it tie at turn 0 and win by arriving second.
 
 So the ranking is a last-writer-wins register whose "last" is `(epoch, turn)` and whose tiebreak is
 content-address order. Arbitrary at ties, identical on every peer, and computed fresh from the set
@@ -472,8 +482,9 @@ input. Moving it to the read does not make it monotone. The placement really doe
 What the move buys is **confluence**, not monotonicity: the view is a deterministic function of the
 replicated set, so two peers holding the same set compute the same view. Divergence becomes
 temporary rather than permanent. That is SEC stated at the view rather than at the base relation,
-and it holds only because `sortFactIndividualsById` makes the fold a function of the set. Without
-that sort the view is neither monotone nor confluent, and the whole argument fails.
+and it holds only because `sortFactIndividualsById` and `readFactRows`' own content sort make the
+fold a function of the set. Without those the view is neither monotone nor confluent, and the whole
+argument fails.
 
 So: monotone base, non-monotone but confluent view, coordination-free throughout. `removeFacts` is
 the operation that sits outside all of it, and what puts it back inside is the retraction record.
@@ -493,8 +504,9 @@ one place that shrinks — `removeFacts` and `retireRetractions` both delete row
 is what keeps that shrinkage from undoing itself on the next sync.
 
 **The conflict resolution is a read-time query, and it must stay a pure function of the set.** That
-is the invariant to protect. `foldWorldState` broke it and was fixed from two sides: `p2p-room.mjs`
-sorts Fact individuals by content-addressed id after every merge, and every writer to a
+is the invariant to protect. `foldWorldState` broke it and was fixed from three sides: `p2p-room.mjs`
+sorts Fact individuals by content-addressed id after every merge, `readFactRows` sorts the rows it
+folds so a reader that never sees a merge still gets content order, and every writer to a
 fold-versioned family stamps a turn that outranks what it supersedes rather than counting on
 arriving after it. Any future resolver has to be checked the same way: feed one peer's facts in two
 different orders and demand the same answer. A resolver that reads a wall clock, a local counter, or array position without

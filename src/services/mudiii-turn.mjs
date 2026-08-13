@@ -805,10 +805,12 @@ const PLACED_BY_PREDICATE = "mgx:placed-by";
 
 // The families foldTownSquareState ranks by (epoch, turn). A row in one of
 // them needs a snapshot subject or it ranks as turn 0 and loses to anything
-// already played about the same thing. mgx:placed-by is read raw and keeps
-// its bare subject, exactly as placeFood writes it.
+// already played about the same thing. mgx:placed-by is one of them: placeFood
+// writes the item's first placer under a bare subject when it mints the item,
+// so a taught placer that stayed bare too would tie with it at turn 0 and win
+// only by sitting later in the array.
 const TAUGHT_SNAPSHOT_PREDICATES = new Set([
-  PLACEMENT_PREDICATE, MASS_PREDICATE, MOOD_PREDICATE, FACING_PREDICATE,
+  PLACEMENT_PREDICATE, MASS_PREDICATE, MOOD_PREDICATE, FACING_PREDICATE, PLACED_BY_PREDICATE,
 ]);
 
 // The closed cast vocabulary a taught sentence may name, matching the lane's
