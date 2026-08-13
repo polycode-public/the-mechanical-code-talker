@@ -45,14 +45,20 @@ state and does not.
 
 The work list, ranked by value against the plan's target card.
 
-1. [ ] **A guard against `localeCompare` over fact-store data** — in flight on
-   `worktree-agent-a09db26aee7a955e0`. Ten sites were converted across
-   `inspect.mjs`, `digest/select.mjs`, `digest/compose.mjs`, `ledger-viz.mjs` and
-   `core.mjs`; nothing stops an eleventh. The rule lives in `fact-order.mjs`:
+1. [ ] **`localeCompare` over fact data, everywhere the sweep did not reach** —
+   the closed item claimed ten sites. Ten is what was CONVERTED. Measured across
+   `src/` after the guard landed: **116 calls in 39 files**, the largest being
+   `tableau.mjs` (14), `syllogise.mjs` (13), `ask.mjs` (10), `domain.mjs` (8),
+   `chat.mjs` (4, all over fact-derived data — two render union and enumeration
+   sentences, one picks a someValuesFrom restriction, one lists taught action
+   families), and `blocks.mjs` (1, ranking retrieved memory blocks by an id
+   tiebreak, so two locales can retrieve different blocks). Not all 116 are fact
+   data — viz files and browser entries sort labels — so the job is triage
+   first, not a blind replace. `test/estate/fact-store-locale-compare.test.mjs`
+   guards the five swept files and names in its own report what it misses;
+   widen it as each group is cleared. The rule is in `fact-order.mjs`:
    codepoint, never `localeCompare`, because two readers on machines with
    different locales otherwise render different text from identical knowledge.
-   The guard could not land before the sweep finished, since it would have failed
-   on the sites still waiting.
 
 ## Discipline
 
