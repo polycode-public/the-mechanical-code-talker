@@ -28,27 +28,15 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 The work list, ranked by value.
 
-1. [ ] **A declared switch decides the code-graph lane, never a guess at the
-   input.** `looksCodeish` reads any full stop, decimal, date slash or
-   abbreviation as a code token through `[_./]`, and carries `where`, `use`,
-   `class`, `history`, `test`, `contains` and `members` in `STRUCT_WORDS`, so 26
-   of 27 ordinary sentences classify as code-ish. It goes, with `STRUCT_WORDS`
-   and the appended `no code graph — index it with...` remedy. A `/code-graph
-   on|off` session switch replaces it, shaped like `/wiki`, with a consumer
-   parameter beside it so an embedding application sets the mode without a slash
-   command. The switch is the only gate: no default derived from state, off
-   unless set, and a graph missing while the switch is on is an error rather
-   than a hint. With the switch off nothing may say "code graph" at all, and a
-   question that wanted the lane lands on the ordinary miss wall. `noCodeGraph`
-   stays — it reads a loaded graph's module count, which is state, not intent.
-   `isConversational` is exported, so any change to its behaviour is
-   consumer-visible.
-2. [ ] **`appendFacts` costs more the fuller the store gets.** `tmct import
-   --corpus child` on the sqlite backend takes about 9 minutes wall for 68,955
-   facts, with the WAL peaking near 240 MB. The in-memory path is unaffected —
-   the same 127,404-fact `init:xl` set seeds in about 13s in-process. This is
-   why `npm run init:xl` and `npm run check:readme`'s heavy block are now
-   ten-minute commands.
+1. [ ] **Remove the browser-to-browser sharing feature.** Every surface and
+   every document. Fact merging and the determinism machinery stay —
+   `fact-order.mjs`, `causal-stability.mjs` and `retraction.mjs` are not part of
+   this. The invariant CLAUDE.md anchors on `p2p-room.mjs`'s
+   `sortFactIndividualsById` needs a surviving example if that file goes.
+2. [ ] **`STRUCT_WORDS` still gates relation-verb minting.** Five sites in
+   `chat.mjs` read `call`, `use`, `test` and `contains` as structural, so
+   "I use a spoon to eat soup" cannot mint a `uses` relation. The intent
+   classifier that shared this list is gone; the verb filter is not.
 
 ## Discipline
 
