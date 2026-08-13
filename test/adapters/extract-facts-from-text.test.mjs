@@ -8,7 +8,9 @@ import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { main, ingestText, optimisticTriples, clauseCandidates } from "../../src/services/extract-facts.mjs";
+import {
+  main, ingestText, optimisticTriples, clauseCandidates, termsUsedOnlyAsVerbs,
+} from "../../src/services/extract-facts.mjs";
 import { createSession } from "../../src/services/chat.mjs";
 import { splitSentences } from "../../src/services/sentences.mjs";
 import { loadMemory, readFactRows, openConfiguredMemoryBackend } from "../../src/adapters/memory/core.mjs";
@@ -513,6 +515,50 @@ test("optimisticTriples: a counting head after a copula states quantity, so it d
   // partitive container already gets.
   assert.deepEqual(optimisticTriples("A pack is dozens of wolves."), []);
   assert.deepEqual(optimisticTriples("A crowd is hundreds of people."), []);
+});
+
+test("optimisticTriples: a copula whose subject is a pronoun abstains, never reaching past it for a noun", () => {
+  // "many say it is just a matter of time" predicates about "it". wink tags the
+  // sentence's own verb "say" NOUN, so a subject scan that walks through the
+  // pronoun stores "say ⊑ matter" — a false class fact that then anchors the
+  // sense of every walk over "say".
+  assert.deepEqual(
+    optimisticTriples("In Sweida Province, dominated by the country's Druse minority, many say it is just a matter of time before the central government moves to assert control over the region."),
+    [],
+  );
+  assert.deepEqual(optimisticTriples("It is a mountain that has lava."), []);
+  assert.deepEqual(optimisticTriples("They are large mammals of the northern seas."), []);
+  // A pronoun sitting in front of the subject is a possessive, not the subject:
+  // the scan stops at the noun before it ever reaches one.
+  assert.deepEqual(
+    optimisticTriples("His main challenger is a novelty candidate."),
+    [{ subject: "challenger", predicate: "rdfs:subClassOf", object: "novelty candidate" }],
+  );
+});
+
+test("termsUsedOnlyAsVerbs names the words a text turns a clause on, and leaves a real noun alone", () => {
+  const verbs = termsUsedOnlyAsVerbs([
+    "In Sweida Province, dominated by the country's Druse minority, many say it is just a matter of "
+      + "time before the central government moves to assert control over the region.",
+  ]);
+  assert.deepEqual([...verbs], ["say", "moves"]);
+  // A determiner in front settles that the word heads a noun phrase.
+  assert.deepEqual([...termsUsedOnlyAsVerbs(["The eclipse arrived on the day it was promised."])], []);
+  // An infinitive follows real nouns constantly. Only a token whose own left
+  // neighbour is a common noun reads as that noun phrase's verb.
+  assert.deepEqual([...termsUsedOnlyAsVerbs([
+    "The insects are disappearing for many reasons, including rapid development to cater to tourists.",
+    "He was the only person to break the sound barrier on land.",
+    "Three warships were sent to Valencia to capture pictures of the corona.",
+  ])], []);
+  // The preposition that governs a phrase does the same, so a reduced relative
+  // clause after one is no reason to call its head a verb.
+  assert.deepEqual([...termsUsedOnlyAsVerbs(["ICE sends immigrants to countries they have no connection to."])], []);
+  // A relative clause is not a subject pronoun and its verb.
+  assert.deepEqual([...termsUsedOnlyAsVerbs(["The warships carried a high-definition camera that would cost a fortune."])], []);
+  // One verb reading never disqualifies a word the same text also uses as a
+  // noun.
+  assert.deepEqual([...termsUsedOnlyAsVerbs(["The ceasefire talks resumed.", "Many talks it is over."])], []);
 });
 
 test("optimisticTriples: a non-relative multi-verb sentence contributes a fact per clause", () => {

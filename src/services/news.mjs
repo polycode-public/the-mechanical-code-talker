@@ -60,7 +60,9 @@ import {
 import { DEFAULT_MIN_INTERVAL_MS } from "../adapters/corpus/courtesy.mjs";
 import { researchFacts } from "../adapters/corpus/research-source.mjs";
 import { throughSourceBreaker, sourceSkipStatusLine } from "../domain/source-breaker.mjs";
-import { ingestText, readsAsEntityTerm, ungroundedTermOccurrences } from "./extract-facts.mjs";
+import {
+  ingestText, readsAsEntityTerm, ungroundedTermOccurrences, termsUsedOnlyAsVerbs,
+} from "./extract-facts.mjs";
 
 export { NEWS_SOURCE_RECORDS, DEFAULT_NEWS_SOURCE_IDS, DEFAULT_NEWS_KB_IDS };
 
@@ -316,11 +318,19 @@ function buildSourcesByFactId(items) {
  *  drops a term the graph already holds facts about, and a card wants precisely
  *  those. A single word the lexicon reads as an everyday noun drops out here —
  *  "developer" names nothing a lookup could define — while a name run keeps its
- *  whole spelling, "tim king" and "amigados" alike. */
+ *  whole spelling, "tim king" and "amigados" alike.
+ *
+ *  A word the article only ever uses as a clause's verb names no entity either,
+ *  however the tagger read it: "many say it is …" is the article saying
+ *  something, and "the government moves to assert control" is the government
+ *  moving. Either one reaching this list gives a card's background walk an
+ *  anchor the article never named. */
 export function articleEntityNames(texts, { lexicon } = {}) {
   const lex = lexicon || loadLexicon();
+  const verbs = termsUsedOnlyAsVerbs(texts, { lexicon: lex });
   const names = [];
   for (const term of ungroundedTermOccurrences(texts, [], { lexicon: lex }).keys()) {
+    if (verbs.has(term)) continue;
     if (term.includes(" ") || !isVocabGroundedTerm(lex, term)) names.push(term);
   }
   return names.sort();

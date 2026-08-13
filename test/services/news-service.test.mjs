@@ -779,6 +779,19 @@ test("articleEntityNames reads the whole names an article's text carries and dro
   assert.deepEqual(names, [...names].sort(), "the names come back in a fixed order");
 });
 
+test("articleEntityNames drops a word the article only ever uses as a clause's verb", () => {
+  const names = articleEntityNames([
+    "A Syrian Holdout Province, Sweida, Fears a Government Takeover",
+    "In Sweida Province, dominated by the country's Druse minority, many say it is just a matter of "
+      + "time before the central government moves to assert control over the region.",
+  ]);
+  assert.ok(!names.includes("say"), `"many say" is the article speaking, not a name: ${JSON.stringify(names)}`);
+  assert.ok(!names.includes("moves"), `"moves to assert" is the government moving, not a name: ${JSON.stringify(names)}`);
+  assert.ok(names.includes("sweida province"), `the place the report is about survives: ${JSON.stringify(names)}`);
+  assert.ok(names.includes("druse"), `the minority it names survives: ${JSON.stringify(names)}`);
+  assert.ok(names.includes("government takeover"), `the headline's own compound survives: ${JSON.stringify(names)}`);
+});
+
 test("buildFeed's card carries what the graph holds about an entity named inside its headline, not only its own facts' endpoints", async () => {
   const { ctx } = await makeCtx({ now: () => FIXED_NOW });
 
