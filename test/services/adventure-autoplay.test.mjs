@@ -186,6 +186,27 @@ test("a taught fact never steers auto-play: a teach-provenance objective is invi
   assert.match(result.goal, /exploring|stalled/, "with no world objective, auto-play explores or stalls — it never chases the taught decoy");
 });
 
+test("exploring: two unexposed exits pick the codepoint-lowest direction, and the same one whichever order the exit facts arrived", async () => {
+  // "aardvark" sorts before "east" in plain codepoint order — a direction name
+  // that would lose to "east" under any priority OTHER than a real sort would
+  // still be picked here only if the sort actually ran.
+  const extraExits = [
+    { subject: "a", predicate: "mgx:has-exit-aardvark", object: "w" },
+    { subject: "w", predicate: "rdf:type", object: "room" },
+  ];
+  const build = async (order) => {
+    const dir = await seedLineWorld({ extraFacts: order });
+    return dir;
+  };
+  const forward = await build(extraExits);
+  const reversed = await build([...extraExits].reverse());
+
+  const forwardResult = await runAdventureAutoplayTick(forward, { exposedRoomIds: new Set(["a"]), planHolder: planHolderFor() });
+  const reversedResult = await runAdventureAutoplayTick(reversed, { exposedRoomIds: new Set(["a"]), planHolder: planHolderFor() });
+  assert.equal(forwardResult.goal, reversedResult.goal, "exit-fact arrival order never changes which direction is picked");
+  assert.match(forwardResult.goal, /heading aardvark into unseen ground/, "codepoint order picks 'aardvark' over 'east'");
+});
+
 test("fetch: the objective's room is exposed but not co-located — auto-play paths toward it over the exposed exit-graph, one step per tick", async () => {
   const dir = await seedLineWorld({ objectiveRoom: "c" });
   const planHolder = planHolderFor();
