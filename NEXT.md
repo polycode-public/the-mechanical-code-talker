@@ -78,15 +78,10 @@ The work list, ranked by value against the plan's target card.
    `year | rdfs:subClassOf | eclipse` from simple-wikipedia's solar_eclipse
    body, and it reached a live card's background. Same family as the wikidata
    rows already fixed, through a different source path.
-5. [ ] **Phrasal verbs split, and one event states itself twice** — built on
-   `worktree-agent-a8807a5a6b26758d7` but NOT merged: that branch was cut before
-   the passive work landed, so its `readNewswireFrame` reinstates the blanket
-   be-form decline the passives replaced. Integration in flight on
-   `worktree-agent-a98d6491e094d48a8`, porting the phrasal table, the widened
-   subject climb, the synonym fold and the strict-lane particle decline onto the
-   current function without losing the passive frames. Open question it carries:
-   what the branch's `lookupVerb(...) continue` gate is for, since the current
-   function has no equivalent.
+5. [~] **Phrasal verbs split, and one event states itself twice** — CODE
+   COMPLETE on `worktree-agent-a98d6491e094d48a8`, awaiting the full suite at
+   the next push. `worktree-agent-a8807a5a6b26758d7` was never merged and can
+   be deleted: its work is ported, not taken.
 6. [~] **Thin cards crowd the feed** — CODE COMPLETE, merged as `2685a438`,
    awaiting the full suite at the next push. The source was the wrong key: the
    tim-king card comes off the same bodyless source and is the plan's first
