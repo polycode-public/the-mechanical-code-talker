@@ -45,26 +45,43 @@ state and does not.
 
 The work list, ranked by value against the plan's target card.
 
-1. [ ] **A report's claim is not attributed to its speaker** — the write path
-   and sibling resolution are CODE COMPLETE on
-   `worktree-agent-ad6f9b1744d17d6b2` and DELIBERATELY UNMERGED. Merging them
-   before the card read side would break the spec's own invariant: the russia
-   card renders the claim with no speaker, and on a store where the seed graph
-   does not out-rank it, `looksLikeEntityTerm` accepts `fact:285cf16183…` as a
-   one-word term and heads a card with the hex id. `news-feed.mjs` has no
-   `attributedTo` and no `startsWith("fact:")` anywhere. So commit 4 lands
-   first, then both merge together. Spec in
-   `PLAN_ATTRIBUTION.md`. Commits 1, 2, 5 and 6 are merged: the `normFactTerm`
-   carve-out, the phrase layer, the chat caveat, and every vocabulary site with
-   an estate guard that parses all five live. What remains is the write path
-   (commit 7, `extract-facts.mjs`), the card read side (commit 4,
-   `news-feed.mjs`), `resolution.mjs` site 10, and the full chat route
-   (commit 8). `reportedClauseOf` currently discards the speaker — its own
-   comment says so — and neither of its two regexes captures it, so both need a
-   capture group and its return type becomes `{ claim, speaker }`. It is
-   exported and pinned, so that signature change is a real edit. The invariant
-   to hold throughout: a surface that cannot render the attribution must not
-   render the claim.
+1. [ ] **A report's claim is not attributed to its speaker** — the shape is a
+   reified finding: the claim row carries `mgx:extractionFinding =
+   "reported-speech"`, and a second row states
+   `fact:<claimId> | mgx:attributedTo | <speaker>`. The finding is the durable
+   half, so a lost attribution degrades to "reported speech, speaker unrecorded"
+   rather than to a bare assertion. An attributed claim STAYS GROUNDED and every
+   rendering names the speaker — refusing it would be a judgement that a grounded
+   claim might be false, which is a guess in the direction tmct exists to avoid,
+   and a trust penalty is banned outright by the findings vocabulary's own
+   constitution. **The invariant: a surface that cannot render the attribution
+   must not render the claim.**
+   - Merged: the `normFactTerm` carve-out (a `fact:` id survives the CURIE strip,
+     without which the reference is unrecoverable), the phrase layer, the chat
+     caveat, and the finding at all five vocabulary sites with an estate guard
+     parsing each one live.
+   - CODE COMPLETE and DELIBERATELY UNMERGED on
+     `worktree-agent-ad6f9b1744d17d6b2`: the write path and
+     `resolution.mjs`'s `MERGE_PREDICATE_STEMS` entry (without which two outlets
+     attributing one claim to two speakers read as a contradiction). Merging it
+     alone breaks the invariant — the russia card renders the claim with no
+     speaker, and where the seed graph does not out-rank it,
+     `looksLikeEntityTerm` accepts `fact:285cf16183…` as a one-word term and
+     heads a card with the hex id.
+   - In flight on `worktree-agent-abdd759e4cdcb7f98`: the card read side, which
+     unblocks that merge. Suppress attribution rows from every card lane at the
+     top of `buildNewsItems`, and read the speaker off the entry's WHOLE `rows`
+     array — on the russia card the kept sentence is the headline row while the
+     folded row carries the speaker.
+   - Still open: the full chat route, where `foldFactRows` attaches an
+     `attributedTo` field so every reader inherits it, rather than chat showing
+     only the caveat. And retraction does not cascade — `removeFacts` scrubs
+     `objectProperties` edges, while an attribution holds the claim id in an
+     attribute value, so retracting a claim leaves its attribution behind.
+   - Unverified, and worth checking before trusting: an attribution row's trust
+     behaviour is untraced (`trust.mjs` was never read), and whether attribution
+     rows should count toward the bench's grounded numbers needs
+     `scripts/news-bench/metrics.mjs`.
 2. [ ] **One event, two verbs, two rows on the card** — in flight on
    `worktree-agent-a2ed151e88e6c10f0`, at paragraph assembly where the whole row
    set is in view. The russia card reads
