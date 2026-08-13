@@ -55,18 +55,19 @@ The work list, ranked by value against the plan's target card.
    rendering names the speaker; the invariant is that a surface which cannot
    render the attribution must not render the claim. Commits 2–5 are blocked
    only on other agents' files, 6–8 on `core.mjs` and `extract-facts.mjs`.
-2. [ ] **An unplaced hub turns the sense scope off entirely** — in flight on
-   `worktree-agent-a88fb2f1a0b11930f`, anchoring the scope on the terms the
-   article itself names when the hub is unplaced (chosen over admitting
-   nothing, accepting that a card naming few entities goes sparse). When `topsOf(hub)`
-   is empty the bands never place it, the hub-anchored scope switches off, and
-   every neighbour is admitted as filler. Iteration 11 killed the `bright`
-   specimen by re-heading that card on `rescuers`, and the same cause
-   immediately surfaced on another card: `syrian holdout province` emits
-   "pronounce means the same as say. say is a kind of matter." Fixing a hub
-   cures one card; the class needs the scope to do something better than switch
-   off. One measured non-answer already: anchoring on the hub's seeds plus the
-   far side of its reported rows reshuffles noise rather than cutting it.
+2. [ ] **The graph's own false fact becomes an anchor's sense** — in flight on
+   `worktree-agent-a8aed6d0760b04093`. The unplaced-hub scope landed and the
+   syrian card is byte-identical, because its strays never came through the hub
+   walk. Instrumented: both arrive on the article-entity walk, and the article's
+   own extraction minted `say | rdfs:subClassOf | matter` from "many say it is
+   just a matter of time". That asserted isa places `say` under `substance`, so
+   `matter` then legitimately meets the anchor pool — no sense gate can refuse
+   it, because the graph believes it. Two upstream causes: the mint itself in
+   `extract-facts.mjs`, and `articleEntityNames` in `news.mjs` admitting `say`
+   and `moves`, neither of which is an entity. A measured lever left pending
+   their fix: a strict article walk drops the genuine stray
+   `dance | mgx:relatedTo | moves` from the trump tariff card (background 24 →
+   15) and does not touch the syrian card.
 3. [ ] **"hackernews discuss" reads as a plural** — live on 6 of 14 cards.
    `isSubjectPlural` reads a naive `-s` suffix, so a singular site name spelled
    with a trailing `-s` renders bare. The fix is one entry in the existing
