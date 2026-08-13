@@ -52,8 +52,8 @@
 //
 // The extractor also says HOW it read a sentence, as named structural findings
 // with their own detectors — never a score. A candidate the detectors show was
-// mis-read is declined by name (`relative-clause-verb`, `fragment-term`), and a
-// definitional frame ("X is the name for Y") declines the false isa and mints
+// mis-read is declined by name (`relative-clause-verb`, `fragment-term`,
+// `phrasal-particle`), and a definitional frame ("X is the name for Y") declines the false isa and mints
 // the edge the sentence actually states (`mgx:nameFor`, `definitional-frame`).
 // The ingest result reports both as `declined` and `minted`.
 
@@ -70,6 +70,7 @@ import { touchedFactRows } from "../domain/memory/touched-facts.mjs";
 import { INGEST_SESSION_MARKER } from "../domain/memory/trust.mjs";
 import { normFactTerm } from "../domain/hash.mjs";
 import { splitIdentifierWords } from "../domain/prose.mjs";
+import { baseVerbSurface } from "../domain/fact-phrase.mjs";
 import { winkInstance } from "../adapters/wink-model.mjs";
 import {
   loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName, predicateOf,
@@ -198,6 +199,71 @@ const NEWSWIRE_RELATION_VERBS = new Set([
   "launch", "unveil", "seize", "capture", "invade", "attack", "bomb", "target",
   "discover", "uncover", "rescue", "evacuate",
   "spark", "trigger", "cause", "force", "deploy", "restore", "expand",
+]);
+// Two verbs the band already holds can report ONE event: a headline frees a
+// prisoner the description says was released, and the card then states the
+// same act twice. Each pair below is one act under two words, so the left
+// lemma reads as the right one and both sentences land on a single edge —
+// the vocabulary-level form of the rule that already puts "releases" and
+// "released" on one edge. Only true interchangeables belong here: a pair that
+// merely overlaps ("detain"/"jail", "oust"/"overthrow") states two different
+// things about the same people and keeps its own edge.
+const NEWSWIRE_VERB_SYNONYMS = new Map([
+  ["free", "release"],
+  ["wound", "injure"],
+  ["uncover", "discover"],
+  ["bar", "ban"],
+]);
+
+// The particles a phrasal verb carries. A frame that drops one states a
+// different event ("Frenzy … Takes Over London" → "takes London"), and one
+// that reads it as the thing the event touched states nonsense ("stocks sell
+// out" → sell "out"), so the pair below is read whole or not at all.
+const PHRASAL_PARTICLES = new Set([
+  "over", "out", "up", "down", "off", "in", "on", "away", "back", "aside", "through",
+]);
+// The closed verb+particle pairs read as one predicate. Each is a phrasal verb
+// whose meaning is not its bare verb's — "take over" is not "take", "sell out"
+// is not "sell" — so the pair mints `mgx:<lemma>-<particle>`, which
+// fact-phrase.mjs already reads back as "takes over". A verb+particle the list
+// doesn't hold is left to the tiers it already went through.
+const PHRASAL_VERB_PAIRS = new Set([
+  "take over", "take out", "take up", "take on", "take down", "take back",
+  "sell out", "sell off",
+  "carry out",
+  "step down", "step up", "step aside", "step in",
+  "call off", "call up", "call out",
+  "hand over", "hand out", "hand down",
+  "rule out",
+  "pull out", "pull off", "pull down", "pull back",
+  "set out", "set up", "set off", "set aside",
+  "break out", "break up", "break down", "break off",
+  "lay off", "lay out",
+  "shut down", "shut off",
+  "turn out", "turn down", "turn over", "turn away", "turn back",
+  "give up", "give back", "give in",
+  "bring down", "bring back", "bring in",
+  "roll out", "roll back",
+  "hold back", "hold up", "hold off",
+  "back down", "scale back", "push back", "push through",
+  "knock out", "knock down", "wipe out", "shoot down", "strike down",
+  "head off", "fend off",
+  "point out", "speak out",
+  "close down", "open up",
+  "drop out", "walk out", "walk back",
+  "wind down", "phase out", "sign off",
+  "fall back", "move on",
+]);
+// The prepositions a subject run climbs OUT of to the head that governs it.
+// "Frenzy for solar eclipse glasses takes over London" is about the frenzy;
+// the run beside the verb is the preposition's object, never the subject.
+// Deliberately without the temporal ones (after/before/during/since): a
+// fronted temporal phrase is adverbial, so the noun the climb would reach for
+// heads nothing.
+const SUBJECT_CHAIN_PREPOSITIONS = new Set([
+  "of", "for", "in", "on", "at", "from", "with", "about", "over",
+  "against", "between", "among", "across", "near", "behind", "around",
+  "under", "inside", "outside", "amid",
 ]);
 // The of-frame heads a newswire event reads THROUGH to what it really touched:
 // "discovers hundreds of ancient amphorae" is a fact about the amphorae, and
@@ -597,15 +663,17 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     return i === null ? null : entityRunAt(i);
   };
   // The subject-side mirror of the copula-object of-chain rule: when a found
-  // subject run is the inner noun of an of-chain ("the weight of all of the
-  // snow …"), climb to the outer run's nominal head ("weight"), bounded to two
-  // hops. A classifier head (type/kind/sort/…) reads THROUGH — a "kind of X"
-  // outer never becomes the subject, so the inner noun is kept. When the run is
-  // governed by "of" but no readable noun heads the chain (a mis-tagged head,
-  // e.g. "the top of the mountain …"), return null: an honest abstain, never the
-  // inner-noun confusion ("mountain", "snow"). A run not governed by "of" is
-  // returned unchanged. Returns a run-lo index to fold, or null to abstain.
-  const ofChainSkip = (k) => {
+  // subject run is the object of a preposition ("the weight of all of the
+  // snow …", "frenzy for eclipse glasses …"), climb to the head that governs
+  // the phrase ("weight", "frenzy"), bounded to two hops. A classifier head
+  // (type/kind/sort/…) or a counting one (hundreds/dozens/…) reads THROUGH —
+  // "a kind of X" and "hundreds of X" are both about X — so the inner noun is
+  // kept. When the run is governed by a preposition but no readable noun heads
+  // the phrase (a mis-tagged head, e.g. "the top of the mountain …"), return
+  // null: an honest abstain, never the inner-noun confusion ("mountain",
+  // "snow"). An ungoverned run is returned unchanged. Returns a run-lo index
+  // to fold, or null to abstain.
+  const prepositionChainSkip = (k) => {
     const p = pos[k];
     return p === "DET" || p === "ADJ" || p === "ADV" || p === "NUM";
   };
@@ -613,12 +681,14 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     let lo = runLoOf(found);
     for (let hop = 0; hop < 2; hop += 1) {
       let g = lo - 1;
-      while (g >= 0 && ofChainSkip(g)) g -= 1;
-      if (g < 0 || values[g]?.toLowerCase() !== "of") return lo; // not an of-chain object
+      while (g >= 0 && prepositionChainSkip(g)) g -= 1;
+      if (g < 0 || !SUBJECT_CHAIN_PREPOSITIONS.has(values[g]?.toLowerCase())) return lo; // ungoverned run
       let k = g - 1;
-      while (k >= 0 && !isNounish(k) && (ofChainSkip(k) || values[k]?.toLowerCase() === "of")) k -= 1;
+      while (k >= 0 && !isNounish(k)
+        && (prepositionChainSkip(k) || SUBJECT_CHAIN_PREPOSITIONS.has(values[k]?.toLowerCase()))) k -= 1;
       if (k < 0 || !isNounish(k)) return null; // no readable head — abstain
-      if (OF_CLASSIFIER_HEADS.has(String(values[k]).toLowerCase())) return lo; // classifier reads through
+      const head = String(values[k]).toLowerCase();
+      if (OF_CLASSIFIER_HEADS.has(head) || OF_COUNT_HEADS.has(head)) return lo; // reads through to the inner noun
       lo = runLoOf(k);
     }
     return lo;
@@ -767,22 +837,34 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
   //
   //   - wink must have tagged the token VERB, and its LEMMA must be in the
   //     band, so a past tense ("released", "adopted") reads where the
-  //     lexicon's -s-only fold cannot;
-  //   - the verb complex must not open with a be-form, so a passive or a
-  //     progressive never mints its own reverse;
+  //     lexicon's -s-only fold cannot. A verb the LEXICON already declares is
+  //     skipped by surface, because the lexicon arm read that sentence first
+  //     and this frame would mint the same act a second time;
+  //   - a verb followed by one of the closed phrasal pairs is admitted on the
+  //     pair instead, whichever vocabulary the bare verb belongs to: "take
+  //     over" is a different relation from "take", so the lexicon's entry for
+  //     the verb has nothing to say about it;
   //   - it must not sit in a relative clause, which has no subject of its own
   //     here;
+  //   - a be-form auxiliary heads a passive or a progressive rather than
+  //     declining the sentence: the -ing form marks the progressive and is
+  //     skipped, a "by" complement mints the ACTIVE edge with the actor as
+  //     subject, and an agentless passive states the patient's own condition;
   //   - subject and object are each the NEAREST noun run on their side with
   //     the copula frame's blockers applied, so neither scan crosses a verb, a
   //     preposition or a conjunction into another clause. "resigned from
   //     Cambridge" yields no object at all rather than "resign Cambridge".
   //     The subject scan starts left of the verb's OWN modal chain ("will
-  //     completely block"), which is one verb complex rather than a crossing.
-  //     A counting of-chain on either side reads through to what the event
-  //     really touched ("hundreds of ancient amphorae" → amphorae).
+  //     completely block"), which is one verb complex rather than a crossing,
+  //     and climbs out of any preposition that governs it ("a fire AT the
+  //     hospital killed …" is about the fire). A counting of-chain on either
+  //     side reads through to what the event really touched ("hundreds of
+  //     ancient amphorae" → amphorae).
   //
   // A lemma the lexicon itself declares keeps the lexicon's predicate, so
-  // "releases" (the lexicon arm) and "released" (this one) land on one edge.
+  // "releases" (the lexicon arm) and "released" (this one) land on one edge —
+  // and NEWSWIRE_VERB_SYNONYMS folds the band's own interchangeable pairs onto
+  // that same edge before the lookup, so "freed" lands there too.
   const verbComplexStart = (i) => {
     let k = i - 1;
     while (k >= 0 && (pos[k] === "ADV" || pos[k] === "AUX" || pos[k] === "PART")) k -= 1;
@@ -792,7 +874,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     const w = String(word ?? "").toLowerCase();
     return OF_COUNT_HEADS.has(w) || OF_PARTITIVE_HEADS.has(w) || OF_CLASSIFIER_HEADS.has(w);
   };
-  const countChainEntity = (idx, step) => {
+  const countChainEntityIndex = (idx, step) => {
     let at = nearestEntityIndex(idx, step, COPULA_FRAME_BLOCKERS);
     for (let hop = 0; at !== null && hop < 2; hop += 1) {
       let hi = at;
@@ -802,7 +884,30 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
       if (inner === null) break;
       at = inner;
     }
+    return at;
+  };
+  const countChainEntity = (idx, step) => {
+    const at = countChainEntityIndex(idx, step);
     return at === null ? null : entityRunAt(at);
+  };
+  // The noun an event predicates about: the nearest run leftward, climbed out
+  // of any preposition it is the object of, so a phrase-headed subject reads as
+  // its own head rather than as the noun that happens to sit beside the verb.
+  const newswireSubject = (idx) => {
+    const at = countChainEntityIndex(idx, -1);
+    if (at === null) return null;
+    const climbed = climbSubjectRun(at);
+    return climbed === null ? null : entityRunAt(climbed);
+  };
+  // The phrasal verb headed at `i`, when the closed table holds the pair: its
+  // own minted predicate, and the particle's index, so an object scan reads
+  // past the particle to what the event touched.
+  const phrasalVerbAt = (i) => {
+    const particle = stripSentenceFinalStop(String(values[i + 1] ?? "")).toLowerCase();
+    if (!PHRASAL_PARTICLES.has(particle)) return null;
+    const lemma = String(lemmas?.[i] ?? values[i]).toLowerCase();
+    if (!PHRASAL_VERB_PAIRS.has(`${lemma} ${particle}`)) return null;
+    return { predicate: `mgx:${lemma}-${particle}`, particleAt: i + 1 };
   };
   // The first token of the complement a verb takes, adverbs crossed. A passive
   // reads its own frame off this one word: "by" names the actor, a locative or
@@ -829,14 +934,23 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
   const readNewswireFrame = () => {
     for (let i = 1; i < values.length - 1; i += 1) {
       if (pos[i] !== "VERB") continue;
-      if (lookupVerb(lexicon, String(values[i]).toLowerCase())) continue;
       const lemma = String(lemmas?.[i] ?? values[i]).toLowerCase();
-      if (!NEWSWIRE_RELATION_VERBS.has(lemma)) continue;
+      const phrasal = phrasalVerbAt(i);
+      if (!phrasal) {
+        if (lookupVerb(lexicon, String(values[i]).toLowerCase())) continue;
+        if (!NEWSWIRE_RELATION_VERBS.has(lemma)) continue;
+      }
       if (relativePronounBefore(i) >= 0) continue;
-      const declared = lookupVerb(lexicon, lemma);
-      const predicate = declared ? predicateOf(declared) : `mgx:${lemma}`;
+      const canonical = NEWSWIRE_VERB_SYNONYMS.get(lemma) || lemma;
+      const declared = lookupVerb(lexicon, canonical);
+      const predicate = phrasal
+        ? phrasal.predicate
+        : (declared ? predicateOf(declared) : `mgx:${canonical}`);
       const surface = stripSentenceFinalStop(String(values[i])).toLowerCase();
-      const head = complementHead(i);
+      // A phrasal verb's own complement starts past the particle, so the frame
+      // below reads "was taken over BY Google" the same way it reads a bare
+      // participle's "by".
+      const head = complementHead(phrasal ? phrasal.particleAt : i);
       const headWord = head === -1 ? "" : String(values[head]).toLowerCase();
       const beAuxiliary = beAuxiliaryBefore(i);
       // A progressive is not an event that happened, and its -ing form is the
@@ -848,7 +962,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
       // Attackers"), so the "by" is what identifies the frame.
       if (headWord === "by") {
         const actor = countChainEntity(head, +1);
-        const patient = countChainEntity(verbComplexStart(i), -1);
+        const patient = newswireSubject(verbComplexStart(i));
         if (actor && patient) push(actor, predicate, patient);
         continue;
       }
@@ -856,15 +970,17 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
         // "<patient> is <participle> <prep> <complement>" — no actor is named,
         // so nothing can take the subject side of an active edge. The claim the
         // sentence DOES make is about the patient's own condition, and that is
-        // what the participle predicate states.
-        if (!PASSIVE_STATE_PREPOSITIONS.has(headWord)) continue;
-        const patient = countChainEntity(verbComplexStart(i), -1);
+        // what the participle predicate states. A phrasal pair already carries
+        // its particle as that condition, and no second preposition can restate
+        // it, so an agentless phrasal passive abstains.
+        if (phrasal || !PASSIVE_STATE_PREPOSITIONS.has(headWord)) continue;
+        const patient = newswireSubject(verbComplexStart(i));
         const complement = countChainEntity(head, +1);
         if (patient && complement) push(patient, `mgx:${surface}-${headWord}`, complement);
         continue;
       }
-      const subject = countChainEntity(verbComplexStart(i), -1);
-      const object = countChainEntity(skipCountPhrase(i), +1);
+      const subject = newswireSubject(verbComplexStart(i));
+      const object = countChainEntity(phrasal ? phrasal.particleAt : skipCountPhrase(i), +1);
       if (!subject || !object) continue;
       push(subject, predicate, object);
     }
@@ -922,6 +1038,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
       if (OPTIMISTIC_COPULAS.has(word)) continue;
       const verb = lookupVerb(lexicon, word);
       if (!verb) continue;
+      if (phrasalVerbAt(i)) continue; // the phrasal frame reads the pair whole
       const relative = relativePronounBefore(i);
       if (relative >= 0 && relative - 1 !== copulaObjHi) {
         decline("relative-clause-verb", { subject: copulaSubject, predicate: predicateOf(verb), object: nearestEntity(i, +1) });
@@ -946,6 +1063,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
     if (pos[i] !== "VERB") continue;
     const verb = lookupVerb(lexicon, values[i].toLowerCase());
     if (!verb) continue;
+    if (phrasalVerbAt(i)) continue; // the phrasal frame reads the pair whole
     const subject = climbedSubjectAt(i);
     if (relativePronounBefore(i) >= 0) {
       decline("relative-clause-verb", { subject, predicate: predicateOf(verb), object: nearestEntity(i, +1) });
@@ -1256,6 +1374,27 @@ export function readsAsEntityTerm(term, nlp) {
 
 const readsAsEntityFact = (fact, nlp) => readsAsEntityTerm(fact.subject, nlp) && readsAsEntityTerm(fact.object, nlp);
 
+/** Did the frame that read this row cut a phrasal verb in half? "as prices
+ *  surge and stocks sell out" names no object at all, so a row pairing the
+ *  bare verb with its own particle ("stocks mgx:sell out") states nothing —
+ *  the particle belongs to the verb. Read off the same closed pair table the
+ *  optimistic tier reads a phrasal verb whole by, so only a particle that verb
+ *  really takes declines the row. */
+export function splitsPhrasalVerb(fact) {
+  const particle = String(fact?.object ?? "").trim().toLowerCase();
+  if (!PHRASAL_PARTICLES.has(particle)) return false;
+  const surface = String(fact?.predicate ?? "").split(":").pop().toLowerCase();
+  return PHRASAL_VERB_PAIRS.has(`${surface} ${particle}`)
+    || PHRASAL_VERB_PAIRS.has(`${baseVerbSurface(surface)} ${particle}`);
+}
+
+/** Why a candidate row is turned down, or null when it stands: the phrasal
+ *  split first (it names the row's real problem), then the entity-term rule. */
+const declineFindingFor = (fact, nlp) => {
+  if (splitsPhrasalVerb(fact)) return "phrasal-particle";
+  return readsAsEntityFact(fact, nlp) ? null : "fragment-term";
+};
+
 /** Does one raw token read as a code identifier rather than a word? camelCase
  *  and snake_case split into several words, and a dot between letters or a path
  *  separator names a module or a file. Read on the sentence's own surface,
@@ -1482,13 +1621,13 @@ export async function ingestText(text, {
     currentRows = afterRows;
     if (!recognized) { lastDecline = decline || lastDecline; return null; }
     const fresh = rows.filter((row) => !taggedIds.has(row.id));
-    const kept = fresh.filter((row) => readsAsEntityFact(row, termNlp));
+    const kept = fresh.filter((row) => !declineFindingFor(row, termNlp));
     if (kept.length !== fresh.length) {
       for (const row of fresh) {
         if (kept.includes(row)) continue;
         declined.push({
           sentence: currentSentence,
-          finding: "fragment-term",
+          finding: declineFindingFor(row, termNlp),
           candidate: { subject: row.subject, predicate: row.predicate, object: row.object },
         });
       }
@@ -1581,8 +1720,9 @@ export async function ingestText(text, {
         for (const { finding, candidate } of reading.declined) declined.push({ sentence, finding, candidate });
         const keptCandidates = [];
         for (const t of reading.triples) {
-          if (readsAsEntityFact(t, termNlp)) keptCandidates.push(t);
-          else declined.push({ sentence, finding: "fragment-term", candidate: t });
+          const finding = declineFindingFor(t, termNlp);
+          if (finding) declined.push({ sentence, finding, candidate: t });
+          else keptCandidates.push(t);
         }
         // A minted edge rides its own finding: minted[].fact is the very object
         // the candidate list holds, so the mint and its row match by identity
