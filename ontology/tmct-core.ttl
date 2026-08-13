@@ -236,7 +236,7 @@ mgx:observedAt a owl:DatatypeProperty ;
 mgx:extractionFinding a owl:DatatypeProperty ;
   rdfs:domain tmct:Fact ;
   rdfs:range xsd:string ;
-  rdfs:comment "OPTIONAL: the space-joined structural findings the extractor recorded about how it read the sentence THIS assertion came from, from the closed vocabulary identifier-token | clause-fallback | pronoun-carry | definitional-frame. Each is a mechanical property of the parse with its own detector and its own tests — never a confidence score, which is the guessing tmct's honest-miss promise exists to prevent. It sits on the assertion record rather than the triple, so a second source stating the same thing cleanly inherits no caveat. Absent means no findings were recorded, never that the sentence was checked and read cleanly." .
+  rdfs:comment "OPTIONAL: the space-joined structural findings the extractor recorded about how it read the sentence THIS assertion came from, from the closed vocabulary identifier-token | clause-fallback | pronoun-carry | definitional-frame | reported-speech. Each is a mechanical property of the parse with its own detector and its own tests — never a confidence score, which is the guessing tmct's honest-miss promise exists to prevent. It sits on the assertion record rather than the triple, so a second source stating the same thing cleanly inherits no caveat. Absent means no findings were recorded, never that the sentence was checked and read cleanly." .
 
 mgx:supersedes a owl:DatatypeProperty ;
   rdfs:domain tmct:Fact ;
@@ -1014,6 +1014,11 @@ mgx:nameFor a owl:ObjectProperty ;
   rdfs:label "nameFor" ;
   rdfs:seeAlso tmct:denotes ;
   rdfs:comment "Subject is a name for the object's concept — the edge a definitional copula frame states (\"latency is the name for the time period …\"), minted at the EXTRACTION tier where that frame's false class membership was declined. Reads back through the curated phrase table as \"is the name for\". seeAlso tmct:denotes, the provider-tier cousin: the two say the same thing from different mouths, and they stay separate so extracted prose is never laundered into a provider-declared shape." .
+
+mgx:attributedTo a owl:ObjectProperty ;
+  rdfs:label "attributedTo" ;
+  rdfs:subPropertyOf prov:wasAttributedTo ;
+  rdfs:comment "Subject is the id of a Fact carrying the reported-speech finding, object is the named person the sentence credits as speaker — the reified attribution row a reported-speech clause produces, minted at the EXTRACTION tier alongside that finding. Unlike mgx:statedBy, whose range unions tmct:Source's three disjoint PROV top classes and so stays rdfs:seeAlso, this predicate's object is always a named person, a prov:Agent, so the PROV alignment holds outright and this carries rdfs:subPropertyOf prov:wasAttributedTo rather than seeAlso." .
 
 # ---------------------------------------------------------------------------
 # 1f. Game-world vocabulary (the worlds pack, corpus/worlds/).

@@ -133,7 +133,7 @@ mgx:FactShape a sh:NodeShape ;
         sh:minCount 0 ;
         sh:maxCount 1 ;
         sh:minLength 1 ;
-        sh:message "mgx:extractionFinding, when present, must name at least one finding from the closed vocabulary identifier-token | clause-fallback | pronoun-carry | definitional-frame (a space-joined LIST, since one assertion can carry several). Absent — never empty — when the write recorded none, which means no findings were recorded rather than that the sentence read cleanly." ;
+        sh:message "mgx:extractionFinding, when present, must name at least one finding from the closed vocabulary identifier-token | clause-fallback | pronoun-carry | definitional-frame | reported-speech (a space-joined LIST, since one assertion can carry several). Absent — never empty — when the write recorded none, which means no findings were recorded rather than that the sentence read cleanly." ;
     ] ;
     sh:property [
         sh:path mgx:supersedes ;
