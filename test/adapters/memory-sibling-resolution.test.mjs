@@ -11,6 +11,7 @@ import {
   resolutionStrategyFor, effectiveObservedAt, resolveSiblingGroups,
   RESOLUTION_MERGE, RESOLUTION_LATEST_OBSERVATION_WINS, RESOLUTION_FIRST_CLAIM_WINS, RESOLUTION_CONTRADICTION,
 } from "../../src/domain/memory/resolution.mjs";
+import { factIdForTriple } from "../../src/domain/hash.mjs";
 
 const tmpRepo = () => mkdtemp(join(tmpdir(), "tmct-resolve-"));
 
@@ -27,6 +28,7 @@ test("the resolver table classifies each predicate family, defaulting to contrad
   assert.equal(resolutionStrategyFor("mgx:currently-in"), RESOLUTION_LATEST_OBSERVATION_WINS);
   assert.equal(resolutionStrategyFor("mgx:display-name"), RESOLUTION_LATEST_OBSERVATION_WINS);
   assert.equal(resolutionStrategyFor("mgx:has-exit-north"), RESOLUTION_LATEST_OBSERVATION_WINS, "the exit family is generated, not enumerated");
+  assert.equal(resolutionStrategyFor("mgx:attributedTo"), RESOLUTION_MERGE, "two speakers on one claim corroborate it, they do not disagree");
   assert.equal(resolutionStrategyFor("mgx:playedBy"), RESOLUTION_FIRST_CLAIM_WINS);
   assert.equal(resolutionStrategyFor("mgx:hasFirstSubevent"), RESOLUTION_CONTRADICTION, "'the FIRST thing you do' is functional by meaning");
   assert.equal(resolutionStrategyFor("mgx:whatever-nobody-classified"), RESOLUTION_CONTRADICTION);
@@ -191,6 +193,22 @@ test("a member taught into two collections merges — belonging to both at once 
     assert.deepEqual(findContradictions(m), [], "p belongs to both collections at once — not a contradiction");
     const rows = readFactRows(m).filter((r) => r.subject === "p");
     assert.equal(rows.length, 2, "both memberships are kept");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("one claim attributed to two speakers corroborates, and neither attribution is dropped", async () => {
+  const dir = await tmpRepo();
+  const claimId = factIdForTriple("russia", "tmct:releases", "robert gilman");
+  try {
+    await appendFact(dir, { subject: claimId, predicate: "mgx:attributedTo", object: "president trump", provenance: "extracted:nyt-world" });
+    await appendFact(dir, { subject: claimId, predicate: "mgx:attributedTo", object: "the state department", provenance: "extracted:reuters-world" });
+    const m = await loadMemory(dir);
+    assert.deepEqual(findContradictions(m), [], "two outlets naming two speakers is not a disagreement");
+    const rows = readFactRows(m).filter((r) => r.predicate === "mgx:attributedTo");
+    assert.equal(rows.length, 2, "both speakers are kept");
+    assert.ok(rows.every((r) => r.subject === claimId), "the claim's group id survives the write as the subject");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

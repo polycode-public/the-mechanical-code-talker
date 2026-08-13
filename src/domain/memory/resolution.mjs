@@ -44,6 +44,9 @@ const MERGE_PREDICATE_STEMS = [
   "mgx:createdBy",
   "mgx:mannerOf", "mgx:relatedTo", "mgx:synonym", "mgx:antonym", "mgx:similarTo", "mgx:symbolOf",
   "mgx:knows-about",
+  // One claim can be attributed to many speakers at once. Two outlets naming two
+  // different people corroborate the claim; they do not disagree about it.
+  "mgx:attributedTo",
 ];
 
 export const MERGE_PREDICATES = new Set(
