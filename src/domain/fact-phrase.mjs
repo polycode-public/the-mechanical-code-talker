@@ -235,6 +235,18 @@ export function predicatePhrase(predicate, subject) {
     const verb = isSubjectPlural(subject) ? minted[1] : thirdPersonSingularSurface(minted[1]);
     return `${verb}${minted[2] ? ` ${minted[2]}` : ""}`;
   }
+  // The lexicon's own minted verb predicates come pre-inflected: it builds
+  // "tmct:<3sg>[<Prep>]" from a declared verb, so "release" is stored as
+  // "tmct:releases" and "rely" + "on" as "tmct:reliesOn". Singular subjects
+  // read that surface as it stands. A plural one takes the bare form through
+  // baseVerbSurface, the documented inverse of the fold that made it, so
+  // "rescuers release" comes out of the same rule that gives "rescuers report".
+  // The camel-cased preposition is its own word in a sentence.
+  const declared = /^tmct:([a-z]+)([A-Z][a-z]+)?$/.exec(p);
+  if (declared) {
+    const verb = isSubjectPlural(subject) ? baseVerbSurface(declared[1]) : declared[1];
+    return `${verb}${declared[2] ? ` ${declared[2].toLowerCase()}` : ""}`;
+  }
   const colon = p.indexOf(":");
   return colon === -1 ? p : p.slice(colon + 1);
 }
