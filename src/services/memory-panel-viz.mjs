@@ -23,10 +23,9 @@ export function bandLabelFor(key) {
     "human-large": "human persona (large)",
     seon: "seon ontology",
     conceptnet: "ConceptNet",
-    "tier2-aws": "AWS",
-    "tier2-python": "Python",
-    "tier2-java": "Java",
     "wordnet-xl": "WordNet",
+    namenet: "NameNet",
+    child: "child vocabulary",
   };
   return BAND_LABELS[key] || key;
 }
@@ -39,7 +38,7 @@ export function bandLabelFor(key) {
 export function statsSummaryLine(stats, bandLabel) {
   const BAND_ORDER = [
     "human", "human-medium", "human-large", "seon", "conceptnet",
-    "tier2-aws", "tier2-python", "tier2-java", "wordnet-xl",
+    "wordnet-xl", "namenet", "child",
     "taught this session", "other",
   ];
   if (!stats || !stats.total) return "no starter memory; starting empty";
@@ -172,7 +171,7 @@ export function renderStatsPanelInto(panelEl, stats, opts) {
   const { bandLabel, taughtHint, onForget = null, persistNote = null } = opts;
   const BAND_ORDER = [
     "human", "human-medium", "human-large", "seon", "conceptnet",
-    "tier2-aws", "tier2-python", "tier2-java", "wordnet-xl",
+    "wordnet-xl", "namenet", "child",
     "taught this session", "other",
   ];
   function bandRow(label, count) {

@@ -125,26 +125,23 @@ test("a pack-kind entry with NO corpusPath (lexicon/templates-only pack) is stil
   }
 });
 
-test("a mid-list active bundle (tier2-aws, activated via tmct.toml) seeds alongside seon+conceptnet in one loop", async () => {
+test("a mid-list active bundle (tier2-general, activated via tmct.toml) seeds alongside seon+conceptnet in one loop", async () => {
   const dir = await tmp();
   try {
-    await writeFile(join(dir, "tmct.toml"), `${CODE_PERSONA_TOML}\n[extensions.tier2-aws]\nactive = true\n`);
+    await writeFile(join(dir, "tmct.toml"), `${CODE_PERSONA_TOML}\n[extensions.tier2-general]\nactive = true\n`);
     const { entries } = await resolveExtensions(dir);
-    assert.deepEqual([...entries.keys()].filter((n) => entries.get(n).active), ["seon", "conceptnet", "tier2-aws"]);
+    assert.deepEqual([...entries.keys()].filter((n) => entries.get(n).active), ["seon", "conceptnet", "tier2-general"]);
     const { perBundle } = await seedActiveCorpusEntries(dir, entries);
-    assert.deepEqual(Object.keys(perBundle).sort(), ["conceptnet", "seon", "tier2-aws"]);
-    assert.ok(perBundle["tier2-aws"].appended > 0);
+    assert.deepEqual(Object.keys(perBundle).sort(), ["conceptnet", "seon", "tier2-general"]);
+    assert.ok(perBundle["tier2-general"].appended > 0);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
-// Confirm EVERY shipped tier-2 bundle
-// (not just aws, above) genuinely activates end-to-end via the same
-// config-only [extensions.<name>] active = true seam, and that the newly
-// added tier2-general bundle (a non-code-domain "wider general-knowledge"
-// seed set, TASK 1(b)) rides the identical path.
-for (const name of ["tier2-python", "tier2-java", "tier2-general"]) {
+// Confirm every OTHER shipped top-up bundle genuinely activates end-to-end via
+// the same config-only [extensions.<name>] active = true seam.
+for (const name of ["namenet"]) {
   test(`activation seam: [extensions.${name}] active = true seeds real facts alongside seon+conceptnet`, async () => {
     const dir = await tmp();
     try {
@@ -165,3 +162,24 @@ for (const name of ["tier2-python", "tier2-java", "tier2-general"]) {
     }
   });
 }
+
+test("the child pack reaches the same seed loop through shard_pack_path, and its cap buys the definitional band first", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "tmct.toml"), `${CODE_PERSONA_TOML}\n[extensions.child]\nactive = true\nlimit = 40\n`);
+    const { entries } = await resolveExtensions(dir);
+    assert.equal(entries.get("child").corpusPath, undefined, "the child entry names a shard pack, not a slice file");
+    const { perBundle } = await seedActiveCorpusEntries(dir, entries);
+    assert.equal(perBundle.child.error, undefined);
+    assert.equal(perBundle.child.total, 40, "the limit caps what the pack offers the store");
+    assert.ok(perBundle.child.appended > 0, "the child pack actually wrote facts");
+
+    const mem = await loadMemory(dir);
+    const facts = mem.individuals.filter((i) => i.class === FACT_CLASS);
+    const fromPack = facts.filter((f) =>
+      (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).startsWith("corpus:child ")));
+    assert.ok(fromPack.length > 0, "some fact carries the child pack's own provenance tag");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

@@ -39,7 +39,7 @@ const POSTS = {
       { angle: "the reading behind it", to: "chat-about.html#papers",
         text: "Refusing to answer has a literature. Chow wrote the reject option up in 1970 and Reiter wrote the open world assumption up in 1978. This page lists what the design rests on." },
       { angle: "how it is put together", to: "chat-about.html#build",
-        text: "No server, no API key, no model. One bundle, one seed file of about 63,000 facts, and wink-nlp for lemmas. Here is the whole stack." },
+        text: "No server, no API key, no model. One bundle, one seed file of about 70,000 facts, and wink-nlp for lemmas. Here is the whole stack." },
       { angle: "try a question", to: "index.html?q=what%20calls%20Task",
         text: "The box on this page runs the real engine on a real code graph, live in your browser, primed with a question. Type your own over the top of it." },
       { angle: "it proves things", to: "chat-about.html#reasoning",

@@ -54,7 +54,7 @@ export function sourceLabelFor(source) {
   const BANDS = {
     human: "human persona", "human-medium": "human persona", "human-large": "human persona",
     seon: "SEON ontology", conceptnet: "ConceptNet",
-    "tier2-aws": "AWS", "tier2-python": "Python", "tier2-java": "Java", "wordnet-xl": "WordNet",
+    "wordnet-xl": "WordNet", namenet: "NameNet", child: "child vocabulary",
   };
   const key = (source && source.key) || "";
   if (key === "taught") return { label: "taught by telling", tone: "taught" };

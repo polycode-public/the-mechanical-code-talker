@@ -114,10 +114,10 @@ test("a repo WITH a graph artifact never seeds", async () => {
   }
 });
 
-test("a tmct.toml activating tier2-aws seeds a second bundle alongside the default human bundle — banner grows an extra clause, base sentence unchanged", async () => {
+test("a tmct.toml activating tier2-general seeds a second bundle alongside the default human bundle — banner grows an extra clause, base sentence unchanged", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-seed-tier2-"));
   try {
-    await writeFile(join(dir, "tmct.toml"), '[extensions.tier2-aws]\nactive = true\n');
+    await writeFile(join(dir, "tmct.toml"), '[extensions.tier2-general]\nactive = true\n');
     clearCache();
     const s = await createSession({ repoPath: dir, env: {} });
     await s.close();
@@ -125,13 +125,13 @@ test("a tmct.toml activating tier2-aws seeds a second bundle alongside the defau
     assert.ok(line, `a seed banner line is present: ${JSON.stringify(s.bannerLines)}`);
     const banner = parseSeedBanner(line);
     assert.ok(banner, `banner parses generically: ${line}`);
-    assert.ok(banner.byBundle.human > 0 && banner.byBundle["tier2-aws"] > 0, `both bundles present: ${line}`);
+    assert.ok(banner.byBundle.human > 0 && banner.byBundle["tier2-general"] > 0, `both bundles present: ${line}`);
     const sumOfClauses = Object.values(banner.byBundle).reduce((a, b) => a + b, 0);
     assert.equal(banner.total, sumOfClauses, "banner arithmetic includes both bundles");
     const mem = await readRoutedMemory(dir);
     const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
-    const awsFact = facts.find((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
-    assert.ok(awsFact, "a tier2-aws-provenance fact landed in memory");
+    const generalFact = facts.find((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-general")));
+    assert.ok(generalFact, "a tier2-general-provenance fact landed in memory");
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

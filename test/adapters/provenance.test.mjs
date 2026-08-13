@@ -304,13 +304,13 @@ test("(e) two extension bundles asserting a conflicting fact: distinct Fact/Sour
     // mgx:hasFirstSubevent in the committed conceptnet-map.toml, and "the FIRST
     // thing you do" is functional by meaning, so the resolver table leaves it on
     // the default `contradiction` strategy — DIFFERENT object, from two
-    // DIFFERENT provenancePrefixes (the exact shape a tier2-aws bundle and a
+    // DIFFERENT provenancePrefixes (the exact shape a tier2-general bundle and a
     // seon bundle would each pass to seedMemory via
     // src/services/extensions.mjs's resolved entries).
     await writeFile(sliceA, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasFirstSubevent", end: "/c/en/red", weight: 1 }) + "\n");
     await writeFile(sliceB, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasFirstSubevent", end: "/c/en/blue", weight: 1 }) + "\n");
     const { seedMemory } = await import("../../src/adapters/corpus/conceptnet.mjs");
-    await seedMemory(dir, { slicePath: sliceA, provenancePrefix: "corpus:tier2-aws" });
+    await seedMemory(dir, { slicePath: sliceA, provenancePrefix: "corpus:tier2-general" });
     await seedMemory(dir, { slicePath: sliceB, provenancePrefix: "corpus:seon" });
 
     const m = await loadMemory(dir);
@@ -320,11 +320,11 @@ test("(e) two extension bundles asserting a conflicting fact: distinct Fact/Sour
 
     // distinct, correctly-typed Source individuals — one per bundle, deterministic id
     const sources = sourcesOf(m);
-    const awsSrc = sources.find((s) => s.id === "src:corpus:tier2-aws");
+    const generalSrc = sources.find((s) => s.id === "src:corpus:tier2-general");
     const seonSrc = sources.find((s) => s.id === "src:corpus:seon");
-    assert.ok(awsSrc, "a src:corpus:tier2-aws Source individual exists");
+    assert.ok(generalSrc, "a src:corpus:tier2-general Source individual exists");
     assert.ok(seonSrc, "a src:corpus:seon Source individual exists");
-    assert.equal(attr(awsSrc, "mgx:sourceType"), "corpus");
+    assert.equal(attr(generalSrc, "mgx:sourceType"), "corpus");
     assert.equal(attr(seonSrc, "mgx:sourceType"), "corpus");
 
     // the EXISTING, UNTOUCHED findContradictions surfaces the conflict rather

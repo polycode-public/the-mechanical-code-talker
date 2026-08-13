@@ -199,8 +199,8 @@ source = ${JSON.stringify(config.research.source)}
   if (!Object.keys(extras).length) return out;
   return `${out}
 # Extension packs + bias (src/services/extensions.mjs) — written by \`tmct init --with-persona\`
-# or a manual edit. Recognized names (human, seon, code, conceptnet, tier2-aws,
-# tier2-python, tier2-java, tier2-general) override the shipped defaults; any
+# or a manual edit. Recognized names (human, seon, code, conceptnet, child,
+# namenet, tier2-general) override the shipped defaults; any
 # other name declares a new host-supplied bundle (needs its own "kind").
 # [bias] is a flat bundle-name -> weight table consumed by
 # src/domain/memory/bias.mjs's ranking.
@@ -298,8 +298,8 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
         "",
         "Corpus bundles (activate by id — no local copy needed):",
         "  tmct import --corpus human | human-medium | human-large",
-        "  tmct import --corpus seon | conceptnet | aws | python | java | general",
-        "  tmct import --corpus wordnet-xl | wordnet-full | namenet   (large: tens of thousands of facts)",
+        "  tmct import --corpus code | seon | conceptnet | general",
+        "  tmct import --corpus wordnet-xl | wordnet-full | namenet | child   (large: tens of thousands of facts)",
         "",
         "Ontology / lexicon resources are file paths declared as extension entries:",
         "  tmct import --ontology <path> | --lexicon <path>",

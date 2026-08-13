@@ -1,7 +1,7 @@
 {
   "name": "commonsenseqa",
-  "generatedAt": "2026-08-09T14:56:59.670Z",
-  "commit": "401cecf6d26161b4632a093d3ec458ce68797ae4",
+  "generatedAt": "2026-08-13T12:26:48.443Z",
+  "commit": "24987e2a7a25a82f32dffb25445dd3d0aa600811",
   "hardware": "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz x16 (darwin/x64)",
   "pack": "shipped",
   "unit": "questions",
@@ -17,49 +17,48 @@
     "corpus/conceptnet/slice.jsonl",
     "corpus/wordnet/wordnet-full.jsonl"
   ],
-  "value": 5,
+  "value": 6,
   "detail": {
     "sampleSize": 100,
     "bands": [
       "human",
       "human-medium",
       "human-large",
-      "seon",
+      "code",
       "conceptnet",
-      "tier2-aws",
-      "tier2-python",
-      "tier2-java",
-      "wordnet-xl"
+      "wordnet-xl",
+      "namenet",
+      "child"
     ],
-    "seedFacts": 61724,
-    "answered": 21,
-    "correctOfAnswered": 5,
+    "seedFacts": 70453,
+    "answered": 22,
+    "correctOfAnswered": 6,
     "refused": 22,
-    "abstained": 57,
+    "abstained": 56,
     "sourceEdgePresent": 30,
     "correctWhenSourceEdgePresent": 2,
     "routedByRelation": 56,
     "correctWhenRouted": 4,
     "byHop": {
       "1": {
-        "answered": 20,
-        "correct": 4
+        "answered": 21,
+        "correct": 5
       },
       "2": {
         "answered": 0,
         "correct": 0
       },
       "unreachable": {
-        "abstained": 57
+        "abstained": 56
       }
     },
     "matchedBy": {
-      "exact": 11,
+      "exact": 12,
       "lemma": 0,
       "head-noun": 6,
       "wordnet": 3
     },
-    "abstainedUncued": 26,
+    "abstainedUncued": 25,
     "topicRead": 92,
     "topicIsQuestionConcept": 31,
     "separated": 1,
@@ -75,7 +74,6 @@
       "0b90c6710a65eb55fea4cc92895bf601",
       "0e6a005eec5e6746f3facf4d608bfd8b",
       "113aaea2b1a27a976547f54e531d99bb",
-      "14d760e43728e9e4643c414627f2b596",
       "167d2cfa04bfaea0e0b5bac3598d5769",
       "194b66240f6fab75749c1e30ed09ea09",
       "1e939cc6fef999953d692b57caab254b",
@@ -170,8 +168,8 @@
     ],
     "abstainedUncuedExampleStems": [
       "A story about World War II would be set when?",
-      "The painter started to edge the room with tape, he always took extra care to make the lines clean and crisp when working with an what?",
-      "What do professors primarily do?"
+      "What do professors primarily do?",
+      "In what country are the most fast food restaurants?"
     ]
   }
 }

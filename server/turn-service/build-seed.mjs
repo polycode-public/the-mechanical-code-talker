@@ -1,8 +1,8 @@
 // build-seed.mjs — writes the turn Lambda's cold-boot seed (§3.18's mid band
-// set): the human persona at every size, SEON, and the three small tier-2
-// code corpuses — persona and depth, none of the two bands retrieval serves
-// per-query instead (WordNet-xl and the capped ConceptNet band, each a
-// subset of the corpus partition its own name matches).
+// set): the human persona at every size plus the code domain pack — persona
+// and depth, none of the two bands retrieval serves per-query instead
+// (WordNet-xl and the capped ConceptNet band, each a subset of the corpus
+// partition its own name matches).
 //
 // Reuses `scripts/build-chat-seed.mjs`'s own seeding pipeline (the same
 // resolveExtensions + seedActiveCorpusEntries path `tmct init` runs) with
@@ -16,10 +16,9 @@ import { main as buildSeed } from "../../scripts/build-chat-seed.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** §3.18's mid band set, in seeding order: the always-active `human` band,
- *  its additive medium/large size tiers, the code domain's curated corpus
- *  (`seon`), and the three small tier-2 language packs. */
+ *  its additive medium/large size tiers, and the code domain pack. */
 export const MID_BUNDLE_BANDS = Object.freeze([
-  "human", "human-medium", "human-large", "seon", "tier2-aws", "tier2-python", "tier2-java",
+  "human", "human-medium", "human-large", "code",
 ]);
 
 // A guard specific to this bundle's expected scale (§3.18 measures it at
