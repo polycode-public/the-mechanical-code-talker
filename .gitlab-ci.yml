@@ -334,39 +334,6 @@ e2e-web-index:
       test-e2e/memory-ask-browser-bundle.test.mjs test-e2e/readme-examples.test.mjs
       test-e2e/cli-render-views.test.mjs
 
-# The browser files that need a LOCAL origin, so they cannot move to
-# `e2e:deployed:pages` with the rest of the matrix. Three of them build the page they
-# open, and a deployed site has no equivalent to serve:
-#   pages-sprites            rewrites sprites.html with the chat dock enabled
-#   sprites-large-visual     writes its own single-page harness
-#   ledger-viz-query-only-dock  renders what `tmct viz` writes (dock-less
-#                            ledger.html), which is deliberately NOT the site's
-# The fourth is different: pages-chat-boot-budget runs fine against a deployed
-# origin, but what it measures stops being the page's own boot cost and starts
-# being the CDN's — its own header says so. A budget wants a fixed origin.
-# The fifth, pages-service-worker-cache-bust, rebuilds its own served
-# directory in place under a second version partway through — a deployed
-# site is one live snapshot, with no second historical build to redeploy
-# over it, so this one is structurally local-only too.
-# pages-news / pages-news-feed copy public/chat-seed.json into their own
-# snapshot directory before serving it (buildDemoSiteSnapshot carries only
-# git-tracked files, and the seed is a build output) — a step with nowhere
-# to land against a deployed origin, so these two are local-only for the
-# same reason pages-sprites is.
-e2e-web-local-origin:
-  extends: .e2e-web-base
-  script:
-    # pages-news / pages-news-feed lstat public/chat-seed.json before copying it
-    # into their snapshot; only deploy:website's demo:build produces it, so this
-    # job builds it for itself.
-    - npm run build:chat-seed
-    - >-
-      node --disable-warning=ExperimentalWarning --test
-      test-e2e/pages-sprites.test.mjs test-e2e/sprites-large-visual.test.mjs
-      test-e2e/ledger-viz-query-only-dock.test.mjs
-      test-e2e/pages-chat-boot-budget.test.mjs test-e2e/pages-service-worker-cache-bust.test.mjs
-      test-e2e/pages-news.test.mjs test-e2e/pages-news-feed.test.mjs
-
 # No browser: pure stdio/process spawns.
 e2e-tui:
   extends: .e2e-lite-base
@@ -774,12 +741,6 @@ smoke:post-deploy:
 # e2e-web-index's list repeats here deliberately: it is the one channel proven
 # twice, once against a local build and once against the real edge. The two now
 # run alongside each other rather than in sequence.
-#
-# Not here, and why: the eight files in `e2e-web-local-origin` need a local
-# origin — four build the page they open, the boot budget wants a fixed one,
-# and three (the cache-bust rebuild, pages-news, pages-news-feed) each need
-# something in their own served directory a deployed origin has no
-# equivalent for.
 #
 # Three jobs, not one, and each caps `--test-concurrency` rather than leaving
 # node's default (all files at once, bounded only by the runner's own core
