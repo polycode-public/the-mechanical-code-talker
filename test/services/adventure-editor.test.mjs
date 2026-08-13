@@ -155,9 +155,34 @@ test("round trip: editing one line (moving the locked cabinet to the library) pl
   const edited = text.replace("Cabinet stands locked in the study.", "Cabinet stands locked in the library.");
   const { triples, unrecognized } = parseWorldEditorText(edited, rows);
   assert.deepEqual(unrecognized, []);
-  const { toAppend, toRemoveIds } = planWorldEditorSync(rows, state, triples);
-  assert.deepEqual(toAppend, [{ subject: "cabinet", predicate: "mgx:stands-locked-in", object: "library", kind: "placement" }]);
+  const { toAppend, toRemoveIds, editTurn } = planWorldEditorSync(rows, state, triples);
+  assert.equal(editTurn, state.turnCount + 1);
+  assert.deepEqual(toAppend, [{ subject: `cabinet@turn${editTurn}`, predicate: "mgx:stands-locked-in", object: "library", kind: "placement" }]);
   assert.deepEqual(toRemoveIds, []);
+});
+
+test("the superseding placement is stamped one turn past the world's own count, so it outranks by rank and not by arriving last", async () => {
+  const rows = await loadShippedWorldRows();
+  const state = foldWorldState(rows);
+  const played = [...rows, { subject: "cabinet@turn4", predicate: "mgx:stands-locked-in", object: "hall" }];
+  const playedState = foldWorldState(played);
+  assert.equal(playedState.turnCount, 4);
+  const text = renderWorldEditorText(played, playedState);
+  const edited = text.replace("Cabinet stands locked in the hall.", "Cabinet stands locked in the library.");
+  const { toAppend, editTurn } = planWorldEditorSync(played, playedState, parseWorldEditorText(edited, played).triples);
+  assert.equal(editTurn, 5);
+  assert.deepEqual(toAppend.map((t) => t.subject), ["cabinet@turn5"]);
+});
+
+test("a world on a later epoch stamps its edit into that epoch, so the recast still outranks the run it replaced", async () => {
+  const rows = await loadShippedWorldRows();
+  const recast = [...rows, { subject: "world", predicate: "mgx:world-epoch", object: "2" }];
+  const recastState = foldWorldState(recast);
+  assert.equal(recastState.epoch, 2);
+  const text = renderWorldEditorText(recast, recastState);
+  const edited = text.replace("Cabinet stands locked in the study.", "Cabinet stands locked in the library.");
+  const { toAppend } = planWorldEditorSync(recast, recastState, parseWorldEditorText(edited, recast).triples);
+  assert.deepEqual(toAppend.map((t) => t.subject), ["cabinet@epoch2@turn1"]);
 });
 
 test("round trip: applying that planned edit through the real store actually moves the cabinet — foldWorldState reads the new placement", async () => {
@@ -179,6 +204,48 @@ test("round trip: applying that planned edit through the real store actually mov
   const freshState = foldWorldState(freshRows);
   assert.equal(freshState.placements.get("cabinet").object, "library", "the cabinet's placement actually moved in the live store");
   assert.equal(freshState.placements.get("cabinet").predicate, "mgx:stands-locked-in", "still locked, just relocated");
+});
+
+test("the world an edited store folds to is the same one whichever order its rows arrive in — forward, reversed, and in content-address order", async () => {
+  clearWorldsPackCache();
+  const world = await getWorldsPackProvider({}).load("ashcombe-hall");
+  const dir = createInMemoryStore();
+  await appendFacts(dir, world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:ashcombe-hall" })));
+  const rows = readFactRows(await loadMemory(dir));
+  const state = foldWorldState(rows);
+  const text = renderWorldEditorText(rows, state);
+  const edited = text
+    .replace("Cabinet stands locked in the study.", "Cabinet stands locked in the library.")
+    .replace("Letter is hidden in the cabinet.", "Letter is hidden in the desk.");
+  const { toAppend, editTurn } = planWorldEditorSync(rows, state, parseWorldEditorText(edited, rows).triples);
+  await appendFacts(dir, toAppend.map((f) => ({
+    subject: f.subject, predicate: f.predicate, object: f.object,
+    provenance: f.kind === "other" ? "world:ashcombe-hall" : `world:ashcombe-hall:turn${editTurn}`,
+  })));
+
+  const freshRows = readFactRows(await loadMemory(dir));
+  const byContentAddress = [...freshRows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const orderings = [
+    ["forward", freshRows],
+    ["reversed", [...freshRows].reverse()],
+    ["content-address order", byContentAddress],
+  ];
+  const readable = (world) => JSON.stringify({
+    placements: [...world.placements].map(([s, p]) => [s, p.predicate, p.object]).sort(),
+    positions: [...world.positions].map(([s, p]) => [s, p.predicate, p.object]).sort(),
+    openness: [...world.openness].map(([s, o]) => [s, o.open]).sort(),
+    masses: [...world.masses].map(([s, m]) => [s, m.value]).sort(),
+    turnCount: world.turnCount,
+    epoch: world.epoch,
+  });
+  const [, forwardRows] = orderings[0];
+  const expected = readable(foldWorldState(forwardRows));
+  for (const [name, order] of orderings) {
+    const folded = foldWorldState(order);
+    assert.equal(folded.placements.get("cabinet").object, "library", `the edit still rules in ${name}`);
+    assert.equal(folded.placements.get("letter").object, "desk", `and so does the second edited line in ${name}`);
+    assert.equal(readable(folded), expected, `the whole folded world is identical in ${name}`);
+  }
 });
 
 test("round trip: deleting a puzzle-fact line (the unlocks-with instrument) plans a real retraction, applied cleanly through removeFacts", async () => {
@@ -203,11 +270,13 @@ test("round trip: adding a brand new object (a candlestick, not in the shipped w
   const edited = `${text}\nCandlestick is in the library.\nCandlestick is a portable.`;
   const { triples, unrecognized } = parseWorldEditorText(edited, rows);
   assert.deepEqual(unrecognized, []);
-  const { toAppend, toRemoveIds } = planWorldEditorSync(rows, state, triples);
+  const { toAppend, toRemoveIds, editTurn } = planWorldEditorSync(rows, state, triples);
   assert.deepEqual(toRemoveIds, []);
   assert.equal(toAppend.length, 2);
-  assert.ok(toAppend.some((t) => t.subject === "candlestick" && t.predicate === "mgx:located-in" && t.object === "library"));
-  assert.ok(toAppend.some((t) => t.subject === "candlestick" && t.predicate === "rdf:type" && t.object === "portable"));
+  assert.ok(toAppend.some((t) => t.subject === `candlestick@turn${editTurn}` && t.predicate === "mgx:located-in" && t.object === "library"),
+    "the placement is fold-versioned, so it carries the turn stamp");
+  assert.ok(toAppend.some((t) => t.subject === "candlestick" && t.predicate === "rdf:type" && t.object === "portable"),
+    "the type is read raw by every reader, so it keeps its bare subject");
 });
 
 test("safety: a typo elsewhere in the document is reported as unrecognized and never silently guessed", async () => {

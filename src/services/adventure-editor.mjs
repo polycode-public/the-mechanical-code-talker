@@ -14,24 +14,29 @@
 // mgx:acts-toward, mgx:is-objective) — an editor has to show and change
 // exactly the facts a player is never told.
 //
-// No imports of its own logic: every export here is .toString()-splice-safe,
-// the same discipline adventure-viz.mjs's own render-glue functions hold (see
-// that module's header) — this module's functions get spliced directly into
-// the adventure page's inline script the same way. The one exception,
-// wordBeforeCursor, re-exports viz-theme.mjs's own shared copy (byte-identical
+// The two exports the adventure page splices into its inline script through
+// `.toString()` — renderWorldEditorText and wordBeforeCursor — are entirely
+// self-contained, the same discipline adventure-viz.mjs's own render-glue
+// functions hold (see that module's header): a splice captures a function's
+// own source text and none of its closure over sibling module bindings.
+// wordBeforeCursor re-exports viz-theme.mjs's own shared copy (byte-identical
 // to what used to live here, and to mud-editor.mjs's own copy) rather than
 // keep a third copy of the same regex.
 //
 // Two predicate families get different sync strategies, on purpose:
 //   - PLACEMENT/OPENNESS (mgx:currently-in/located-in/fixed-in/stands-
 //     locked-in/hidden-in, mgx:is-open) are fold-versioned: foldWorldState
-//     already treats the newest write as the current truth (adventure.mjs's
-//     own "turn >= prior.turn" rule — the same mechanism every in-game
-//     action's commit() already writes through). Editing one of these facts
-//     is handled as a plain new write superseding the old one, never a
+//     ranks these rows by the (epoch, turn) pair stamped on the subject, and
+//     reads the highest-ranked one as the current truth. Editing one of these
+//     facts is handled as a plain new write superseding the old one, never a
 //     retraction, so planWorldEditorSync can never touch memory/core.mjs's
 //     own removeFacts for this family, and can never race the fold logic the
-//     rest of the engine depends on. One consequence, stated plainly: this
+//     rest of the engine depends on. The superseding write is stamped one
+//     turn past the world's own turn count, exactly the way every in-game
+//     action's commit() writes, so it OUTRANKS what it replaces instead of
+//     merely arriving after it — at equal turn the fold takes whichever row
+//     comes later in the array, and array order is nobody's to promise once
+//     a peer's facts have merged in. One consequence, stated plainly: this
 //     editor can move an object or reopen/close a container, but it cannot
 //     make a placed object vanish outright — the append-only truth model has
 //     no way to write "nowhere" — a scope choice, not a defect.
@@ -46,6 +51,8 @@
 //     fact is gone", so every removal stays pending until the whole
 //     document parses cleanly again. Additions are never gated this way —
 //     they are non-destructive by construction.
+
+import { snapshotSubject } from "../domain/world-snapshot.mjs";
 
 const PLACEMENT_KIND = "placement";
 const OPENNESS_KIND = "openness";
@@ -308,20 +315,29 @@ export function editableOtherRows(rows) {
 
 /** Plan the fact-store writes one parsed edit implies, from already-parsed
  *  `triples` (parseWorldEditorText's own output) against the world's current
- *  `rows`/`state`. Returns `{ toAppend, toRemoveIds }` — pure, no I/O.
+ *  `rows`/`state`. Returns `{ toAppend, toRemoveIds, editTurn }` — pure, no
+ *  I/O. `toAppend` rows are store-ready: a fold-versioned one already carries
+ *  its `subject@turnN` stamp, and `editTurn` is the turn every one of them
+ *  was stamped at, for the caller's own provenance tag.
  *
  *  Placement/openness triples are NEVER retracted (see this module's own
  *  header): a triple only joins `toAppend` when it actually differs from the
  *  subject's current folded value (or the subject has none yet) — otherwise
  *  re-asserting an unchanged line would append a no-op duplicate on every
- *  keystroke.
+ *  keystroke. Each one is stamped one turn past the world's own turn count,
+ *  which is what makes it outrank the placement it supersedes rather than
+ *  tie with it and win on array position.
  *
- *  "Other"-family triples (type/exits/container/puzzle) get a real add/
- *  remove diff against `editableOtherRows(rows)` — but the CALLER decides
- *  whether `toRemoveIds` is safe to apply (skip it whenever
- *  parseWorldEditorText reported any unrecognized line — see this module's
- *  header for why). */
+ *  "Other"-family triples (type/exits/container/puzzle) keep their bare
+ *  subject — every reader takes those raw, and a stamped one names a subject
+ *  no verb resolves. They get a real add/remove diff against
+ *  `editableOtherRows(rows)` — but the CALLER decides whether `toRemoveIds`
+ *  is safe to apply (skip it whenever parseWorldEditorText reported any
+ *  unrecognized line — see this module's header for why). */
 export function planWorldEditorSync(rows, state, triples) {
+  const editTurn = (state?.turnCount ?? 0) + 1;
+  const editEpoch = state?.epoch ?? 0;
+  const stampedForFold = (t) => ({ ...t, subject: snapshotSubject(t.subject, editTurn, editEpoch) });
   const toAppend = [];
   const seenPlacementSubjects = new Set();
   const otherTriples = [];
@@ -334,11 +350,11 @@ export function planWorldEditorSync(rows, state, triples) {
     seenPlacementSubjects.add(t.subject);
     if (t.kind === PLACEMENT_KIND) {
       const current = state.placements?.get(t.subject);
-      if (!current || current.predicate !== t.predicate || current.object !== t.object) toAppend.push(t);
+      if (!current || current.predicate !== t.predicate || current.object !== t.object) toAppend.push(stampedForFold(t));
     } else if (t.kind === OPENNESS_KIND) {
       const current = state.openness?.get(t.subject);
       const wantOpen = t.object === "true";
-      if (!current || current.open !== wantOpen) toAppend.push(t);
+      if (!current || current.open !== wantOpen) toAppend.push(stampedForFold(t));
     }
   }
 
@@ -355,7 +371,7 @@ export function planWorldEditorSync(rows, state, triples) {
   for (const [key, id] of currentKeys) {
     if (!newOtherKeys.has(key)) toRemoveIds.push(id);
   }
-  return { toAppend, toRemoveIds };
+  return { toAppend, toRemoveIds, editTurn };
 }
 
 /** The additive half of planWorldEditorSync, for ONE already-parsed triple:
@@ -364,7 +380,13 @@ export function planWorldEditorSync(rows, state, triples) {
  *  one sentence only ever says what it says, so nothing it leaves out is
  *  evidence of anything. Re-asserting a fact the world already holds appends
  *  nothing — `reason` says which of the two happened, in the caller's own
- *  words. Pure. */
+ *  words. Pure.
+ *
+ *  The triple comes back with its bare subject, unlike planWorldEditorSync's
+ *  rows: a taught sentence can MINT the thing it talks about, and the caller
+ *  picks the fresh id, so only the caller knows which subject the fold stamp
+ *  belongs on. world-teach.mjs stamps a fold-versioned one at
+ *  `turnCount + 1` there, for the same reason planWorldEditorSync does. */
 export function planTaughtTriple(rows, state, triple) {
   if (!triple?.subject || !triple?.object) return { toAppend: [], reason: "nothing parsed" };
   if (triple.kind === PLACEMENT_KIND) {
