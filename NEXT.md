@@ -63,15 +63,6 @@ The work list, ranked by value against the plan's target card.
    background drift widens — the band carries `PartOf`, `HasProperty`, `MadeOf`,
    `Causes`, `SimilarTo` and `RelatedTo`, none of which the seed has, so the
    sense scope will be filtering relation types it has never seen.
-3. [ ] **`localeCompare` over fact data, everywhere the sweep did not reach** —
-   116 calls in 39 files were measured; the converted set now covers the fact
-   store, the derivation and query layers, chat, blocks, digest, viz and
-   completions, guarded by `test/estate/fact-store-locale-compare.test.mjs`
-   naming each clean file. What remains is triaged OUT and stays out unless the
-   call changes: the code graph (`.tmct/graph.json` — `codegraph.mjs`,
-   `graph-service.mjs`, `prose.mjs`, `codeplan/`, `router/`), npm tooling,
-   licence audits and config registries. Reopen only if a code-graph read turns
-   out to feed a fact-store answer.
 
 ## Discipline
 
