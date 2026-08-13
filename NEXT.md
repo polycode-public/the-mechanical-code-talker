@@ -33,14 +33,13 @@ The method is `PLAN_NEWS_FEED_QUALITY.md`: run
 (`node scripts/news-bench/capture-fixtures.mjs`, then
 `node scripts/news-bench/run-live-cycle.mjs`), show every card whole in the
 four-part form, fix the top item below, merge, repeat — never waiting on
-pipelines. Position: iterations 1–11 run, and the whole wave is merged and
-pushed. Iteration 11 measured the extraction widenings: 9 cards became 14,
-enrichment defined 6 terms where it defined 4, and 2 lookups missed where 4 did.
-The russia card carries the neighbourhood fix live (anatomy gone, twelve
-geography rows in its place) and states its act once, though the headline says
-"Freed" and the body "released". Next run should show the london card headed by
-the frenzy and no `year ⊑ eclipse` in the research rows.
-Harness note: `run-live-cycle.mjs` starts fresh state each run,
+pipelines. Position: iterations 1–12 run. Iteration 12's feed reads 14 cards,
+7 with real background and 5 thin, ranked by substance with admission per source
+printed — NYT 8 of 8 with something to say, Hacker News 1 of 6. The london card
+carries the phrasal fix (`frenzy | mgx:take-over | london`) and no `year ⊑
+eclipse` reaches the research rows. What the next run should show: the syrian
+card without its filler, and "rescuers free quake victim" reading correctly
+again. Harness note: `run-live-cycle.mjs` starts fresh state each run,
 so the negative cache resets and the same misses re-burn lookup slots per run;
 the deployed worker persists state and does not.
 
@@ -76,26 +75,14 @@ The work list, ranked by value against the plan's target card.
    sense (rescuers free from rubble, they do not release from custody) and wrong
    agreement (plural subject, singular verb surface). The agreement half is not
    news-only: any fold or mint whose canonical surface is third-person singular
-   does it under a plural subject.
+   does it under a plural subject. The track's main job:
    "The blast triggers hundreds of evacuations." mints
    `blast | tmct:triggers | hundred`. The newswire frame reads through the count
    (`skipCountPhrase`); Pass 2a/2b's `nearestEntity(i, +1)` does not. Fixing it
    changes the object scan for every lexicon verb in every corpus lane, not just
    news, which is why it is its own item rather than a remainder of the frame
    work that found it.
-4. [ ] **`isaOf`'s window runs past the head noun** — in flight on
-   `worktree-agent-a77db95656aebdcee`. The reviewed-losses gate is handled by
-   the agent only where every loss was a false row anyway; a loss that looks
-   like a genuine definition stops the work for a human. The defect is
-   `quokka ⊑ size`, read out of "a
-   small marsupial about the size of a large cat". `about`/`around`/`roughly`/
-   `approximately` belong in `ISA_CLAUSE_CUT`, which would also fix "a book
-   about dogs". Separate from the definition-body work that found it because
-   `isaOf` in `src/domain/reference-pack.mjs` also computes the shipped pack's
-   stored `isa` values: changing it means re-running
-   `scripts/recompute-reference-isa.mjs` over the pack, clearing its
-   reviewed-losses gate, and re-measuring the chat reference lane.
-5. [ ] **`buildMemoryIndex` rebuilt per write** — in flight on
+4. [ ] **`buildMemoryIndex` rebuilt per write** — in flight on
    `worktree-agent-a382d01858173b066`. A measured "this does not pay" is an
    acceptable outcome. The prize is ~74 ms of a ~280 ms
    write. Two cheap restructurings measured neutral and were reverted. Making
@@ -105,7 +92,7 @@ The work list, ranked by value against the plan's target card.
    reused as-is, and `factRecordsByGroup`'s values are arrays that call sites
    mutate in place, so the overlay must copy on read. ~15 call sites plus
    `patchAssembledPayload`.
-6. [ ] **The world editor supersedes a placement by arriving last** — in flight
+5. [ ] **The world editor supersedes a placement by arriving last** — in flight
    on `worktree-agent-a10784011d797633e`.
    `foldWorldState` ranks placements by `(epoch, turn)` with `turn >= prior.turn`,
    so at equal turn the row later in the array wins, and `adventure-editor.mjs`
@@ -114,13 +101,13 @@ The work list, ranked by value against the plan's target card.
    gets content-address order from `sortFactIndividualsById` today, so this is
    already broken there. The fix is to stamp an editor edit
    `snapshotSubject(subject, turn + 1, epoch)` so it outranks rather than relying
-   on arrival. Do this one before item 7 — it is what item 7 breaks.
-7. [ ] **The readers the content tiebreak couldn't reach** — `news-feed.mjs`'s
+   on arrival. Do this one before item 6 — it is what item 6 breaks.
+6. [ ] **The readers the content tiebreak couldn't reach** — `news-feed.mjs`'s
    `tierOf` and `/memory`'s listing still order by arrival. Reaching them means
    sorting `foldFactRows`' output at the root so `readFactRows` hands out content
    order and every downstream reader inherits it. Measured: 13 pins move, 4 are
-   already fixed, 8 are benign reorderings, and 1 is item 6's editor break.
-8. [ ] **Wikidata** — the pinned dated dump
+   already fixed, 8 are benign reorderings, and 1 is item 5's editor break.
+7. [ ] **Wikidata** — the pinned dated dump
    (`wikidata-20260810-all.json.gz`, 155,457,882,747 bytes) is downloading in
    the operator's terminal via `bash scripts/resume-wikidata-dump.sh`, which
    resumes from wherever a break left it — re-run it after any interruption.
