@@ -63,12 +63,12 @@ test("loads a band's wire rows and writes the manifest last", async () => {
 
 test("a second load over the same source is a no-op that writes nothing new", async () => {
   const client = createFakeCorpusDocumentClient();
-  const { path, dir } = await writeWireRowsJsonl(sampleRows("conceptnet-full", 3));
+  const { path, dir } = await writeWireRowsJsonl(sampleRows("wordnet-complete", 3));
   try {
-    await loadBand({ client, tableName: "t", band: "conceptnet-full", source: path });
+    await loadBand({ client, tableName: "t", band: "wordnet-complete", source: path });
     const callsAfterFirstLoad = client.calls.length;
 
-    const second = await loadBand({ client, tableName: "t", band: "conceptnet-full", source: path });
+    const second = await loadBand({ client, tableName: "t", band: "wordnet-complete", source: path });
     assert.equal(second.status, "unchanged");
     assert.equal(client.calls.length, callsAfterFirstLoad + 1, "only the manifest get, no further writes");
   } finally {
@@ -78,11 +78,11 @@ test("a second load over the same source is a no-op that writes nothing new", as
 
 test("a changed source reloads and updates the manifest's digest", async () => {
   const client = createFakeCorpusDocumentClient();
-  const { path, dir } = await writeWireRowsJsonl(sampleRows("conceptnet-full", 2));
+  const { path, dir } = await writeWireRowsJsonl(sampleRows("wordnet-complete", 2));
   try {
-    const first = await loadBand({ client, tableName: "t", band: "conceptnet-full", source: path });
-    await writeFile(path, sampleRows("conceptnet-full", 4).map((row) => JSON.stringify(row)).join("\n") + "\n");
-    const second = await loadBand({ client, tableName: "t", band: "conceptnet-full", source: path });
+    const first = await loadBand({ client, tableName: "t", band: "wordnet-complete", source: path });
+    await writeFile(path, sampleRows("wordnet-complete", 4).map((row) => JSON.stringify(row)).join("\n") + "\n");
+    const second = await loadBand({ client, tableName: "t", band: "wordnet-complete", source: path });
     assert.equal(second.status, "loaded");
     assert.equal(second.rowCount, 4);
     assert.notEqual(second.sourceDigest, first.sourceDigest);
@@ -106,16 +106,16 @@ test("a band outside the licence table loads with a null licence, honestly", asy
 
 test("a load that dies mid-way leaves valid rows and no manifest, and a retry completes it", async () => {
   const client = createFakeCorpusDocumentClient();
-  const rows = sampleRows("wikidata-slice", 6);
+  const rows = sampleRows("wordnet-complete", 6);
   const { path, dir } = await writeWireRowsJsonl(rows);
   try {
     const dying = poisonPutCall(client, 3);
-    await assert.rejects(loadBand({ client: dying, tableName: "t", band: "wikidata-slice", source: path, writeConcurrency: 1 }));
+    await assert.rejects(loadBand({ client: dying, tableName: "t", band: "wordnet-complete", source: path, writeConcurrency: 1 }));
 
-    const pk = bandPartitionKey("wikidata-slice");
+    const pk = bandPartitionKey("wordnet-complete");
     assert.equal(client.store.get(`${pk}|${MANIFEST_SORT_KEY}`), undefined, "no manifest after the crash");
 
-    const retried = await loadBand({ client, tableName: "t", band: "wikidata-slice", source: path });
+    const retried = await loadBand({ client, tableName: "t", band: "wordnet-complete", source: path });
     assert.equal(retried.status, "loaded");
     assert.equal(retried.rowCount, 6);
     for (const row of rows) {
@@ -130,18 +130,18 @@ test("a load that dies mid-way leaves valid rows and no manifest, and a retry co
 test("a put that fails with a transient 5xx a few times retries and completes the load", async () => {
   const client = createFakeCorpusDocumentClient();
   const flaky = flakyPutCall(client, 2, "InternalServerError");
-  const rows = sampleRows("wikidata-slice", 3);
+  const rows = sampleRows("wordnet-complete", 3);
   const { path, dir } = await writeWireRowsJsonl(rows);
   const { sleepCalls, sleep, random } = instantRetryPolicy();
   try {
     const result = await loadBand({
-      client: flaky, tableName: "t", band: "wikidata-slice", source: path, writeConcurrency: 1, sleep, random,
+      client: flaky, tableName: "t", band: "wordnet-complete", source: path, writeConcurrency: 1, sleep, random,
     });
     assert.equal(result.status, "loaded");
     assert.equal(result.rowCount, 3);
     assert.ok(sleepCalls.length > 0, "the loader backed off before at least one retry");
 
-    const pk = bandPartitionKey("wikidata-slice");
+    const pk = bandPartitionKey("wordnet-complete");
     for (const row of rows) {
       assert.ok(client.store.get(`${pk}|fact#${row.term}#${row.rowKey}`), `row ${row.rowKey} landed after the retries`);
     }
@@ -154,11 +154,11 @@ test("a put that fails with a transient 5xx a few times retries and completes th
 test("a put rejected with a validation error fails immediately, with no retry", async () => {
   const client = createFakeCorpusDocumentClient();
   const invalid = alwaysFailingPutCall(client, "ValidationException");
-  const { path, dir } = await writeWireRowsJsonl(sampleRows("wikidata-slice", 1));
+  const { path, dir } = await writeWireRowsJsonl(sampleRows("wordnet-complete", 1));
   const { sleepCalls, sleep, random } = instantRetryPolicy();
   try {
     await assert.rejects(
-      loadBand({ client: invalid, tableName: "t", band: "wikidata-slice", source: path, sleep, random }),
+      loadBand({ client: invalid, tableName: "t", band: "wordnet-complete", source: path, sleep, random }),
       (error) => {
         assert.ok(error instanceof BackendUnavailable);
         assert.ok(!/after \d+ attempts/.test(error.message), `expected a single-attempt message, got: ${error.message}`);
@@ -175,12 +175,12 @@ test("a put rejected with a validation error fails immediately, with no retry", 
 test("a put that never recovers exhausts its retries and names the attempt count and last error", async () => {
   const client = createFakeCorpusDocumentClient();
   const down = alwaysFailingPutCall(client, "InternalServerError");
-  const { path, dir } = await writeWireRowsJsonl(sampleRows("wikidata-slice", 1));
+  const { path, dir } = await writeWireRowsJsonl(sampleRows("wordnet-complete", 1));
   const { sleepCalls, sleep, random } = instantRetryPolicy();
   try {
     await assert.rejects(
       loadBand({
-        client: down, tableName: "t", band: "wikidata-slice", source: path, retryAttempts: 3, sleep, random,
+        client: down, tableName: "t", band: "wordnet-complete", source: path, retryAttempts: 3, sleep, random,
       }),
       (error) => {
         assert.ok(error instanceof BackendUnavailable);
@@ -210,15 +210,15 @@ test("a dry run reports the row count and digest without writing anything", asyn
 
 test("clear physically deletes every row and the manifest, manifest last", async () => {
   const client = createFakeCorpusDocumentClient();
-  const { path, dir } = await writeWireRowsJsonl(sampleRows("conceptnet-full", 5));
+  const { path, dir } = await writeWireRowsJsonl(sampleRows("wordnet-complete", 5));
   try {
-    await loadBand({ client, tableName: "t", band: "conceptnet-full", source: path });
-    const result = await clearBand({ client, tableName: "t", band: "conceptnet-full" });
+    await loadBand({ client, tableName: "t", band: "wordnet-complete", source: path });
+    const result = await clearBand({ client, tableName: "t", band: "wordnet-complete" });
     assert.equal(result.deleted, 6); // 5 facts + the manifest
 
-    const pk = bandPartitionKey("conceptnet-full");
+    const pk = bandPartitionKey("wordnet-complete");
     for (const key of client.store.keys()) assert.ok(!key.startsWith(`${pk}|`), `${key} should have been cleared`);
-    assert.equal(await bandStatus({ client, tableName: "t", band: "conceptnet-full" }), null);
+    assert.equal(await bandStatus({ client, tableName: "t", band: "wordnet-complete" }), null);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -226,7 +226,7 @@ test("clear physically deletes every row and the manifest, manifest last", async
 
 test("clearing an already-empty band is a no-op", async () => {
   const client = createFakeCorpusDocumentClient();
-  const result = await clearBand({ client, tableName: "t", band: "wikidata-slice" });
+  const result = await clearBand({ client, tableName: "t", band: "wordnet-complete" });
   assert.equal(result.deleted, 0);
 });
 
@@ -286,7 +286,7 @@ test("queryBandTerm reads one term's rows out of the band partition, paginating 
 
 test("queryBandTerm returns nothing for a term the band never held", async () => {
   const client = createFakeCorpusDocumentClient();
-  const found = await queryBandTerm(client, "t", "conceptnet-full", "zzzqx-nonsense");
+  const found = await queryBandTerm(client, "t", "wordnet-complete", "zzzqx-nonsense");
   assert.deepEqual(found, []);
 });
 
@@ -300,12 +300,12 @@ function stepClock(stepMs) {
 
 test("onProgress fires once a fake clock crosses the interval, with the loaded/total count at that point", async () => {
   const client = createFakeCorpusDocumentClient();
-  const rows = sampleRows("wikidata-slice", 5);
+  const rows = sampleRows("wordnet-complete", 5);
   const { path, dir } = await writeWireRowsJsonl(rows);
   const ticks = [];
   try {
     await loadBand({
-      client, tableName: "t", band: "wikidata-slice", source: path, writeConcurrency: 1,
+      client, tableName: "t", band: "wordnet-complete", source: path, writeConcurrency: 1,
       progressIntervalMs: 1000, progressNow: stepClock(400),
       onProgress: (progress) => ticks.push(progress),
     });
@@ -322,12 +322,12 @@ test("onProgress fires once a fake clock crosses the interval, with the loaded/t
 
 test("onProgress never fires mid-load when the fake clock never crosses the interval, only at completion", async () => {
   const client = createFakeCorpusDocumentClient();
-  const rows = sampleRows("wikidata-slice", 4);
+  const rows = sampleRows("wordnet-complete", 4);
   const { path, dir } = await writeWireRowsJsonl(rows);
   const ticks = [];
   try {
     await loadBand({
-      client, tableName: "t", band: "wikidata-slice", source: path, writeConcurrency: 1,
+      client, tableName: "t", band: "wordnet-complete", source: path, writeConcurrency: 1,
       progressIntervalMs: 60_000, progressNow: stepClock(1),
       onProgress: (progress) => ticks.push(progress),
     });
@@ -341,9 +341,9 @@ test("onProgress never fires mid-load when the fake clock never crosses the inte
 
 test("onProgress is unset by default and changes nothing about a load's result", async () => {
   const client = createFakeCorpusDocumentClient();
-  const { path, dir } = await writeWireRowsJsonl(sampleRows("wikidata-slice", 3));
+  const { path, dir } = await writeWireRowsJsonl(sampleRows("wordnet-complete", 3));
   try {
-    const result = await loadBand({ client, tableName: "t", band: "wikidata-slice", source: path });
+    const result = await loadBand({ client, tableName: "t", band: "wordnet-complete", source: path });
     assert.equal(result.status, "loaded");
     assert.equal(result.rowCount, 3);
   } finally {

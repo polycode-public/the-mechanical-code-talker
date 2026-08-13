@@ -27,16 +27,10 @@ import { assertValidRow } from "./row-backend.mjs";
 export const BAND_PARTITION_PREFIX = "corpus:";
 export const MANIFEST_SORT_KEY = "manifest";
 
-/** The three bands this plan ships a build pipeline and a loader for. */
+/** The bands this repo ships a build pipeline and a loader for. */
 export const FIRST_CLASS_BANDS = Object.freeze([
-  "wikidata-slice",
   "wordnet-complete",
-  "conceptnet-full",
 ]);
-
-// Reserved so the partition name is spoken for; no pipeline for it ships
-// here. Its own design doc covers the band when it lands.
-export const RESERVED_BAND_NAMES = Object.freeze(["simplewiki-derived"]);
 
 /** The licence and attribution notice each first-class band's content
  *  carries — a property of the band's identity, not of any one load, so the
@@ -44,13 +38,11 @@ export const RESERVED_BAND_NAMES = Object.freeze(["simplewiki-derived"]);
  *  `notice` is a repo-relative path to the human-readable attribution file;
  *  null when the licence carries no attribution burden. */
 export const BAND_LICENSES = Object.freeze({
-  "wikidata-slice": Object.freeze({ license: "CC0-1.0", notice: null }),
   "wordnet-complete": Object.freeze({ license: "CC-BY-4.0", notice: "corpus/wordnet/LICENSE-NOTICE" }),
-  "conceptnet-full": Object.freeze({ license: "CC-BY-SA-4.0", notice: "corpus/conceptnet/conceptnet-full.NOTICE" }),
 });
 
 /** `{license, notice}` for `band`, or both null when the band carries no
- *  entry here (a consumer's own band, outside the three first-class ones). */
+ *  entry here (a consumer's own band, outside the first-class ones). */
 export function bandLicenseInfo(band) {
   return BAND_LICENSES[band] ?? { license: null, notice: null };
 }

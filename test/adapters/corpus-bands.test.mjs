@@ -83,7 +83,7 @@ test("bandFactRow is deterministic: the same triple on two runs is byte-identica
 
 test("bandFactRow's rowKey carries the source band, so the same triple from two bands never collides", () => {
   const a = bandFactRow({ subject: "dog", predicate: "rdfs:subClassOf", object: "mammal", band: "wordnet-complete" });
-  const b = bandFactRow({ subject: "dog", predicate: "rdfs:subClassOf", object: "mammal", band: "conceptnet-full" });
+  const b = bandFactRow({ subject: "dog", predicate: "rdfs:subClassOf", object: "mammal", band: "a-consumer-owned-band" });
   assert.notEqual(a.rowKey, b.rowKey);
 });
 
@@ -95,8 +95,7 @@ test("bandFactRow refuses an oversized projection before any write", () => {
 });
 
 test("bandLicenseInfo names every first-class band's licence and, when the licence needs one, a notice file", () => {
-  assert.deepEqual(bandLicenseInfo("wikidata-slice"), { license: "CC0-1.0", notice: null });
-  for (const band of ["wordnet-complete", "conceptnet-full"]) {
+  for (const band of FIRST_CLASS_BANDS) {
     const info = bandLicenseInfo(band);
     assert.ok(info.license);
     assert.ok(info.notice, `${band} needs a notice file`);

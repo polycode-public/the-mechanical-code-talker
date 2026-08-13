@@ -25,7 +25,7 @@ import { SUPPLEMENTED_MODE, SEED_SESSION_MODE } from "../../src/domain/retrieval
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CHAT_SOURCE = readFileSync(path.join(REPO_ROOT, "src", "services", "chat.mjs"), "utf8");
 
-const BANDS = ["conceptnet-full", "wordnet-complete"];
+const BANDS = ["wordnet-complete"];
 const supplemented = (bounded) => ({ mode: SUPPLEMENTED_MODE, bounded, bands: BANDS });
 const breakerOpen = () => ({ mode: SEED_SESSION_MODE, bounded: false, bands: BANDS });
 

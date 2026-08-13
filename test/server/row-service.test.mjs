@@ -389,7 +389,7 @@ const TARIFF_BAND_ROWS = [
 
 test("GET /api/corpus/:band/rows needs no session key and 404s an unconfigured or unknown band", async () => {
   await withService({ fixtureBand: { name: "wordnet-complete", rows: TARIFF_BAND_ROWS } }, async (service) => {
-    const unknownBand = await fetch(`${service.url}/api/corpus/conceptnet-full/rows?term=tariff`);
+    const unknownBand = await fetch(`${service.url}/api/corpus/a-band-nobody-configured/rows?term=tariff`);
     assert.equal(unknownBand.status, 404);
   });
   // No fixture at all: every band is unconfigured, so even the band name a

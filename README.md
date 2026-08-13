@@ -1225,8 +1225,8 @@ row-backend table, or clears one; the deployed turn service reads the loaded
 bands per query:
 
 ```output:help:corpus
-  tmct corpus load <band> [--table <name>] [--source <path>] [--dry-run]  load a shared, read-only corpus band (wikidata-slice, wordnet-complete,
-       [--table <name>]        conceptnet-full) into a DynamoDB row-backend table from a jsonl of
+  tmct corpus load <band> [--table <name>] [--source <path>] [--dry-run]  load a shared, read-only corpus band (wordnet-complete, or a
+       [--table <name>]        consumer's own) into a DynamoDB row-backend table from a jsonl of
                                wire-row-shaped facts (default table from TMCT_DYNAMO_TABLE); a
                                source whose digest already matches the band's manifest is a no-op
        [--source <path>]       the band's jsonl (a scripts/corpus-bands/ build output, or any jsonl

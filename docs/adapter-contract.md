@@ -422,13 +422,9 @@ Other pages (chat.html, ledger.html) run their engines in-page and do not call t
 
 ## Corpus bands and the loader
 
-Corpus data lives in the same table under reserved partitions (pk `corpus:<band>`). Three bands ship with tmct:
+Corpus data lives in the same table under reserved partitions (pk `corpus:<band>`). One band ships with tmct: `corpus:wordnet-complete`, Open English WordNet under CC-BY-4.0, with its attribution in the band manifest.
 
-- `corpus:wikidata-slice` — CC0, no attribution burden;
-- `corpus:wordnet-complete` — Open English WordNet, CC-BY-4.0, attribution in the band manifest;
-- `corpus:conceptnet-full` — CC BY-SA 4.0, share-alike.
-
-A fourth band, `corpus:simplewiki-derived` (extracted article facts), is future work; `PLAN_WIKIPEDIA_BAND.md` scopes it.
+A consumer builds and loads their own bands under any other name. The loader takes the band name it is given, and a band outside tmct's own licence table loads with a null licence rather than a guessed one.
 
 Load or clear bands with `tmct corpus load <band> [--table <name>]` and `tmct corpus clear <band>`. Content-addressed keys make re-runs idempotent. The loader streams jsonl from the band's source, writes with bounded concurrency and backoff, and computes a manifest digest for idempotency checks. Both commands are operator tools — credentials are ambient, never embedded. A consumer hosting the turn surface runs the same CLI verb against their own table.
 

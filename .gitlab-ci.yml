@@ -681,24 +681,16 @@ deploy:website:
     - cd ..
     - node scripts/warm-deployed-cache.mjs
 
-# Loads the demo's three corpus bands into the deployed table (§3.13) —
-# runs every pipeline that reaches deploy:website, not gated on a separate
-# schedule, because `tmct corpus load`'s own digest no-op (corpus-loader.mjs)
-# is what makes that cheap: an unchanged band's load is one manifest read
-# and an early return, not a rewrite.
+# Loads the demo's corpus band into the deployed table (§3.13) — runs every
+# pipeline that reaches deploy:website, not gated on a separate schedule,
+# because `tmct corpus load`'s own digest no-op (corpus-loader.mjs) is what
+# makes that cheap: an unchanged band's load is one manifest read and an
+# early return, not a rewrite.
 #
-# wordnet-complete is the one band this job can build from scratch here: its
-# source (corpus/wordnet/wordnet-full.jsonl) is committed in-repo, so the
-# pipeline needs no operator action. wikidata-slice and conceptnet-full each
-# need a real upstream dump (a Wikidata JSON-lines entity dump; a ConceptNet
-# assertions TSV) that isn't committed and has no CI-reachable source
-# configured anywhere in this pipeline — downloading either at CI's own
-# expense isn't a step this job can take, so it reports that plainly and
-# leaves both bands for an operator to load by hand
-# (`node scripts/corpus-bands/build-wikidata-slice.mjs --source <dump>` /
-# `build-conceptnet-full.mjs --source <dump>`, then `tmct corpus load`) once
-# a dump is downloaded. Until then, a fresh table answers turns from
-# wordnet-complete and the bundled mid seed alone.
+# wordnet-complete is the band this job builds from scratch here: its source
+# (corpus/wordnet/wordnet-full.jsonl) is committed in-repo, so the pipeline
+# needs no operator action. A consumer's own band loads through the same CLI
+# verb against their own table, outside this pipeline.
 corpus:load:
   stage: verify
   # The same python+node image the deploy job uses: the awscli fallback
@@ -725,8 +717,6 @@ corpus:load:
     - test -n "$TMCT_DYNAMO_TABLE"
     - node scripts/corpus-bands/build-wordnet-complete.mjs --out wordnet-complete.band.jsonl
     - node bin/tmct.mjs corpus load wordnet-complete --source wordnet-complete.band.jsonl
-    - >
-      echo "corpus:load: wikidata-slice and conceptnet-full each need a real upstream dump this pipeline has no source for (no committed dump, no configured CI download step) — load them by hand once a dump is downloaded, see this job's own comment in .gitlab-ci.yml."
 
 # After a real publish, check that what the world serves is what we built: npm's
 # registry and the AWS-hosted home page must both show package.json's version.

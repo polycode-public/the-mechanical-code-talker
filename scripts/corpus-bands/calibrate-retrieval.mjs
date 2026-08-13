@@ -28,7 +28,7 @@ import { rowsToPayload } from "../../src/adapters/memory/rows.mjs";
 import { retrieveSubgraph, termQueryOverDocumentClient, RETRIEVAL_BUDGETS } from "../../src/services/subgraph-retrieval.mjs";
 
 export const WORDNET_BAND = "wordnet-complete";
-export const CONCEPTNET_BAND = "conceptnet-full";
+export const CONCEPTNET_BAND = "conceptnet-slice";
 
 /** The corpora the turn tier bundles: the three human persona tiers, the code
  *  concept pack and the three small language/domain packs. A calibration case
@@ -188,14 +188,14 @@ export function createFakeDocumentClient(partitions, { sorted = true } = {}) {
   };
 }
 
-/** The two moved bands, built from the committed corpora and indexed the way
- *  the band partitions are. */
+/** Two band partitions, built from the committed corpora and indexed the way
+ *  a real band partition is. */
 export async function buildFixtureBands({ limit = 0 } = {}) {
   const map = await loadMap();
   const partitions = new Map();
   const sources = [
     { band: WORDNET_BAND, path: join(WORDNET_DIR, "wordnet-xl.jsonl"), provenance: "corpus:wordnet-complete" },
-    { band: CONCEPTNET_BAND, path: SLICE_FILE, provenance: "corpus:conceptnet-full" },
+    { band: CONCEPTNET_BAND, path: SLICE_FILE, provenance: "corpus:conceptnet-slice" },
   ];
   let bytes = 0;
   for (const source of sources) {
