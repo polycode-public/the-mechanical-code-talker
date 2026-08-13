@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { EXTRACTION_FINDINGS } from "../../src/adapters/memory/shacl.mjs";
+import { EXTRACTION_FINDINGS, RULE_KINDS } from "../../src/adapters/memory/shacl.mjs";
 import { FINDING_CAVEATS } from "../../src/domain/fact-phrase.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -86,6 +86,38 @@ test("the extraction-findings closed vocabulary matches across shacl.mjs, both o
   assert.deepEqual(core, code, "ontology/tmct-core.ttl's closed list drifted from EXTRACTION_FINDINGS");
   assert.deepEqual(coreMjs, code, "core.mjs's MEMORY_VOCABULARY note drifted from EXTRACTION_FINDINGS");
   assert.deepEqual(contract, code, "docs/adapter-contract.md's findings vocabulary table drifted from EXTRACTION_FINDINGS");
+});
+
+async function shapesRuleKindNames() {
+  const text = await readFile(SHAPES_FILE, "utf8");
+  const block = /sh:path mgx:ruleKind ;\s*sh:in \(([^)]*)\)/.exec(text);
+  assert.ok(block, "mgx:ruleKind property shape's sh:in list not found in memory-shapes.ttl");
+  return [...block[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]);
+}
+
+async function coreRuleKindNames() {
+  const text = await readFile(CORE_FILE, "utf8");
+  const block = /mgx:ruleKind a owl:DatatypeProperty ;[\s\S]*?rdfs:comment "([^"]*)"/.exec(text);
+  assert.ok(block, "mgx:ruleKind property not found in tmct-core.ttl");
+  return closedVocabularyNames(block[1], "tmct-core.ttl's mgx:ruleKind rdfs:comment");
+}
+
+async function coreMjsRuleKindNames() {
+  const text = await readFile(CORE_MJS_FILE, "utf8");
+  const note = /"mgx:ruleKind", note: "([^"]*)"/.exec(text);
+  assert.ok(note, "mgx:ruleKind entry not found in core.mjs's MEMORY_VOCABULARY");
+  return closedVocabularyNames(note[1], "core.mjs's MEMORY_VOCABULARY mgx:ruleKind note");
+}
+
+test("the ruleKind closed vocabulary matches across shacl.mjs, both ontology files, and core.mjs", async () => {
+  const code = [...RULE_KINDS].sort();
+  const shapes = (await shapesRuleKindNames()).sort();
+  const core = (await coreRuleKindNames()).sort();
+  const coreMjs = (await coreMjsRuleKindNames()).sort();
+
+  assert.deepEqual(shapes, code, "ontology/memory-shapes.ttl's mgx:ruleKind sh:in list drifted from RULE_KINDS");
+  assert.deepEqual(core, code, "ontology/tmct-core.ttl's mgx:ruleKind closed list drifted from RULE_KINDS");
+  assert.deepEqual(coreMjs, code, "core.mjs's MEMORY_VOCABULARY mgx:ruleKind note drifted from RULE_KINDS");
 });
 
 test("the finding-caveat table matches FINDING_CAVEATS exactly, names and text both", async () => {

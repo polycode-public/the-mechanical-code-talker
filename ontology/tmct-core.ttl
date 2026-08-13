@@ -269,7 +269,7 @@ mgx:ruleName a owl:DatatypeProperty ;
 
 mgx:ruleKind a owl:DatatypeProperty ;
   rdfs:range xsd:string ;
-  rdfs:comment "A taught Rule's SHAPE tag, over the closed vocabulary compose2 | filter | recursive (structural, like 'Fact'/'Rule' themselves, never a domain word). shacl.mjs enforces the closed set." .
+  rdfs:comment "A taught Rule's SHAPE tag, over the closed vocabulary compose2 | filter | recursive | action-signature | action-precond | action-effect | action-constraint (structural, like 'Fact'/'Rule' themselves, never a domain word). The action-* kinds are a family: one taught sentence mints sibling Rules across them, sharing one mgx:ruleName. shacl.mjs enforces the closed set." .
 
 mgx:ruleBase1 a owl:DatatypeProperty ;
   rdfs:range xsd:string ;

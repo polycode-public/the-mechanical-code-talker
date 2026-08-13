@@ -148,7 +148,7 @@ const MEMORY_VOCABULARY = [
   { prop: "mgx:factQuantifier", note: "OPTIONAL: the quantifier word a plural class-membership teach used ('every'/'some'/'a few'), for literal recall by 'how many Xs are Ys' — never real cardinality counting" },
   { prop: "mgx:factJustification", note: "an entailed Fact's supporting premise fact ids: ' | '-separated environments, one space-separated premise-id list per independent derivation, capped by syllogise's maxEnvironments knob; a value with no ' | ' is a single environment" },
   { prop: "mgx:ruleName", note: "a taught Rule's own name (e.g. 'grandparent') — the query-dispatcher's lookup key, PLAN_TAUGHT_RELATIONS.md §2/§3" },
-  { prop: "mgx:ruleKind", note: "a taught Rule's SHAPE tag — the closed vocabulary compose2 | filter | recursive (structural, like 'Fact'/'Rule' themselves, never a domain word)" },
+  { prop: "mgx:ruleKind", note: "a taught Rule's SHAPE tag — the closed vocabulary compose2 | filter | recursive | action-signature | action-precond | action-effect | action-constraint (structural, like 'Fact'/'Rule' themselves, never a domain word)" },
   { prop: "mgx:ruleBase1", note: "compose2: the first hop's base relation name; filter: the base rule/relation being filtered (same 'base relation' role in both kinds, so the name is shared)" },
   { prop: "mgx:ruleBase2", note: "compose2 only: the second hop's base relation name" },
   { prop: "mgx:ruleFilterProperty", note: "filter only: the property literal candidates are filtered by (an mgx:hasProperty-shaped Fact lookup)" },
