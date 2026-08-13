@@ -5,13 +5,13 @@
 // states the rule and its codepoint comparator; this checks the files a
 // recent sweep converted to it stay converted.
 //
-// Scope is these named files, not a directory sweep or a repo-wide ban: most
-// of src/domain/memory/ and src/adapters/memory/ never touched localeCompare
-// in the first place, and a UI label list or a hard-coded menu sorting by
-// locale is legitimate and outside this guard's concern. Naming exactly the
-// swept files means the guard only ever fails on an actual regression in a
-// site already fixed once, never on an unrelated call this test was never
-// meant to police.
+// Scope is these named files, not a directory sweep or a repo-wide ban: a UI
+// label list or a hard-coded menu sorting by locale is legitimate and outside
+// this guard's concern. Naming exactly the converted files means the guard
+// only ever fails on an actual regression in a site already fixed once, never
+// on an unrelated call this test was never meant to police. The list grows a
+// file at a time, as each one's own sites are converted and proved; a
+// store-derived sort in a file not named here is not yet covered.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -22,8 +22,10 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const GUARDED_FILES = [
   join(ROOT, "src", "adapters", "memory", "core.mjs"),
+  join(ROOT, "src", "adapters", "memory", "blocks.mjs"),
   join(ROOT, "src", "domain", "digest", "select.mjs"),
   join(ROOT, "src", "domain", "digest", "compose.mjs"),
+  join(ROOT, "src", "services", "chat.mjs"),
   join(ROOT, "src", "services", "ledger-viz.mjs"),
   join(ROOT, "src", "domain", "news-feed.mjs"),
 ];

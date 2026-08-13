@@ -38,6 +38,11 @@ import * as defaultSource from "../adapters/source.mjs";
 import { loadTemplates, render as renderTemplate } from "../adapters/corpus/templates.mjs";
 import { rankByBiasThenTrust } from "../domain/memory/bias.mjs";
 import { compareFactsByContent } from "../domain/memory/fact-order.mjs";
+// Bare-string ordering for anything read out of the store that isn't a whole
+// fact row: a taught action family's name, a node id. Codepoint order, never
+// localeCompare — fact-order.mjs states the reason, and it applies to a
+// store-derived string just as much as to the row it came off.
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 import { HAS_A_PREDICATE, foldedFactRows as foldStoreFactRows, loadMemory as loadMemoryStore, normFactPredicate, normFactTerm as normFactTermStatic, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
 import { BACKEND_REJECTED_CODE, BACKEND_UNAVAILABLE_CODE } from "../adapters/memory/row-backend.mjs";
 import {
@@ -8245,11 +8250,13 @@ function renderFactLine(f) {
  *  row-per-member dump: "every pet is a cat or a dog (source: …)". `node` is
  *  the `<parent> rdfs:subClassOf <unionNode>` fact row (the parent and the
  *  citation both come from it); `members` are the union node's own
- *  `owl:unionOf` rows, sorted here by member name so the same union always
- *  reads back the same way regardless of the order its rows arrived in.
+ *  `owl:unionOf` rows, sorted here by content so the same union always
+ *  reads back the same way regardless of the order its rows arrived in, and
+ *  regardless of the reader's locale. Every member shares the union node's
+ *  subject and predicate, so content order is member name then source.
  *  Pure — takes the fact rows, returns one line. */
 function renderUnionLine(node, members) {
-  const sorted = [...members].sort((a, b) => a.object.localeCompare(b.object));
+  const sorted = [...members].sort(compareFactsByContent);
   // One sentence states every arm, so its caveat covers every row it was
   // composed from, not just the one the citation came off.
   const tail = factLineTail({
@@ -8264,13 +8271,15 @@ function renderUnionLine(node, members) {
 /** An enumerated class's stored `owl:oneOf` triples read back as ONE sentence:
  *  "the primary colours are exactly red, yellow and blue (source: …)". `cls`
  *  is the enumerated class's own term; `members` are its `owl:oneOf` rows,
- *  sorted here by member name for the same order-independence renderUnionLine
- *  keeps. The class name pluralizes through the same naive "+s/+es/+ies" fold
+ *  sorted here by content for the same order- and locale-independence
+ *  renderUnionLine keeps; the source the line cites is read off the first
+ *  member in that order, so it settles the same way for every reader.
+ *  The class name pluralizes through the same naive "+s/+es/+ies" fold
  *  thirdPersonSingularSurface already applies to a verb lemma — the same
  *  accepted trade documented there. Pure — takes the fact rows, returns one
  *  line. */
 function renderEnumerationLine(cls, members) {
-  const sorted = [...members].sort((a, b) => a.object.localeCompare(b.object));
+  const sorted = [...members].sort(compareFactsByContent);
   const names = sorted.map((m) => m.object);
   const list = names.length > 1
     ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
@@ -9535,9 +9544,12 @@ async function restrictionExistentialHit(memoryDir, cache, subjectVariants, fill
   // the ones meant to answer, including a provable "no".
   const subjectRestrictions = rows.filter((r) => r.predicate === SUBCLASS_PREDICATE && subjectVariants.has(r.subject)
     && onPropertyOf.has(r.object) && someValuesFromOf.has(r.object));
+  // Which restriction gets cited has to settle the same way for every reader,
+  // so the pick runs on the restriction node's id in codepoint order and falls
+  // through to the row's own content when two subject variants point at one node.
   const hit = subjectRestrictions
     .filter((r) => fillerVariants.has(someValuesFromOf.get(r.object)))
-    .sort((a, b) => a.object.localeCompare(b.object))[0];
+    .sort((a, b) => byCodepoint(a.object, b.object) || compareFactsByContent(a, b))[0];
   if (hit) {
     const byId = new Map(rows.map((r) => [r.id, r]));
     const premises = (hit.justification || [])
@@ -17300,7 +17312,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
       lines.push('taught actions: none yet — teach one ("you can move a disk onto a peg.") and /plan can use it.');
     } else {
       lines.push("taught actions (planned over, never dispatched):");
-      for (const [familyName, family] of [...families.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      for (const [familyName, family] of [...families.entries()].sort(([a], [b]) => byCodepoint(a, b))) {
         const cap = capabilityFromActionRules(familyName, family);
         const sig = cap.parameters
           .map((p) => `${p.name}: ${p.classes.filter(Boolean).join("|") || "?"}`)

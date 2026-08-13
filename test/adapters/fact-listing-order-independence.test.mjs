@@ -9,9 +9,13 @@
 // reader sees: the fold, the rank, and the line rendering.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runTurn } from "../../src/services/chat.mjs";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { runTurn, renderUnionLine, renderEnumerationLine } from "../../src/services/chat.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
-import { createInMemoryStore, appendFacts, readFactRows, loadMemory } from "../../src/adapters/memory/core.mjs";
+import { createInMemoryStore, appendFacts, appendRule, readFactRows, loadMemory } from "../../src/adapters/memory/core.mjs";
+import { saveBlock, retrieveBlocks } from "../../src/adapters/memory/blocks.mjs";
 import { factOrderKey, compareFactsByContent } from "../../src/domain/memory/fact-order.mjs";
 import { rankByBiasThenTrust } from "../../src/domain/memory/bias.mjs";
 import { buildNewsItems } from "../../src/domain/news-feed.mjs";
@@ -262,4 +266,97 @@ test("the ledger's predicate leaderboard breaks a tied count by codepoint order,
   const row = (predicate) => ({ p: predicate, phrase: predicate, src: "corpus:x", prov: "corpus", trustTier: 1, createdAt: "" });
   const stats = computeLedgerStats([row("apple"), row("Bravo")], [], []);
   assert.deepEqual(stats.predicates.map((p) => p.predicate), ["Bravo", "apple"]);
+});
+
+// ---- the chat layer's own sorts over store-derived data (chat.mjs) --------
+// Every case-only pair the digest tests use is folded away here: fact terms
+// go through normFactTerm, which lowercases. What survives the fold is an
+// accent. Codepoint order puts every accented letter after the whole ASCII
+// alphabet; locale collation files it next to its base letter, so "bull"
+// leads "bétail" by codepoint and trails it under any locale-aware sort.
+// Each pair below is chosen so the two orders disagree, which is what makes
+// these assertions a locale check rather than a restatement of the code.
+
+const LOCALE_SPLIT = ["bull", "bétail"];
+const localeFirst = (pair) => [...pair].sort((a, b) => a.localeCompare(b))[0];
+const codepointFirst = (pair) => [...pair].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))[0];
+
+test("the accented pair these chat checks rely on really does split the two orders", () => {
+  assert.equal(codepointFirst(LOCALE_SPLIT), "bull");
+  assert.equal(localeFirst(LOCALE_SPLIT), "bétail");
+  assert.equal(codepointFirst(["zebra", "ñandu"]), "zebra");
+  assert.equal(localeFirst(["zebra", "ñandu"]), "ñandu");
+});
+
+test("a union line reads the same both ways round, and in codepoint order", () => {
+  const node = { subject: "herd animal", predicate: "rdfs:subClassOf", object: "u1", provenance: "corpus:pasture" };
+  const member = (object) => ({ subject: "u1", predicate: "owl:unionOf", object, provenance: "corpus:pasture" });
+  const [x, y] = LOCALE_SPLIT;
+  const forward = renderUnionLine(node, [member(x), member(y)]);
+  assert.equal(forward, "every herd animal is a bull or a bétail (source: corpus:pasture)");
+  assert.equal(renderUnionLine(node, [member(y), member(x)]), forward);
+});
+
+test("an enumeration line reads the same both ways round, and in codepoint order", () => {
+  const member = (object) => ({ subject: "creature", predicate: "owl:oneOf", object, provenance: "corpus:fauna" });
+  const forward = renderEnumerationLine("creature", [member("zebra"), member("ñandu")]);
+  assert.equal(forward, "the creatures are exactly zebra and ñandu (source: corpus:fauna)");
+  assert.equal(renderEnumerationLine("creature", [member("ñandu"), member("zebra")]), forward);
+});
+
+// Two someValuesFrom restrictions on one class, both over the asked filler,
+// so the existential chase has a real choice of which one to cite back.
+const RESTRICTION_ROWS = [
+  fact("heart", "rdfs:subClassOf", "rbull"),
+  fact("rbull", "owl:onProperty", "tmct:contains"),
+  fact("rbull", "owl:someValuesFrom", "valve"),
+  fact("heart", "rdfs:subClassOf", "rbétail"),
+  fact("rbétail", "owl:onProperty", "tmct:holds"),
+  fact("rbétail", "owl:someValuesFrom", "valve"),
+];
+
+test("an existential restriction answer cites the same premise however the rows arrived", async () => {
+  const answers = await renderingsAcrossArrivals(RESTRICTION_ROWS, "does a heart contain a valve");
+  const [first, ...rest] = answers;
+  assert.equal(first, "yes — heart is a kind of rbull (source: corpus:test)");
+  for (const other of rest) assert.equal(other, first);
+});
+
+test("/capabilities lists taught action families in codepoint order, whichever was taught first", async () => {
+  const rules = LOCALE_SPLIT.map((name) => ({
+    name, kind: "action-signature", slots: { subjectClass: `${name}-subject`, targetClass: `${name}-target` },
+  }));
+  const listings = [];
+  for (const [i, order] of [rules, [...rules].reverse()].entries()) {
+    const memoryDir = createInMemoryStore();
+    for (const r of order) await appendRule(memoryDir, { ...r, provenance: "corpus:test" });
+    const answer = (await ask("/capabilities", memoryDir, `caps-${i}`)).answer;
+    listings.push(answer.split("\n").filter((line) => line.includes("taught:")));
+  }
+  assert.deepEqual(listings[0], [
+    "  taught:bull — subject: bull-subject, target: bull-target",
+    "  taught:bétail — subject: bétail-subject, target: bétail-target",
+  ]);
+  assert.deepEqual(listings[1], listings[0]);
+});
+
+// ---- block retrieval's own tiebreak (adapters/memory/blocks.mjs) ----------
+// This one decides WHICH blocks come back, not just what order they print in:
+// two blocks tied on score and rank, k=1, and the id comparison alone picks
+// the winner. A locale-aware comparison would hand a different block's text
+// to the reader off the same store.
+
+test("a tied block set retrieves the same block, in codepoint order by id", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-block-order-"));
+  const shared = "the herd grazes on the upland pasture at dawn";
+  for (const id of LOCALE_SPLIT) await saveBlock(dir, { id, text: shared });
+  // A third, unrelated block keeps the query tokens off every block, so their
+  // idf weight stays above zero and the pair scores at all.
+  await saveBlock(dir, { id: "decoy", text: "compilers emit bytecode for a virtual machine" });
+
+  const query = "herd grazes upland pasture";
+  const both = await retrieveBlocks(dir, query, 3);
+  assert.equal(both[0].score, both[1].score, "the pair really is tied on score");
+  assert.equal(both[0].rank, both[1].rank, "the pair really is tied on rank");
+  assert.deepEqual((await retrieveBlocks(dir, query, 1)).map((b) => b.id), ["bull"]);
 });
