@@ -114,16 +114,26 @@ const TICK_WAIT_MS = 900;
  *  (a distinct icon from plain furniture, since Ashcombe's own cabinet and
  *  portrait are typed "furniture" but read more clearly as a container on
  *  screen), else its own rdf:type object, else the generic "portable"
- *  fallback for anything a world places with no type fact at all. Pure,
- *  self-contained — no reference to adventure.mjs's own private isContainer/
- *  isTyped, since those aren't exported. */
+ *  fallback for anything a world places with no type fact at all. A room
+ *  always wins when it's one of several rdf:type facts on one subject: every
+ *  shipped world's outdoor/underground rooms carry `rdf:type room` PLUS a
+ *  second `rdf:type outdoor-space`/`underground-space` fact purely as a
+ *  border-paint marker for roomKindForRoom below, and that marker has no
+ *  sprite of its own, so picking it as the class would fall through to the
+ *  generic "portable" icon for something that is actually a room. Preferring
+ *  "room" keeps the answer the same regardless of which of the two facts a
+ *  store happens to list first. Pure, self-contained — no reference to
+ *  adventure.mjs's own private isContainer/isTyped, since those aren't
+ *  exported. */
 export function spriteClassForObject(rows, subject) {
   const isContainer = (rows || []).some(
     (r) => r.subject === subject && r.predicate === "mgx:is-container" && r.object === "true",
   );
   if (isContainer) return "container";
-  const typeRow = (rows || []).find((r) => r.subject === subject && r.predicate === "rdf:type");
-  return typeRow ? typeRow.object : "portable";
+  const typeRows = (rows || []).filter((r) => r.subject === subject && r.predicate === "rdf:type");
+  if (!typeRows.length) return "portable";
+  const room = typeRows.find((r) => r.object === "room");
+  return (room || typeRows[0]).object;
 }
 
 /** `rows` plus synthetic rdfs:subClassOf edges covering `subject`'s whole
