@@ -11,7 +11,7 @@ which now points at this file.
 ## 1. What is on disk
 
 ```
-/Users/antony/tmct-dumps/wikidata-20260810-all.json.gz
+~/tmct-dumps/wikidata-20260810-all.json.gz
 155,457,882,747 bytes
 completed 2026-08-13 05:02 BST, ~4.2 MB/s sustained
 ```
