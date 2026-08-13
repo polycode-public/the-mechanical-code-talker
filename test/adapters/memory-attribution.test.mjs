@@ -1,13 +1,13 @@
 // Attribution on the read side: the fold hangs each attributed claim's speakers
-// on the claim's own row. A report's claim and its speaker are two rows — the
-// claim, and `fact:<claimId> | mgx:attributedTo | <speaker>` beside it — so a
-// reader that only reads the claim would state a report's assertion as tmct's
-// own.
+// on the claim's own row, and retracting a claim takes what was said about it
+// with it. A report's claim and its speaker are two rows — the claim, and
+// `fact:<claimId> | mgx:attributedTo | <speaker>` beside it — so a reader that
+// only reads the claim would state a report's assertion as tmct's own.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  createInMemoryStore, appendFacts, loadMemory, readFactRows,
+  createInMemoryStore, appendFacts, loadMemory, readFactRows, removeFacts, readRetractions,
 } from "../../src/adapters/memory/core.mjs";
 import { factIdForTriple } from "../../src/domain/hash.mjs";
 
@@ -81,4 +81,49 @@ test("a row nothing attributed carries no attributedTo at all", async () => {
     { subject: "kestrel", predicate: "rdfs:subClassOf", object: "bird", provenance: "corpus:test" },
   ]));
   assert.ok(!("attributedTo" in rowFor(rows, "kestrel")), "absent, never empty");
+});
+
+test("retracting a claim takes its attributions with it", async () => {
+  const dir = await storeWith([
+    claimRow(),
+    attributionRow("president trump"),
+    attributionRow("state department", "extracted:reuters-world"),
+    { subject: "robert gilman", predicate: "rdf:type", object: "person", provenance: "corpus:test" },
+  ]);
+  const { removed } = await removeFacts(dir, [CLAIM_ID]);
+  assert.deepEqual(removed, [CLAIM_ID], "the caller is answered about the id it asked for, not the cascade");
+  const rows = await rowsOf(dir);
+  assert.equal(rowFor(rows, "russia"), undefined, "the claim is gone");
+  assert.equal(rowFor(rows, CLAIM_ID), undefined, "and no attribution is left pointing at nothing");
+  assert.ok(rowFor(rows, "robert gilman"), "an unrelated row about the same entity stands");
+});
+
+test("a cascaded attribution leaves its own retraction record, so a peer cannot re-deliver it", async () => {
+  const dir = await storeWith([claimRow(), attributionRow("president trump")]);
+  const attributionId = factIdForTriple(CLAIM_ID, "mgx:attributedTo", "president trump");
+  await removeFacts(dir, [CLAIM_ID]);
+  // A retraction is scoped `<groupId>@<sourceId>` — one record per triple and
+  // source, so the triple it covers is the part ahead of the source key.
+  const retracted = readRetractions(await loadMemory(dir)).map((f) => String(f.subject).split("@")[0]);
+  assert.ok(retracted.includes(CLAIM_ID), "the claim is on record as retracted");
+  assert.ok(retracted.includes(attributionId), "so is the attribution that went with it");
+});
+
+test("retracting one source's record of a claim other sources still assert leaves the attribution standing", async () => {
+  const dir = await storeWith([
+    claimRow(),
+    claimRow("extracted:reuters-world"),
+    attributionRow("president trump"),
+  ]);
+  const memory = await loadMemory(dir);
+  const record = (memory.individuals || [])
+    .find((ind) => ind.class === "Fact" && ind.id.startsWith(`${CLAIM_ID}@`) && ind.id.includes("nyt"));
+  assert.ok(record, "the nyt record is there to retract");
+  await removeFacts(dir, [record.id]);
+  const rows = await rowsOf(dir);
+  assert.ok(rowFor(rows, "russia"), "reuters still asserts the claim");
+  assert.deepEqual(
+    rowFor(rows, "russia").attributedTo, ["president trump"],
+    "so what was said about it still stands",
+  );
 });

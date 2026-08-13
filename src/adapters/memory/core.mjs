@@ -4526,6 +4526,26 @@ function recordSourceIdOf(record) {
   return hash < 0 ? rest : rest.slice(0, hash);
 }
 
+/** The triples that name any of `goneGroupIds` in a TERM rather than through an
+ *  edge, as group ids — what a retraction has to take with it, because an
+ *  objectProperties scrub cannot see a fact id sitting in an attribute value.
+ *
+ *  The whole group comes back, not the matching record: an attribution two
+ *  outlets both wrote is one triple with two records, and retracting the claim
+ *  under it leaves neither of them anything to be about. A term is only ever a
+ *  reference when it is a fact id, so membership in the gone set IS the test —
+ *  no term a source writes can collide with one. */
+function factGroupsReferencing(payload, goneGroupIds) {
+  const groups = new Set();
+  for (const ind of payload?.individuals || []) {
+    if (ind?.class !== FACT_CLASS) continue;
+    const subject = individualAttr(ind, "rdf:subject");
+    const object = individualAttr(ind, "rdf:object");
+    if (goneGroupIds.has(subject) || goneGroupIds.has(object)) groups.add(factGroupId(ind.id));
+  }
+  return groups;
+}
+
 /** Retract facts by id — a real DELETE (syllogise.mjs's retractability
  *  mechanism). A GROUP id retracts the triple: every source's record for it,
  *  demoted leaves included, since retracting "dogs bark" cannot leave half its
@@ -4540,9 +4560,16 @@ function recordSourceIdOf(record) {
  *  keeps the retraction on record rather than erasing the fact that something
  *  was asserted at all. A retraction record is never itself removed here.
  *
+ *  A triple retracted WHOLE takes the triples that name it with it, through
+ *  factGroupsReferencing above — the reified attribution beside a report's
+ *  claim is the live case, and the edge scrub cannot reach it. While any
+ *  source's record for a triple still stands the claim does too, so nothing
+ *  cascades off a single retracted record.
+ *
  *  Returns { removed, records } — `removed` the ids asked for that matched, so
  *  it may be smaller than the input and is never longer than it; `records` the
- *  concrete record ids that went, which is what the retraction absorbed. */
+ *  concrete record ids that went, cascaded ones included, which is what the
+ *  retraction absorbed. */
 export async function removeFacts(dir, ids, { provenance = "", retractedAt = "" } = {}) {
   const idSet = new Set((ids || []).filter(Boolean));
   const removed = [];
@@ -4553,12 +4580,7 @@ export async function removeFacts(dir, ids, { provenance = "", retractedAt = "" 
     const removedSet = new Set();
     const matched = new Set();
     const retiredByGroupAndSource = new Map(); // `${groupId} ${sourceId}` -> { groupId, sourceId, ids, template }
-    payload.individuals = (payload.individuals || []).filter((ind) => {
-      if (ind?.class !== FACT_CLASS) return true;
-      const groupId = factGroupId(ind.id);
-      const asked = idSet.has(ind.id) ? ind.id : (idSet.has(groupId) ? groupId : "");
-      if (!asked) return true;
-      matched.add(asked);
+    const retire = (ind, groupId) => {
       removedSet.add(ind.id);
       const sourceId = recordSourceIdOf(ind);
       const key = `${groupId} ${sourceId}`;
@@ -4585,8 +4607,36 @@ export async function removeFacts(dir, ids, { provenance = "", retractedAt = "" 
           },
         });
       }
-      return false;
-    });
+    };
+
+    // Round one takes the ids asked for; every round after it takes whatever
+    // the last one left pointing at a triple that is now gone. A reference to a
+    // reference would need a third round, so the loop runs until a round finds
+    // nothing rather than assuming one hop.
+    let asking = idSet;
+    let cascading = false;
+    while (asking.size) {
+      const standingGroups = new Set();
+      const emptiedGroups = new Set();
+      payload.individuals = (payload.individuals || []).filter((ind) => {
+        if (ind?.class !== FACT_CLASS) return true;
+        const groupId = factGroupId(ind.id);
+        const asked = asking.has(ind.id) ? ind.id : (asking.has(groupId) ? groupId : "");
+        if (!asked) {
+          standingGroups.add(groupId);
+          return true;
+        }
+        // Only the caller's own ids answer for what it asked; a cascade is this
+        // call's consequence, not part of the request.
+        if (!cascading) matched.add(asked);
+        emptiedGroups.add(groupId);
+        retire(ind, groupId);
+        return false;
+      });
+      const gone = [...emptiedGroups].filter((groupId) => !standingGroups.has(groupId));
+      asking = gone.length ? factGroupsReferencing(payload, new Set(gone)) : new Set();
+      cascading = true;
+    }
     for (const id of matched) removed.push(id);
     if (!removed.length) return; // honest no-op — nothing matched, no write needed beyond this
     for (const id of removedSet) records.push(id);
