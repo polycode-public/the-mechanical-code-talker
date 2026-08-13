@@ -9,7 +9,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fnv1a32, fnv1aHex, factIdFor, factIdForTriple, legacyFactIdFor } from "../../src/domain/hash.mjs";
+import { fnv1a32, fnv1aHex, factIdFor, factIdForTriple, legacyFactIdFor, normFactTerm } from "../../src/domain/hash.mjs";
 
 test("fnv1a32 golden values are stable", () => {
   assert.equal(fnv1a32("the mechanical code talker"), 969701681);
@@ -53,4 +53,30 @@ test("two triples that shared one 32-bit id now get distinct fact ids", () => {
   assert.equal(legacyFactIdFor(...a), "fact:495ee929", "the old scheme collided");
   assert.equal(legacyFactIdFor(...a), legacyFactIdFor(...b), "the old scheme collided");
   assert.notEqual(factIdForTriple(...a), factIdForTriple(...b), "the wide id keeps them apart");
+});
+
+// normFactTerm's fact-id guard must change nothing else: every existing
+// prefix-strip case below has to come out exactly as it did before the
+// guard existed. Only a term that is exactly "fact:" + 16 lowercase hex
+// takes the new path.
+test("normFactTerm still strips every non-fact-id prefix form the same way", () => {
+  assert.equal(normFactTerm("/c/en/foo_bar"), "foo bar", "ConceptNet URI");
+  assert.equal(normFactTerm("tmct:Foo_bar"), "foo bar", "tmct CURIE");
+  assert.equal(normFactTerm("mgx:causes"), "causes", "predicate-shaped CURIE used as a term");
+  assert.equal(normFactTerm("fact"), "fact", "bare word, no colon, untouched");
+  assert.equal(normFactTerm("fact:not-hex-at-all"), "not-hex-at-all", "fact: prefix with a non-hex tail still strips");
+  assert.equal(normFactTerm("fact:1a2b3c4d5e6f778"), "1a2b3c4d5e6f778", "15 hex chars is short of an id, still strips");
+  assert.equal(normFactTerm("fact:1a2b3c4d5e6f77889"), "1a2b3c4d5e6f77889", "17 hex chars overshoots an id, still strips");
+});
+
+test("normFactTerm exempts a real fact group id, unchanged apart from lowercasing", () => {
+  assert.equal(normFactTerm("fact:1a2b3c4d5e6f7788"), "fact:1a2b3c4d5e6f7788", "already-lowercase id survives whole");
+  assert.equal(normFactTerm("FACT:1A2B3C4D5E6F7788"), "fact:1a2b3c4d5e6f7788", "mixed-case id lowercases but does not strip");
+  assert.equal(normFactTerm("Fact:1a2b3c4d5e6f7788"), "fact:1a2b3c4d5e6f7788", "mixed-case prefix alone lowercases but does not strip");
+});
+
+test("a fact-id-shaped subject/object now hashes apart from its bare hex tail", () => {
+  const prefixed = factIdForTriple("fact:1a2b3c4d5e6f7788", "mgx:causes", "smoke");
+  const bare = factIdForTriple("1a2b3c4d5e6f7788", "mgx:causes", "smoke");
+  assert.notEqual(prefixed, bare, "a reference to a fact must not collide with a taught word of the same hex");
 });
