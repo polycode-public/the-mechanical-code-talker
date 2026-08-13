@@ -81,6 +81,20 @@ test("a clause-fallback row and an identifier-token row each read with their own
   );
 });
 
+test("a reported-speech row reads back with its caveat between the fact and the citation", async () => {
+  const [turn] = await driveSession({
+    facts: [{
+      subject: "sighting", predicate: "rdfs:subClassOf", object: "report",
+      provenance: "extracted:nyt-world.md", extraction: ["reported-speech"],
+    }],
+    asks: ["what is a sighting"],
+  });
+  assert.equal(
+    body(turn),
+    "i learned: sighting is a kind of report (read from reported speech) (source: extracted:nyt-world.md)",
+  );
+});
+
 test("a row carrying two findings reads both, once each, in the caveat table's own order", async () => {
   const [turn] = await driveSession({
     facts: [{

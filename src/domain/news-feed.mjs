@@ -1488,7 +1488,9 @@ function cardArticleTerms(sources, articleEntityNames, { concepts, readsAsEntity
  *  name inside the headline now reaches the card, where before only the
  *  endpoints of its own facts did. They never widen its report — the walk they
  *  seed excludes every reported row — so what a card claims a source said is
- *  untouched. */
+ *  untouched. They also carry the card's sense when its hub is a phrase the
+ *  bands never place: the hub walk then keeps to the senses of the names the
+ *  article uses, where before it kept to nothing. */
 export function buildNewsItems(rows, {
   now, windowMs, limit = 6, sourcesByFactId = new Map(), readsAsEntityTerm, articleEntityNames = null,
 } = {}) {
@@ -1507,18 +1509,31 @@ export function buildNewsItems(rows, {
   const items = hubs.filter(({ term }) => coverage.get(term).mints).map(({ term, changed }) => {
     const coveredRowIds = coverage.get(term).coveredRowIds;
     const seeds = hubSeedTerms(term);
-    const inHubSense = senseScope.sameSenseAs(seeds);
-    const hubRows = subgraphAround(rows, term, {
+    const hubWalk = {
       adjacency,
       priorityIds: reportedIds,
       seedTerms: seeds,
       excludeIds: coveredRowIds,
-      inSense: inHubSense,
-    });
-    const sources = collectSources(hubReportRows(term, hubRows, { reportedIds }), sourcesByFactId);
+    };
+    // The card's sources have to be read before its sense can be chosen, and a
+    // walk that admits no background at all is enough to read them: a report on
+    // the hub sits on a seed, and every scope admits those. So this pass and
+    // the real one below hand `hubReportRows` the same rows.
+    const reportedRowsOnly = subgraphAround(rows, term, { ...hubWalk, inSense: () => false });
+    const sources = collectSources(hubReportRows(term, reportedRowsOnly, { reportedIds }), sourcesByFactId);
     const articleTerms = articleEntityNames
       ? cardArticleTerms(sources, articleEntityNames, { concepts, readsAsEntityTerm: namesEntities })
       : [];
+    // A hub the bands never place has no sense of its own, so a scope anchored
+    // on it refuses nothing and the walk fills the card with whatever it meets.
+    // The entities the article names carry the card's sense instead, so its
+    // background stays tied to its own text. When the bands place none of those
+    // names either, the card keeps to the unplaced and reads sparse, which is
+    // the price of not filling a card about a coined phrase with strays.
+    const hubSense = senseScope.hasPlacedSense(seeds)
+      ? senseScope.sameSenseAs(seeds)
+      : senseScope.sameSenseAs([...seeds, ...articleTerms], { admitAllWhenUnplaced: false });
+    const hubRows = subgraphAround(rows, term, { ...hubWalk, inSense: hubSense });
     const heldIds = new Set(hubRows.map((r) => r.id));
     const articleRows = articleTerms.length
       ? articleEntityRows(rows, articleTerms, {

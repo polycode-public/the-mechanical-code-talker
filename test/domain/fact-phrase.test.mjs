@@ -13,6 +13,10 @@ test("predicatePhrase returns a curated phrase for every table entry", () => {
   assert.equal(predicatePhrase("mgx:causes"), "causes");
   assert.equal(predicatePhrase("mgx:desires"), "wants");
   assert.equal(predicatePhrase("mgx:currently-in"), "is in");
+  // A curated entry, not the minted-verb branch: without it the mgx:<letters>
+  // fold ran attributedTo through the third-person-singular fold and gave back
+  // "attributedToes".
+  assert.equal(predicatePhrase("mgx:attributedTo"), "is attributed to");
 });
 
 test("predicatePhrase renders a minted verb predicate as its third-person surface", () => {
@@ -56,6 +60,32 @@ test("factSentence agrees a minted verb with its own row.subject", () => {
   assert.equal(
     factSentence({ subject: "the group of scientists", predicate: "mgx:report", object: "a finding" }),
     "the group of scientists reports a finding",
+  );
+});
+
+test("a lexicon-minted predicate comes pre-inflected, so a plural subject reads it back through the bare form", () => {
+  assert.equal(predicatePhrase("tmct:releases", "rescuers"), "release");
+  assert.equal(predicatePhrase("tmct:releases", "russia"), "releases");
+  assert.equal(predicatePhrase("tmct:uses", "people"), "use");
+  assert.equal(predicatePhrase("tmct:carries", "the ships"), "carry");
+  assert.equal(predicatePhrase("tmct:touches", "the wires"), "touch");
+  // The camel-cased preposition is its own word, and the verb in front of it
+  // agrees the same way.
+  assert.equal(predicatePhrase("tmct:reliesOn", "systems"), "rely on");
+  assert.equal(predicatePhrase("tmct:reliesOn", "the system"), "relies on");
+  assert.equal(predicatePhrase("tmct:dependsOn", "the modules"), "depend on");
+  // No subject given at all: today's pre-existing singular default, unchanged.
+  assert.equal(predicatePhrase("tmct:releases"), "releases");
+});
+
+test("factSentence agrees a lexicon-minted verb with its own row.subject", () => {
+  assert.equal(
+    factSentence({ subject: "rescuers", predicate: "tmct:releases", object: "a quake victim" }),
+    "rescuers release a quake victim",
+  );
+  assert.equal(
+    factSentence({ subject: "russia", predicate: "tmct:releases", object: "robert gilman" }),
+    "russia releases robert gilman",
   );
 });
 
@@ -149,6 +179,7 @@ test("findingCaveat renders one short template per kept finding, and nothing for
   assert.equal(findingCaveat("clause-fallback"), "(read from a clause fragment)");
   assert.equal(findingCaveat("pronoun-carry"), "(subject carried from the previous sentence)");
   assert.equal(findingCaveat("identifier-token"), "(identifier token)");
+  assert.equal(findingCaveat("reported-speech"), "(read from reported speech)");
   // A fact row is the shape a renderer actually holds.
   assert.equal(
     findingCaveat({ subject: "cell", predicate: "rdfs:subClassOf", object: "unit", extraction: ["pronoun-carry"] }),
@@ -168,7 +199,7 @@ test("a row carrying several findings reads them in the table's order, not the r
   const caveat = "(read from a clause fragment) (identifier token)";
   assert.equal(findingCaveat(["clause-fallback", "identifier-token"]), caveat);
   assert.equal(findingCaveat(["identifier-token", "clause-fallback"]), caveat);
-  assert.equal(Object.keys(FINDING_CAVEATS).length, 3, "the caveat table is closed");
+  assert.equal(Object.keys(FINDING_CAVEATS).length, 4, "the caveat table is closed");
 });
 
 test("phraseRendererSource carries everything the reader stands on", () => {
@@ -193,4 +224,9 @@ test("phraseRendererSource carries everything the reader stands on", () => {
     browserSentence({ subject: "scientists", predicate: "mgx:report", object: "a finding" }),
     "scientists report a finding",
   );
+  assert.equal(
+    browserSentence({ subject: "rescuers", predicate: "tmct:releases", object: "a quake victim" }),
+    "rescuers release a quake victim",
+  );
+  assert.equal(browserPhrase("tmct:reliesOn", "systems"), "rely on");
 });

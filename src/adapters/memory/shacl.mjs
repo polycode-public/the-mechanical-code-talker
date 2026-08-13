@@ -18,12 +18,19 @@ export const EXTRACTION_FINDINGS = Object.freeze([
   "clause-fallback",    // the row grounded from a clause fragment after the whole sentence declined
   "pronoun-carry",      // the subject was substituted from the paragraph's pronoun carry
   "definitional-frame", // the row came from a definitional copula frame ("X is the name for Y")
+  "reported-speech",    // the row was read from a reported-speech clause, its speaker attributed separately
 ]);
 const EXTRACTION_FINDING_SET = new Set(EXTRACTION_FINDINGS);
-const RULE_KINDS = new Set([
+
+// The closed vocabulary of a taught Rule's SHAPE tag — three structural
+// kinds plus the action-* family shared by one taught sentence's sibling
+// Rules. Exported (like EXTRACTION_FINDINGS above) so an estate guard can
+// cross-check it against its own prose mirrors in the ontology files.
+export const RULE_KINDS = Object.freeze([
   "compose2", "filter", "recursive",
   "action-signature", "action-precond", "action-effect", "action-constraint",
 ]);
+const RULE_KIND_SET = new Set(RULE_KINDS);
 
 // Mirrors the REQUIRED subset of core.mjs's own (unexported) RULE_SLOT_SPEC —
 // kept in sync by hand. Two kinds there also carry optional slots
@@ -140,8 +147,8 @@ function checkFact(ind, violations) {
 function checkRule(ind, violations) {
   if (!nonEmpty(attrValue(ind, "mgx:ruleName"))) violations.push("a Rule needs a non-empty mgx:ruleName");
   const kind = attrValue(ind, "mgx:ruleKind");
-  if (!kind || !RULE_KINDS.has(kind)) {
-    violations.push(`a Rule's mgx:ruleKind must be one of ${[...RULE_KINDS].join(" | ")} (got ${JSON.stringify(kind)})`);
+  if (!kind || !RULE_KIND_SET.has(kind)) {
+    violations.push(`a Rule's mgx:ruleKind must be one of ${RULE_KINDS.join(" | ")} (got ${JSON.stringify(kind)})`);
     return; // no declared kind to check slots against
   }
   for (const prop of RULE_SLOT_PROPS[kind]) {

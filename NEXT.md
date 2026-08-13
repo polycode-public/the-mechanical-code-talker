@@ -45,63 +45,54 @@ the deployed worker persists state and does not.
 
 The work list, ranked by value against the plan's target card.
 
-1. [ ] **A report's claim is not attributed to its speaker** — the recognizer now
-   unwraps "President Trump said X" to the claim X, but the row states X flatly
-   with no record of who said it. Shape decided: a reified finding, a Fact about
-   a Fact, with a new name in the closed findings vocabulary
-   (`src/adapters/memory/shacl.mjs`, `core.mjs`'s byte-pinned vocabulary note,
-   `docs/adapter-contract.md`) — chosen over reusing `statedBy` and over leaving
-   the speaker in provenance only. A design pass is running now to settle the
-   name, whether this store can carry a fact id in subject position at all, the
-   card rendering, and whether an attributed claim still counts as grounded.
-   Implementation waits on items 3 and 5 to free `extract-facts.mjs` and
-   `core.mjs`.
-2. [ ] **An unplaced hub turns the sense scope off entirely** — in flight on
-   `worktree-agent-a88fb2f1a0b11930f`, anchoring the scope on the terms the
-   article itself names when the hub is unplaced (chosen over admitting
-   nothing, accepting that a card naming few entities goes sparse). When `topsOf(hub)`
-   is empty the bands never place it, the hub-anchored scope switches off, and
-   every neighbour is admitted as filler. Iteration 11 killed the `bright`
-   specimen by re-heading that card on `rescuers`, and the same cause
-   immediately surfaced on another card: `syrian holdout province` emits
-   "pronounce means the same as say. say is a kind of matter." Fixing a hub
-   cures one card; the class needs the scope to do something better than switch
-   off. One measured non-answer already: anchoring on the hub's seeds plus the
-   far side of its reported rows reshuffles noise rather than cutting it.
-3. [ ] **The lexicon arm's object scan doesn't read through a count of-chain** —
-   in flight on `worktree-agent-ae96b58e71cd6d7ea`, carrying a second defect
-   found in iteration 12: the free/release synonym fold is lexical, so
-   "Rescuers Free Quake Victim" became "rescuers releases quake victim" — wrong
-   sense (rescuers free from rubble, they do not release from custody) and wrong
-   agreement (plural subject, singular verb surface). The agreement half is not
-   news-only: any fold or mint whose canonical surface is third-person singular
-   does it under a plural subject. The track's main job:
-   "The blast triggers hundreds of evacuations." mints
-   `blast | tmct:triggers | hundred`. The newswire frame reads through the count
-   (`skipCountPhrase`); Pass 2a/2b's `nearestEntity(i, +1)` does not. Fixing it
-   changes the object scan for every lexicon verb in every corpus lane, not just
-   news, which is why it is its own item rather than a remainder of the frame
-   work that found it.
-4. [ ] **`buildMemoryIndex` rebuilt per write** — in flight on
-   `worktree-agent-a382d01858173b066`. A measured "this does not pay" is an
-   acceptable outcome. The prize is ~74 ms of a ~280 ms
-   write. Two cheap restructurings measured neutral and were reverted. Making
-   the index survive across writes needs a handle-level index beside
-   `handle.cachedPayload` with a copy-on-write overlay per mutate — the copy
-   gives every individual a new object identity, so `individualsById` can't be
-   reused as-is, and `factRecordsByGroup`'s values are arrays that call sites
-   mutate in place, so the overlay must copy on read. ~15 call sites plus
-   `patchAssembledPayload`.
-5. [ ] **The world editor supersedes a placement by arriving last** — in flight
-   on `worktree-agent-a10784011d797633e`.
-   `foldWorldState` ranks placements by `(epoch, turn)` with `turn >= prior.turn`,
-   so at equal turn the row later in the array wins, and `adventure-editor.mjs`
-   supersedes by appending an untimed duplicate that only wins by arrival order.
-   `crdt.md` already documents the fold as arbitrary at ties, and a p2p store
-   gets content-address order from `sortFactIndividualsById` today, so this is
-   already broken there. The fix is to stamp an editor edit
-   `snapshotSubject(subject, turn + 1, epoch)` so it outranks rather than relying
-   on arrival.
+1. [ ] **A report's claim is not attributed to its speaker** — spec settled in
+   `PLAN_ATTRIBUTION.md`, nine commits. Commit 1 (the `normFactTerm` carve-out)
+   is merged; commits 2 and 5 (the phrase layer and the chat caveat) are in
+   flight. The two findings that shaped it:
+   reification over a Fact is unprecedented in this store, and `normFactTerm`
+   strips the `fact:` prefix so the reference is unrecoverable at read time
+   until a carve-out lands. An attributed claim stays grounded and every
+   rendering names the speaker; the invariant is that a surface which cannot
+   render the attribution must not render the claim. Commits 2–5 are blocked
+   only on other agents' files, 6–8 on `core.mjs` and `extract-facts.mjs`.
+2. [ ] **The graph's own false fact becomes an anchor's sense** — in flight on
+   `worktree-agent-a8aed6d0760b04093`. The unplaced-hub scope landed and the
+   syrian card is byte-identical, because its strays never came through the hub
+   walk. Instrumented: both arrive on the article-entity walk, and the article's
+   own extraction minted `say | rdfs:subClassOf | matter` from "many say it is
+   just a matter of time". That asserted isa places `say` under `substance`, so
+   `matter` then legitimately meets the anchor pool — no sense gate can refuse
+   it, because the graph believes it. Two upstream causes: the mint itself in
+   `extract-facts.mjs`, and `articleEntityNames` in `news.mjs` admitting `say`
+   and `moves`, neither of which is an entity. A measured lever left pending
+   their fix: a strict article walk drops the genuine stray
+   `dance | mgx:relatedTo | moves` from the trump tariff card (background 24 →
+   15) and does not touch the syrian card.
+3. [ ] **"hackernews discuss" reads as a plural** — live on 6 of 14 cards.
+   `isSubjectPlural` reads a naive `-s` suffix, so a singular site name spelled
+   with a trailing `-s` renders bare. The fix is one entry in the existing
+   `SINGULAR_NOUNS_ENDING_S` closed set, but it moves 5 pinned assertions across
+   `news-feed.test.mjs`, `news-card-article-entities.test.mjs` and
+   `news-card-coverage.test.mjs`. Written and reverted once already because
+   those files belong to the sense-scope track; land it when they are free.
+   The wider version — a plural column on 43 of the curated table's 49 entries,
+   plus a subject-number test that does not read "redis", "socrates" or "mjs"
+   as plural — needs the lexicon's declared plurals, and `fact-phrase.mjs` is
+   deliberately import-free so it can be stringified into the browser. That
+   cost is the real one, and it is bigger than the typing.
+4. [ ] **The rest of a 300 ms write** — the index was 18% of it and is now
+   carried across writes (appendFact −15.6%, appendUtterance −16.1%,
+   removeFacts −11.7% at 60k facts). The profile puts the remaining ~85% in
+   `cacheUpsertEdge`'s per-edge filter, `sqlitePayloadStoreRows`, and
+   `cloneJson`. The largest single item is `mutablePayloadCopy` copying all 60k
+   individuals; skipping it needs the object-identity work the index change
+   deliberately left alone, since three of the five index maps can't be reused
+   precisely because every individual gets a new identity per mutation.
+5. [ ] **`mud-editor.mjs` has the adventure editor's old loose contract** —
+   `planMudEditorSync` returns bare triples and `mud-browser-entry.mjs` stamps
+   them at the call site, exactly as the adventure pair did before the fix. Its
+   one production caller stamps correctly, so there is no live break — this is
+   symmetry, and the same mechanical change of shape.
 6. [ ] **Wikidata** — the pinned dated dump
    (`wikidata-20260810-all.json.gz`, 155,457,882,747 bytes) is downloading in
    the operator's terminal via `bash scripts/resume-wikidata-dump.sh`, which

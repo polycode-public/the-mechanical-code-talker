@@ -45,7 +45,7 @@ test("a passive states who it happened to, so the actor takes the subject side a
 test("a headline that names its subject and then interrupts itself still reaches that subject", () => {
   assert.deepEqual(
     triplesOf("Ex-Marine Robert Gilman, Freed by Russia After 4 Years in Prison, Arrives in the U.S."),
-    ["russia tmct:releases robert gilman"],
+    ["russia mgx:free robert gilman"],
   );
 });
 
@@ -146,10 +146,6 @@ test("a preposition-governed subject with no readable head abstains rather than 
 });
 
 test("two band verbs for one act land on one edge, so a report can't state the same event twice", () => {
-  const freed = triplesOf("Russia freed Robert Gilman on a humanitarian basis.");
-  assert.deepEqual(freed, ["russia tmct:releases robert gilman"]);
-  assert.deepEqual(triplesOf("Russia released Robert Gilman on a humanitarian basis."), freed);
-
   assert.deepEqual(
     triplesOf("The blast wounded twelve people."),
     triplesOf("The blast injured twelve people."),
@@ -157,6 +153,24 @@ test("two band verbs for one act land on one edge, so a report can't state the s
   assert.deepEqual(
     triplesOf("Police uncovered a plot."),
     triplesOf("Police discovered a plot."),
+  );
+  assert.deepEqual(
+    triplesOf("Parliament barred the candidate."),
+    triplesOf("Parliament banned the candidate."),
+  );
+});
+
+test("a verb carrying a sense its would-be synonym lacks keeps its own edge", () => {
+  // Firefighters pull someone out of the wreckage; they release nobody from
+  // custody. Nothing in the sentence tells that sense from the custodial one,
+  // so "free" never reads as "release".
+  assert.deepEqual(
+    triplesOf("Firefighters freed the driver from the wreckage."),
+    ["firefighters mgx:free driver"],
+  );
+  assert.deepEqual(
+    triplesOf("Russia freed Robert Gilman on a humanitarian basis."),
+    ["russia mgx:free robert gilman"],
   );
 });
 
@@ -189,7 +203,7 @@ test("a Title Case headline reads its verb off the closed band, not off the tagg
   );
   assert.deepEqual(
     triplesOf("A Bright Spot in Colombia as Rescuers Free Quake Victim"),
-    ["rescuers tmct:releases quake victim"],
+    ["rescuers mgx:free quake victim"],
   );
 });
 
