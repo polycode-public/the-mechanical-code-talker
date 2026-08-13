@@ -45,34 +45,14 @@ state and does not.
 
 The work list, ranked by value against the plan's target card.
 
-1. [ ] **A report's claim is not attributed to its speaker** — the shape is a
-   reified finding: the claim row carries `mgx:extractionFinding =
-   "reported-speech"`, and a second row states
-   `fact:<claimId> | mgx:attributedTo | <speaker>`. The finding is the durable
-   half, so a lost attribution degrades to "reported speech, speaker unrecorded"
-   rather than to a bare assertion. An attributed claim STAYS GROUNDED and every
-   rendering names the speaker — refusing it would be a judgement that a grounded
-   claim might be false, which is a guess in the direction tmct exists to avoid,
-   and a trust penalty is banned outright by the findings vocabulary's own
-   constitution. **The invariant: a surface that cannot render the attribution
-   must not render the claim.**
-   - Still open, in flight on `worktree-agent-a68f3be2d47c247b0`: the full chat
-     route, where `foldFactRows` attaches an `attributedTo` field so every reader
-     inherits it rather than chat showing only the caveat; and the retraction
-     cascade — `removeFacts` scrubs `objectProperties` edges, while an
-     attribution holds the claim id in an attribute value, so retracting a claim
-     leaves its attribution behind.
-2. [ ] **`localeCompare` over fact rows** — in flight on
-   `worktree-agent-af3258a7474da26d1` (digest and ledger-viz) and
-   `worktree-agent-a68f3be2d47c247b0` (core.mjs's two). A locale-divergence
-   class rather than an arrival-order one: two readers on machines with
-   different locales sort the same rows differently, which breaks the same
-   pure-function-of-the-fact-set invariant by another route. `fact-order.mjs`
-   states the rule (codepoint, never `localeCompare`) and `inspect.mjs`'s four
-   were fixed alongside the root sort. The rest sit in `core.mjs`'s
-   `findContradictions` and its store-row listing, `digest/select.mjs`,
-   `digest/compose.mjs` and `ledger-viz.mjs` — left deliberately rather than
-   half-sweeping five files mid-task.
+1. [ ] **A guard against `localeCompare` over fact-store data** — in flight on
+   `worktree-agent-a09db26aee7a955e0`. Ten sites were converted across
+   `inspect.mjs`, `digest/select.mjs`, `digest/compose.mjs`, `ledger-viz.mjs` and
+   `core.mjs`; nothing stops an eleventh. The rule lives in `fact-order.mjs`:
+   codepoint, never `localeCompare`, because two readers on machines with
+   different locales otherwise render different text from identical knowledge.
+   The guard could not land before the sweep finished, since it would have failed
+   on the sites still waiting.
 
 ## Discipline
 
