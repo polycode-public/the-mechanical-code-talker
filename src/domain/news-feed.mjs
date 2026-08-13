@@ -81,14 +81,19 @@ export function newsWindowRows(rows, { now, windowMs }) {
 // nothing a source ever writes as a term.
 const FACT_REFERENCE_TERM_RE = /^fact:[0-9a-f]{16}$/;
 
-const namesAFactRow = (term) => FACT_REFERENCE_TERM_RE.test(String(term ?? "").trim().toLowerCase());
+// A fact id is minted lowercase, and both the claim's own `id` and the
+// attribution's subject go through this before either is used as a key — a
+// speaker matched on one spelling and stored under another is a silent drop.
+const factIdKey = (term) => String(term ?? "").trim().toLowerCase();
+
+const namesAFactRow = (term) => FACT_REFERENCE_TERM_RE.test(factIdKey(term));
 
 /** The fact `row` is ABOUT, when either of its sides names one rather than a
  *  thing, else "". */
 function referencedFactId(row) {
-  const subject = String(row?.subject ?? "").trim().toLowerCase();
+  const subject = factIdKey(row?.subject);
   if (namesAFactRow(subject)) return subject;
-  const object = String(row?.object ?? "").trim().toLowerCase();
+  const object = factIdKey(row?.object);
   return namesAFactRow(object) ? object : "";
 }
 
@@ -121,7 +126,7 @@ export function partitionAttributions(rows) {
       continue;
     }
     if (row.predicate !== ATTRIBUTED_TO_PREDICATE) continue;
-    const claimId = String(row.subject ?? "").trim().toLowerCase();
+    const claimId = factIdKey(row.subject);
     const speaker = String(row.object ?? "").trim();
     if (!claimId || !speaker) continue;
     let speakers = named.get(claimId);
@@ -756,7 +761,7 @@ function speakersFor(rows, speakersByClaimId) {
   if (!(speakersByClaimId instanceof Map) || !speakersByClaimId.size) return [];
   const named = new Set();
   for (const row of rows) {
-    for (const speaker of speakersByClaimId.get(row.id) ?? []) named.add(speaker);
+    for (const speaker of speakersByClaimId.get(factIdKey(row.id)) ?? []) named.add(speaker);
   }
   return [...named].sort();
 }
@@ -783,7 +788,7 @@ function groupSpeakerClause(rows, printedObjects, speakersByClaimId) {
   const named = new Set();
   const spokenObjects = new Set();
   for (const row of rows) {
-    const speakers = speakersByClaimId.get(row.id);
+    const speakers = speakersByClaimId.get(factIdKey(row.id));
     if (!speakers?.length) continue;
     for (const speaker of speakers) named.add(speaker);
     spokenObjects.add(row.object);
