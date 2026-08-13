@@ -32,21 +32,21 @@ News-card work runs through the `news-feed-quality` skill
 
 The work list, ranked by value.
 
-1. [ ] **Serve `child` and `conceptnet` to the news worker from DynamoDB,
-   uncapped.** `wordnet-complete` is the only band in the table, so the worker's
-   last-resort grounding is WordNet glosses alone. Its seed is a replay of
-   `public/chat-seed.json` (`Dockerfile` sets `TMCT_XL_SEED_SQLITE`), so it
-   inherits the browser's caps: 2,000 of `child`'s ~69,140 triples and 28,000 of
-   `conceptnet`'s. Both bands go in whole, not as the seed's remainder — the
-   remainder is defined by the cap and would rot the moment the cap moved, while
-   a whole band corroborates against the seed on the band's own
-   content-addressed ids. Needs a builder per band beside
-   `build-wordnet-complete.mjs`, a `FIRST_CLASS_BANDS` and `BAND_LICENSES` entry
-   each, `BAND_TERM_LOOKUP_BAND` widened from one constant to a list queried as
-   a parallel fan-out under one shared race, and a load step per band in
-   `corpus:load`. The 750 ms timeout stays: the queries are independent
-   single-partition `begins_with` reads capped at 50 rows, so a fan-out's worst
-   case is one timeout, not one per band.
+1. [ ] **A declared switch decides the code-graph lane, never a guess at the
+   input.** `looksCodeish` reads any full stop, decimal, date slash or
+   abbreviation as a code token through `[_./]`, and carries `where`, `use`,
+   `class`, `history`, `test`, `contains` and `members` in `STRUCT_WORDS`, so 26
+   of 27 ordinary sentences classify as code-ish. It goes, with `STRUCT_WORDS`
+   and the appended `no code graph — index it with...` remedy. A `/code-graph
+   on|off` session switch replaces it, shaped like `/wiki`, with a consumer
+   parameter beside it so an embedding application sets the mode without a slash
+   command. The switch is the only gate: no default derived from state, off
+   unless set, and a graph missing while the switch is on is an error rather
+   than a hint. With the switch off nothing may say "code graph" at all, and a
+   question that wanted the lane lands on the ordinary miss wall. `noCodeGraph`
+   stays — it reads a loaded graph's module count, which is state, not intent.
+   `isConversational` is exported, so any change to its behaviour is
+   consumer-visible.
 2. [ ] **Reshape the seed's band set.** `child`, `namenet` and `domains/code`
    seed, and `aws`/`python`/`java` are purged. Two parts are still open.
 
