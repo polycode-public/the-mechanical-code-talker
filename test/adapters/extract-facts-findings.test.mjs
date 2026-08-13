@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 
 import {
   ingestText, optimisticReading, optimisticTriples, reportedClauseOf,
-  readsAsEntityTerm, readsAsIdentifierToken, identifierTermsIn,
+  readsAsEntityTerm, readsAsIdentifierToken, identifierTermsIn, splitsPhrasalVerb,
 } from "../../src/services/extract-facts.mjs";
 
 const LATENCY_SENTENCE =
@@ -187,6 +187,26 @@ test("ingestText declines a phrasal-verb remainder the recognizer over-read as a
   // Nothing from the scaffolding sentence reaches the store.
   assert.deepEqual(result.extracted, []);
   assert.deepEqual(result.optimistic, []);
+});
+
+test("ingestText declines a row that pairs a verb with its own particle", async () => {
+  const sentence = "Ahead of the eclipse, prices surge and stocks sell out.";
+  const result = await ingestText(sentence, { optimistic: true, findings: true });
+
+  const split = result.declined.filter((d) => d.finding === "phrasal-particle");
+  assert.equal(split.length, 1, "the particle-as-object row is declined by name");
+  assert.deepEqual(split[0].candidate, { subject: "stocks", predicate: "mgx:sell", object: "out" });
+  // "sell out" names no object here, so nothing is stored in its place.
+  assert.deepEqual(result.extracted, []);
+  assert.deepEqual(result.optimistic, []);
+});
+
+test("splitsPhrasalVerb reads the pair table, not the particle alone", () => {
+  assert.equal(splitsPhrasalVerb({ subject: "stocks", predicate: "mgx:sell", object: "out" }), true);
+  assert.equal(splitsPhrasalVerb({ subject: "council", predicate: "tmct:carries", object: "out" }), true);
+  // "back" is a fine object for a verb the table never pairs it with.
+  assert.equal(splitsPhrasalVerb({ subject: "player", predicate: "mgx:hurt", object: "back" }), false);
+  assert.equal(splitsPhrasalVerb({ subject: "russia", predicate: "tmct:releases", object: "robert gilman" }), false);
 });
 
 test("a sentence with nothing to decline reports empty finding lists", async () => {

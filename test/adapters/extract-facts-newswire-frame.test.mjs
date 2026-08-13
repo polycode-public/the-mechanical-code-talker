@@ -45,7 +45,7 @@ test("a passive states who it happened to, so the actor takes the subject side a
 test("a headline that names its subject and then interrupts itself still reaches that subject", () => {
   assert.deepEqual(
     triplesOf("Ex-Marine Robert Gilman, Freed by Russia After 4 Years in Prison, Arrives in the U.S."),
-    ["russia mgx:free robert gilman"],
+    ["russia tmct:releases robert gilman"],
   );
 });
 
@@ -116,6 +116,63 @@ test("a lemma the lexicon declares keeps the lexicon's own predicate across tens
   );
 });
 
+test("a phrasal verb is read whole, and its subject is the head of the phrase that governs it", () => {
+  assert.deepEqual(
+    triplesOf("Frenzy for Solar Eclipse Glasses Takes Over London"),
+    ["frenzy mgx:take-over london"],
+  );
+  assert.deepEqual(
+    triplesOf("The council carried out a review of the bridge."),
+    ["council mgx:carry-out review"],
+  );
+});
+
+test("a phrasal verb with nothing after its particle states no object, so it abstains", () => {
+  assert.deepEqual(triplesOf("The minister stepped down after the vote."), []);
+  assert.deepEqual(triplesOf("As prices surge, stocks sell out."), []);
+});
+
+test("a phrasal read needs the closed pair: any other word after the verb stands between it and an object", () => {
+  assert.deepEqual(triplesOf("The quake damaged up to a hundred buildings."), []);
+});
+
+test("a subject run governed by a preposition climbs to the head, and a counting chain still reads through", () => {
+  assert.deepEqual(triplesOf("A fire at the hospital killed five people."), ["fire mgx:kill person"]);
+  assert.deepEqual(triplesOf("Hundreds of protesters blocked the road."), ["protester mgx:block road"]);
+});
+
+test("a preposition-governed subject with no readable head abstains rather than name the inner noun", () => {
+  assert.deepEqual(triplesOf("For the people of the town destroyed the bridge."), []);
+});
+
+test("two band verbs for one act land on one edge, so a report can't state the same event twice", () => {
+  const freed = triplesOf("Russia freed Robert Gilman on a humanitarian basis.");
+  assert.deepEqual(freed, ["russia tmct:releases robert gilman"]);
+  assert.deepEqual(triplesOf("Russia released Robert Gilman on a humanitarian basis."), freed);
+
+  assert.deepEqual(
+    triplesOf("The blast wounded twelve people."),
+    triplesOf("The blast injured twelve people."),
+  );
+  assert.deepEqual(
+    triplesOf("Police uncovered a plot."),
+    triplesOf("Police discovered a plot."),
+  );
+});
+
+test("only the listed pairs fold: a band verb that merely neighbours one keeps its own edge", () => {
+  assert.deepEqual(triplesOf("Russia detained Robert Gilman."), ["russia mgx:detain robert gilman"]);
+  assert.deepEqual(triplesOf("Russia jailed Robert Gilman."), ["russia mgx:jail robert gilman"]);
+});
+
+test("a phrasal verb under a be-form names its actor with by, and abstains without one", () => {
+  assert.deepEqual(
+    triplesOf("The airline was taken over by Lufthansa."),
+    ["lufthansa mgx:take-over airline"],
+  );
+  assert.deepEqual(triplesOf("The flights were called off in Paris."), []);
+});
+
 test("a sentence-final full stop never enters a stored term; an abbreviation keeps its own stops", () => {
   const [fact] = optimisticTriples("The moon will completely block the sun.");
   assert.equal(fact.object, "sun");
@@ -132,7 +189,7 @@ test("a Title Case headline reads its verb off the closed band, not off the tagg
   );
   assert.deepEqual(
     triplesOf("A Bright Spot in Colombia as Rescuers Free Quake Victim"),
-    ["rescuers mgx:free quake victim"],
+    ["rescuers tmct:releases quake victim"],
   );
 });
 
