@@ -34,11 +34,10 @@ import { buildSenseGate } from "./sense-gate.mjs";
 
 /** Codepoint order, never localeCompare. Every candidate list below is sorted
  *  and then cut at the budget, so the comparator decides WHICH entailments a
- *  pass derives, not just what order it lists them in — and the `via` slot of
- *  a surviving derivation is whichever middle term sorted first, so it also
- *  decides which premise the proof cites. Sorting those by the reader's OS
- *  locale would let two machines forward-chain one graph into two different
- *  fact sets. */
+ *  pass derives. It also decides which premise each one cites: dedup keeps the
+ *  first candidate per key, so a derivation's `via` slot holds whichever middle
+ *  term sorted first. Sorting either by the reader's OS locale would let two
+ *  machines forward-chain one graph into two different fact sets. */
 const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 /** The two persisting entry points (syllogise, retractSubClassOf) take the

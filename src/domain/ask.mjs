@@ -44,11 +44,12 @@ export { normalizeQuery, applyNegationFrames };
 import { defaultNlp } from "./interpret/nlp-registry.mjs";
 
 /** Codepoint order, never localeCompare. Every string sorted through this is a
- *  label, id or attribute value read off the graph, and several of these sorts
- *  are read at `[0]` — the newest commit, the entry-point module — or cut to a
- *  top-N, so the comparator picks WHICH individual the answer names. A
- *  locale-sensitive compare would let two readers ask one graph the same
- *  question and be told about different commits. */
+ *  label, id or attribute value read off the graph. Several of these sorts get
+ *  read at `[0]` (the newest commit a query substitutes in, the entry-point
+ *  module a where-defined answer names) or cut to a top-N, so the comparator
+ *  picks WHICH individual the answer is about. A locale-sensitive compare would
+ *  let two readers ask one graph the same question and be told about different
+ *  commits. */
 const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 /** Commits newest first, ties broken on the commit's own id. The date is

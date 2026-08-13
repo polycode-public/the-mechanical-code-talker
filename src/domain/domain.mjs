@@ -37,11 +37,11 @@ const optionalTerm = (value) => {
   return t === "" ? undefined : t;
 };
 
-/** Codepoint order, never localeCompare. Every string this file sorts came
- *  out of the fact/Rule store, and the planner walks actions, signatures and
- *  state rows in exactly the order these comparators leave them — so a
- *  locale-sensitive compare would let two machines holding one taught domain
- *  return different plans from it. */
+/** Codepoint order, never localeCompare. Every string this file sorts came out
+ *  of the fact/Rule store. The planner walks actions, signatures and state rows
+ *  in exactly the order these comparators leave them, so a locale-sensitive
+ *  compare would let two machines holding one taught domain return different
+ *  plans from it. */
 const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
 const rowSort = (a, b) =>
