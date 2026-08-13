@@ -104,6 +104,14 @@ const TEXT_CAP = 2000;   // an utterance's stored text (a whole answer fits; a p
  *  on which module did the writing. */
 export const normText = (t) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, TEXT_CAP);
 
+// A term that is exactly a fact group id ("fact:" + the 16 lowercase hex
+// digits factIdFor mints — an 8-byte SHA-256 truncation, see factIdFor below)
+// must survive normFactTerm whole. Without this guard the generic CURIE
+// strip below removes "fact:" from it same as any other prefix, so a
+// reference TO a fact and a taught word become the same term and collide
+// on one id. No existing corpus/vocabulary term takes this exact shape.
+const FACT_ID_TERM_RE = /^fact:[0-9a-f]{16}$/;
+
 /** Normalize a fact TERM (subject/object) so every writer converges on one
  *  spelling: ConceptNet's /c/en/foo_bar, tmct:Foo_bar, and bare "Foo bar" all
  *  become "foo bar". Also strips a leading "the"/"a"/"an" (idempotent — safe
@@ -111,6 +119,7 @@ export const normText = (t) => String(t ?? "").replace(/\s+/g, " ").trim().slice
  *  is meaningful controlled vocabulary. */
 export function normFactTerm(t) {
   let s = normText(t);
+  if (FACT_ID_TERM_RE.test(s.toLowerCase())) return s.toLowerCase();
   s = s.replace(/^\/c\/[a-z]{2,3}\//i, "");
   s = s.replace(/^[a-z][\w.-]*:/i, "");
   s = s.replace(/_/g, " ").replace(/\s+/g, " ").trim();
