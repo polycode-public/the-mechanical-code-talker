@@ -770,6 +770,110 @@ function proseNamesTerm(prose, term) {
   }
 }
 
+/** Every name the looked-up definition is ABOUT: the term that was asked and
+ *  the title the source answered with ("solar eclipse" and "Solar eclipse",
+ *  "u.s. virgin islands" and "United States Virgin Islands"), each with its
+ *  plural, since a body says "Solar eclipses can only happen during a new
+ *  moon" as readily as it says "a solar eclipse". */
+function definedTermKeys(term, article) {
+  const keys = new Set();
+  for (const name of [term, article?.term, article?.title]) {
+    const key = normFactTerm(name ?? "");
+    if (!key) continue;
+    keys.add(key);
+    keys.add(normFactTerm(pluralOf(key)));
+  }
+  return keys;
+}
+
+const SENTENCE_WORD_RE = /[a-z0-9][a-z0-9'’-]*/g;
+
+const COPULAS = new Set(["is", "are", "was", "were", "be", "been", "being"]);
+
+// Words that mean the copula opened something other than the term's class:
+// a clause ("an earthquake is WHEN tectonic plates shake"), a denial ("Puerto
+// Rico is NOT an independent country"), a second phrase ("is one OF the...")
+// or a list ("is a state AND a...").
+const CLASS_PHRASE_BREAKERS = new Set([
+  "not", "no", "never", "n't", "nor",
+  "when", "where", "while", "why", "how", "who", "whom", "whose", "which", "that",
+  "what", "because", "if", "whether", "unless", "until", "since", "though", "although",
+  "of", "in", "on", "at", "from", "with", "by", "to", "for", "about", "into", "onto",
+  "over", "under", "between", "among", "during", "near", "across", "through", "against",
+  "and", "or", "but",
+]);
+
+/** True when `sentence` states `object` as the class the copula introduces —
+ *  the test for whether a class claim read out of a definition body is what
+ *  the body actually says the term is.
+ *
+ *  The optimistic tier answers with a class it found somewhere in the
+ *  sentence, which is right when the sentence is a definition ("A tsunami is
+ *  a natural disaster" -> disaster) and wrong the moment the copula opens
+ *  anything else. "An earthquake is when Earth's tectonic plates shake"
+ *  yields "an earthquake is an earth"; "Puerto Rico is not an independent
+ *  country" yields the exact claim the sentence denies. So the class has to
+ *  sit inside the noun phrase the copula introduces: only determiners,
+ *  numbers and adjectives may stand between them, never a clause, a
+ *  preposition, a conjunction or a negation. A body that states its class
+ *  some other way keeps it to itself, which costs a fact and never a wrong
+ *  one. */
+function bodyStatesClass(sentence, object) {
+  const words = String(sentence ?? "").toLowerCase().match(SENTENCE_WORD_RE) || [];
+  const head = (normFactTerm(object).match(SENTENCE_WORD_RE) || [])[0];
+  if (!head || !words.length) return false;
+  const plural = pluralOf(head);
+  const namesHead = (word) => {
+    const bare = word.replace(/['’]s$/, "");
+    return bare === head || bare === plural || pluralOf(bare) === head;
+  };
+  for (let at = 0; at < words.length; at += 1) {
+    if (!namesHead(words[at])) continue;
+    for (let back = at - 1; back >= 0; back -= 1) {
+      if (CLASS_PHRASE_BREAKERS.has(words[back])) break;
+      if (COPULAS.has(words[back])) return true;
+    }
+  }
+  return false;
+}
+
+/** The rows a definition body is allowed to give up: those about the term it
+ *  defines, and — for a class claim — those the body states as that term's
+ *  class. A body is evidence about its own subject, so a row whose subject is
+ *  some other term the prose merely mentions ("Every year there are about two
+ *  solar eclipses" -> a year is a kind of eclipse; "The Calpine Corporation
+ *  operates and owns 19 of the 22 facilities" -> a corporation owns a
+ *  facility) is not a definition of anything and is dropped. */
+function factsDefinitionBodyStates(rows, termKeys) {
+  return rows.filter((row) => {
+    if (!termKeys.has(normFactTerm(row.subject))) return false;
+    if (!ISA_PREDICATES.has(row.predicate)) return true;
+    return bodyStatesClass(row.sentence, row.object);
+  });
+}
+
+const provenanceHead = (tag) => String(tag ?? "").split(/[\s@]/)[0];
+
+const tripleKeyOf = (row) => `${normFactTerm(row.subject)}\0${normFactPredicate(row.predicate)}\0${normFactTerm(row.object)}`;
+
+/** Retracts rows this call's ingest wrote and the definition-body rule then
+ *  turned down. ingestText has already stored them by the time their rows
+ *  come back, so they are matched by triple under this ingest's own
+ *  provenance and removed — the same retract-after-write path the recognizer
+ *  takes for a fragment term. */
+async function retractRejectedBodyFacts(ctx, rejected, provenance) {
+  const { memoryDir, store, now } = ctx;
+  if (!rejected.length) return;
+  const keys = new Set(rejected.map(tripleKeyOf));
+  const rows = store.readFactRows(await store.loadMemory(memoryDir));
+  const ids = rows
+    .filter((row) => keys.has(tripleKeyOf(row)) && provenanceHead(row.provenance).endsWith(provenanceHead(provenance)))
+    .map((row) => row.id);
+  if (!ids.length) return;
+  await store.removeFacts(memoryDir, ids, { retractedAt: resolveNow(now) });
+  invalidateCache(ctx.cache);
+}
+
 /** Grounds `article` under `provider`'s own provenance tag, through the SAME
  *  ingest seam a polled article takes: the structured or isa facts the
  *  research-source seam licenses (researchFacts), then the article's own
@@ -788,7 +892,12 @@ function proseNamesTerm(prose, term) {
  *  it — "AmigaDOS is the disk operating system" mints "amigados is a disk"
  *  beside the structured "amigados is a disk operating system" — while the
  *  relations the body states ("Rottnest has a lighthouse") are the strict
- *  tier's own work and survive either way. */
+ *  tier's own work and survive either way.
+ *
+ *  What the body does give up is then held to what it says about the term it
+ *  defines (factsDefinitionBodyStates): a row about some other term the prose
+ *  mentions, or a class the sentence never states, is retracted before it can
+ *  reach the feed or a syllogism. */
 async function ingestResearchArticle(ctx, term, provider, article) {
   const { memoryDir, store, config, lexicon, now } = ctx;
   const provenance = provider.provenanceTag(term);
@@ -802,17 +911,20 @@ async function ingestResearchArticle(ctx, term, provider, article) {
   );
 
   const prose = String(article.summary || article.text || "").trim();
-  let ingested = { extracted: [], optimistic: [] };
+  let fromBody = [];
   if (prose && proseNamesTerm(prose, term)) {
-    ingested = await ingestText(prose, {
+    const ingested = await ingestText(prose, {
       memoryDir, sourceTag: provenance, optimistic: !lookupStatedClass,
       lexicon: lexicon || loadLexicon(), observedAt: resolveNow(now), findings: true,
       attributeToSource: true,
     });
     invalidateCache(ctx.cache);
+    const read = [...ingested.extracted, ...ingested.optimistic];
+    fromBody = factsDefinitionBodyStates(read, definedTermKeys(term, article));
+    await retractRejectedBodyFacts(ctx, read.filter((row) => !fromBody.includes(row)), provenance);
   }
 
-  const facts = [...structured, ...ingested.extracted, ...ingested.optimistic];
+  const facts = [...structured, ...fromBody];
   if (!facts.length) return { facts: 0, derived: 0 };
   const distinct = new Set(facts.map(
     (f) => `${normFactTerm(f.subject)}\0${normFactPredicate(f.predicate)}\0${normFactTerm(f.object)}`,
