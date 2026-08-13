@@ -207,6 +207,17 @@ test("a single end object never splits", () => {
   assert.equal(clusters.length, 1);
 });
 
+test("clusters come out in codepoint label order, not locale order, whichever way the objects arrived", () => {
+  // "zebra" sorts BEFORE "élan" in codepoint order (z=0x7A < é=0xE9) but AFTER
+  // it under locale-aware collation, so this only holds under codepoint order.
+  const edges = [["zebra", "zclass"], ["élan", "eclass"]];
+  const forward = clusterSenses(["zebra", "élan"], { subClassEdges: edges });
+  const reversed = clusterSenses(["élan", "zebra"], { subClassEdges: edges });
+  assert.deepEqual(forward.clusters.map((c) => c.label), ["zebra", "élan"]);
+  assert.deepEqual(reversed.clusters.map((c) => c.label), forward.clusters.map((c) => c.label),
+    "the order the two objects were asked about never changes the cluster order");
+});
+
 test("three senses partition into three clusters", () => {
   const edges = [
     ["dog", "canine"], ["canine", "mammal"], ["mammal", "animal"],
