@@ -30,11 +30,8 @@ T15) has landed. What remains is launch timing, not implementation.
   populated.
 - `infra/lib/website-stack.ts` enables CloudFront standard access logging to an S3 bucket
   with a lifecycle expiry.
-- `reports/PAGE_WEIGHTS.md` carries a first-paint measurement (2026-08-05, version 5.0.7):
-  all four then-heaviest pages painted well under the 500ms threshold, so no splash or
-  payload splitting was needed. That measurement predates the research/spider-fly/code/
-  ingest/mud page drop, so the report's own rev-3 page-weight table (23 pages) no longer
-  matches the live site. A refresh is the `page-weights` skill's job, not this plan's.
+- A first-paint measurement at version 5.0.7 put all four then-heaviest pages well under
+  the 500ms threshold, so no splash or payload splitting was needed.
 - `archive/PLAN_RECEIPTS.md` (moved off the repo root in the 2026-08-08 plans-refocus
   sweep) records the receipts page as shipped: R1 (latency/size measurements) and R2 (the
   page itself) delivered. R3, a RAG-comparison harness, is open there.

@@ -53,8 +53,7 @@ the next edit anywhere above them, and nothing fails when they do.
 | Asking in plain English | `tmct cli ask` | `dispatchTool`, `ask` | `test/readme/readme.test.mjs` | replay |
 | The tool surface | `tmct_untested` and the tool table | `TOOL_DEFINITIONS` | `test/estate/tool-docs.test.mjs` | estate |
 | The rest of the tools | `bash` — a cold-tool invocation | `dispatchTool` | `test/readme/readme.test.mjs` | replay |
-| Measuring it | the four bench-smoke invocations | the bench `run.mjs` entry points | `test/corpus/bench-smoke.test.mjs` | replay |
-| Measuring it | `skip=offline-eval-only` — `chatbench:judge` | — | never run: needs an LLM judge | — |
+| Measuring it | the bench-smoke invocations | the bench `run.mjs` entry points | `test/corpus/bench-smoke.test.mjs` | replay |
 
 ## public/index.html
 
@@ -120,17 +119,6 @@ drifts silently, and two have. ConceptNet's 44,947 and WordNet's 192,498 match
 their files. SEON's 399 and 288 match; its **9 relations is 11**.
 WordNet's 107,526 synsets is an upstream figure the manifest does not carry, so
 nothing here can check it.
-
-## test-benchmarks/chatbench/
-
-| surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
-|---|---|---|---|---|
-| `test-benchmarks/chatbench/README.md` | 138 cases | `graded-pool.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
-| `test-benchmarks/chatbench/GRADED.md` | 1,075 cases across 36 cells | `graded-pool-max.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
-
-`graded-pool-max.jsonl` holds 1,075 rows and matches. `graded-pool.jsonl` holds
-**139**, and its README says 138 in three places and 139 in a fourth — the drift
-this section warns about, in the file that describes it.
 
 ## examples/
 

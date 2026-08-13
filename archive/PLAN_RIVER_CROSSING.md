@@ -1426,10 +1426,8 @@ sub-agent runs `stash`, `reset`, `checkout --` or `clean`.
   populations across a bank and bounding a boat's load are both real design work on
   `src/domain/domain.mjs`'s precondition shapes, not wiring. R3 ships the one the shipped frames already
   reach and section 15 names the rest as the next increment.
-- **Page weight.** `mudiii.html` already carries the three vendor bundle, which
-  `backlog/PLAN_MUD_MUDIII.md:140-145` records as still unmeasured in `reports/PAGE_WEIGHTS.md`. One
-  more world shard and a card's worth of markup is small beside it, but the page-weights refresh is
-  worth running after R6 lands.
+- **Page weight.** `mudiii.html` already carries the three vendor bundle. One more world shard
+  and a card's worth of markup is small beside it.
 - **The plan panel invites a wrong reading.** A drive plan and a puzzle plan are different searches
   over different state spaces, and a panel that showed them in one list would teach the visitor
   something untrue. The panel names which it is showing, and the e2e spec asserts the label.

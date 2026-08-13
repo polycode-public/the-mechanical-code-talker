@@ -1,7 +1,7 @@
 // interpret-ace-strategy.test.mjs — the Stage-2 ACE pipeline adapter
 // (interpret/strategies/ace.mjs). Two guarantees: it ADDS declarative-fragment
-// reach to interpret(), and it is BYTE-STABLE on the sync parseQuery path (the
-// CHATBENCH-facing spine) because runStrategiesSync skips async strategies.
+// reach to interpret(), and it is BYTE-STABLE on the sync parseQuery path
+// because runStrategiesSync skips async strategies.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

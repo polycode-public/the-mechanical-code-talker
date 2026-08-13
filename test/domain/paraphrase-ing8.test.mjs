@@ -3,9 +3,7 @@
 // relations, multi-sentence documents, and synonym substitution over the closed
 // relation vocabulary. Unit coverage plus the held-out gate: the checker never
 // accepts a pair the real judge (test-benchmarks/ingestbench's committed ING-8
-// corpus) scored as NOT a faithful paraphrase — the same
-// matcherTighterThanJudge discipline chatbench's own promotion pipeline holds
-// its matchers to.
+// corpus) scored as NOT a faithful paraphrase.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";

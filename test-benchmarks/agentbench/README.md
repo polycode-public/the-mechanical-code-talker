@@ -1,10 +1,9 @@
 # agentbench — the tmct AGENTIC measurement harness
 
-The **sibling of chatbench**, on a new axis. chatbench measures the *chat turn*
-(a request → the right grounded answer) on the CEFR ladder; AGENTBENCH measures
-the **tool loop** (a request → the right *tool call(s)*) on the **TOOL-0→TOOL-9 tool-use
-rungs**. Same versioned-naming + regression discipline (`BENCHMARK_AGENT_<version>.md`,
-`_00N` for re-runs), one decisive difference:
+AGENTBENCH measures the **tool loop** (a request → the right *tool call(s)*) on
+the **TOOL-0→TOOL-9 tool-use rungs**, with versioned naming and regression
+discipline (`BENCHMARK_AGENT_<version>.md`, `_00N` for re-runs). One rule sits
+above the rest:
 
 > **A hallucinated tool call is an AUTOMATIC FAIL.** Emitting a call to a tool
 > that is not in the declared set, or with arguments that cannot bind, fails the
@@ -12,8 +11,7 @@ rungs**. Same versioned-naming + regression discipline (`BENCHMARK_AGENT_<versio
 > thing a deterministic router must never do, so it is the gate the whole bench
 > is built around.
 
-**No LLM, no judge.** chatbench has a tier-2 LLM judge; AGENTBENCH has none.
-Grading is **entirely deterministic** — compare the produced call(s) to the
+**No LLM, no judge.** Grading is **entirely deterministic** — compare the produced call(s) to the
 expected call(s), gate against the capability registry, check termination and
 (when required) the proof chain. A deterministic router is measured by a
 deterministic ruler.
@@ -95,8 +93,7 @@ The honest **gate** is therefore **"0% hallucination AT ≥50% completion"**
 completion; a reckless driver fails it on hallucination. Only a driver that is
 both **safe and useful** clears it. `--ladder` runs rungs ascending and the
 first rung that fails the gate gates every rung above it (skipped with a
-receipt, e.g. `rung TOOL-5 skipped: gated by TOOL-2 completion 40% < 50%`), exactly like
-chatbench's grade ladder.
+receipt, e.g. `rung TOOL-5 skipped: gated by TOOL-2 completion 40% < 50%`).
 
 ## Closed-world / default-deny
 
@@ -177,7 +174,7 @@ node test-benchmarks/agentbench/run.mjs --only ab-a0-describe-widget
 ## Reference bands (ILLUSTRATIVE anchors — NOT run here)
 
 AGENTBENCH's ladder is read against **comparable models** as illustrative
-anchors, the way chatbench frames CEFR bands. These are the intended reference
+anchors. These are the intended reference
 points for a future write-up; **none are run by this harness** (no network, no
 LLM), and no scores are claimed for them here:
 

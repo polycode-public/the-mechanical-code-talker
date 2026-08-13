@@ -6,7 +6,7 @@ description: Resynthesize STATUS.md from the already-committed benchmark reports
 # refresh-status — regenerate STATUS.md from the committed reports and the latest CI run
 
 This skill resynthesizes `STATUS.md` (repo root), the one-page capability summary, from whatever
-`reports/BENCHMARK_*.md` and `reports/PAGE_WEIGHTS.md` reports are already committed, the root
+`reports/BENCHMARK_*.md` reports are already committed, the root
 `PLAN_*.md` design docs, `README.md`'s own claims, and the most recent CI pipeline result on
 `main`. **It never runs a benchmark itself, never triggers a pipeline, and never edits any of the
 source documents it reads.** If a source is stale, that staleness is what the refreshed STATUS.md
@@ -55,10 +55,8 @@ that directory, not one of the reports itself.
    between them is exactly what the banner at the top of STATUS.md exists to say. Name
    concretely what has landed since the measured tree, in one or two sentences, drawn from
    `NEXT.md`'s recent history or `git log` — not a vague "things have changed."
-6. **Carry forward the gates-ranked-by-leverage list** from the summary if one exists (or compose
-   one from each axis's stated gate/ceiling if not), and the site-weight pointer to
-   `reports/PAGE_WEIGHTS.md` (a one-line pointer, not a duplicated table — that table has its own
-   skill and its own version stamp; see the `page-weights` skill).
+6. **Carry forward the gates-ranked-by-leverage list** from the summary if one exists, or compose
+   one from each axis's stated gate if not.
 
 ## Part 2 — the last CI pipeline
 
@@ -125,9 +123,9 @@ that directory, not one of the reports itself.
     narrative doesn't mention. This is the harder, more valuable half — a stale README under-sells
     what tmct does at least as often as it over-sells. Two known-good techniques:
     - Grep for a page's own filename (`research.html`, `ingest.html`, …) in README; a shipped page
-      (check `reports/PAGE_WEIGHTS.md`'s page list) with zero mentions is a strong candidate —
-      confirm it's genuinely undocumented (not just referred to by a different name) before
-      reporting it.
+      (check what `scripts/build-demo-site.mjs` actually emits) with zero mentions is a strong
+      candidate — confirm it's genuinely undocumented (not just referred to by a different name)
+      before reporting it.
     - Cross-check a fully-`BUILT`/shipped `PLAN_*.md` slice against README's narrative for the
       same capability area; a slice shipped and corpus/unit-tested with nothing in README
       describing what a user can now ask or do is a real omission.
@@ -162,7 +160,7 @@ refreshing at once.
   substantive read of each plan's own reasoning, not a lookup. Sonnet at minimum; Opus if several
   plans changed status since the last refresh and the classification calls are non-obvious.
 - **Part 4** (the README audit) is the widest-reaching part — it requires cross-referencing a
-  1000+ line README against `src/`, `test/`, `test-e2e/`, and `reports/PAGE_WEIGHTS.md`. This is
+  1000+ line README against `src/`, `test/`, and `test-e2e/`. This is
   a good candidate for its own dispatched sub-agent (worktree-isolated is unnecessary — this
   skill only reads, never edits source files) or a `fork` if run from an interactive coordinator
   session, since the grep/read legwork is high-volume and doesn't need to stay in the
@@ -181,8 +179,7 @@ sub-agent or fork, then the coordinator does Part 5 itself once all three report
 
 - Don't touch any `reports/BENCHMARK_*.md` file itself — this skill only reads them.
 - Don't backfill a number for an axis with no report. Say "not yet measured", and check
-  `.claude/skills/` fresh for a `benchmark-*` skill that would produce it — as of this writing
-  only `benchmark-cefr-english` exists, so most axes have no owning skill to name yet. Say that
+  `.claude/skills/` fresh for a `benchmark-*` skill that would produce it. Say that
   plainly rather than inventing one or leaving the axis out silently.
 - Don't silently advance the "measured tree" version to match `package.json`'s current version
   without a real new report backing every number that changes — that would make STATUS.md's own

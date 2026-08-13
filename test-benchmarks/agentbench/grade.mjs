@@ -1,9 +1,8 @@
 // agentbench/grade.mjs — the DETERMINISTIC grading core for AGENTBENCH.
 //
-// AGENTBENCH is the SIBLING of chatbench, on a new axis: it grades the TOOL LOOP
-// (driving tool calls), not the chat turn. Same versioned-naming + regression
-// discipline; the levels are the TOOL-0→TOOL-8 tool-use RUNGS (a scale drawn from
-// this bench's own domain, not CEFR), and — the one
+// AGENTBENCH grades the TOOL LOOP (driving tool calls), not the chat turn.
+// The levels are the TOOL-0→TOOL-8 tool-use RUNGS (a scale drawn from
+// this bench's own domain), and — the one
 // non-negotiable — a HALLUCINATED tool call is an AUTOMATIC FAIL. There is NO
 // LLM judge here: grading is entirely deterministic (compare produced calls to
 // expected + gate on the registry), which is the whole point (a deterministic
@@ -52,12 +51,12 @@ export const RUNGS = Object.freeze(["TOOL-0", "TOOL-1", "TOOL-2", "TOOL-3", "TOO
  *  (coordinator refinement 1). Expressed as a fraction in (0,1]. */
 export const COMPLETION_FLOOR = 0.5;
 
-// ---- case lint (mirrors chatbench parseCases: schema, dup ids, referential) --
+// ---- case lint: schema, dup ids, referential --
 
 const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /** Parse cases.jsonl text into { cases, errors }. Errors are lint findings the
- *  test enforces over the committed file (same discipline as chatbench).
+ *  test enforces over the committed file.
  *  `knownLabels` (optional Set of fixture entity labels) turns on the REFERENTIAL
  *  lint of expect.result: every static composed-answer literal must name a real
  *  fixture entity, so a stale literal fails loudly at parse time — the exact
@@ -463,7 +462,7 @@ function tallyOne(rows) {
   };
 }
 
-/** Ladder gating (mirrors chatbench's runGradedDraw --ladder): rungs run
+/** Ladder gating: rungs run
  *  A0→C2; the FIRST rung that does not pass the honest gate GATES every rung
  *  above it, which is reported as skipped-with-a-receipt. Returns
  *  { order, gatedAt, receipts:[{rung, reason}] } over a completed rollup. */

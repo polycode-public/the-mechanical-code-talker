@@ -1,6 +1,6 @@
-// benchlib/bench.mjs — the shared primitives the three bench directories
-// (chatbench, agentbench, infbench) each grew their own byte-identical copy of.
-// It lives one level up from all three, so each imports it as ../benchlib/bench.mjs
+// benchlib/bench.mjs — the shared primitives the bench directories
+// (agentbench, infbench) each grew their own byte-identical copy of.
+// It lives one level up from both, so each imports it as ../benchlib/bench.mjs
 // without reaching into a sibling bench's internals (the coupling the benches'
 // own comments were written to avoid). Dev-only, like the benches themselves —
 // not in package.json's `files`, never shipped, never on the product path.

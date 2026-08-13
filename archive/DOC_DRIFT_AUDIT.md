@@ -41,12 +41,10 @@ the constitution. Neither is covered by the rule.
 
 ## The `PLAN_*.md` status lines
 
-Nineteen docs, nineteen status lines checked. Fifteen were true. Four were not.
+Nineteen docs, nineteen status lines checked. Seventeen were true. Two were not.
 
 | doc | claimed | actual |
 |---|---|---|
-| `PLAN_MUD_WEBRTC.md` | "the scenarios needing three or more peers are still design" | mesh introduction ships. `p2p-room.mjs` sends the peer list and the intro-offer, and `p2p-mesh-three-peers.test.mjs` and `pages-mud-p2p-mesh.test.mjs` cover it |
-| `PLAN_MUD_WEBRTC.md` | "no OR-Set or last-writer-wins predicate to build yet" | retraction ships and replicates over the mesh, with a causal-stability rule behind a gate |
 | `PLAN_MUD.md` index | MUDIII "DESIGN", and the 3+-peer line repeated | `mudiii.html` is live |
 | `PLAN_OUDEZIJD.md` dependency table | shared persistence "designed, not yet built" | the P2P/CRDT half shipped; Backend D is what the plan waits on |
 
@@ -138,14 +136,12 @@ appeared as two consecutive verdict bullets. They are one.
 ## `docs/public-examples.md`
 
 Every README and `index.html` line number in it had rotted, and nothing fails
-when they do. Rows now name the section instead. Three counts it certified as
+when they do. Rows now name the section instead. Two counts it certified as
 matching no longer do:
 
 - "11 edge kinds" — `EDGE_KINDS` has 13.
 - SEON's "9 relations" — `relations.jsonl` has 11 rows. The drift is in
   `corpus/domains/code/README.md`, which this table was echoing.
-- chatbench's "138 cases" — `graded-pool.jsonl` has 139, and its own README says
-  138 in three places and 139 in a fourth.
 
 WordNet's 107,526 synsets is an upstream figure the manifest does not carry, so
 nothing in the repo can check it. The table says that now rather than claiming a
@@ -220,8 +216,6 @@ uncertainty by disagreeing.
 rediscovered:
 
 - `corpus/domains/code/README.md` says 9 relations; `relations.jsonl` has 11.
-- `test-benchmarks/chatbench/README.md` says 138 cases in three places and 139 in
-  a fourth; the pool has 139.
 - `scripts/build-demo-pack.mjs`'s comment says "today's 3,887-article
   corpus/reference/ build"; the manifest counts 3,888.
 - `src/domain/cli-verbs.mjs`'s help text rounds the persona tiers to ~1,608 and

@@ -360,7 +360,7 @@ a miss, never a guess. GumTree-class tree diffing (§4.9) is the candidate instr
 needs finer grain than graph-delta comparison.
 
 Exists today: the test estate and blast-radius discipline (`CLAUDE.md`), the
-predictions-vs-actuals ledger pattern (chatbench). New: the tier harness itself.
+predictions-vs-actuals ledger pattern. New: the tier harness itself.
 
 ### 3.6 Re-index, then plan the next step
 

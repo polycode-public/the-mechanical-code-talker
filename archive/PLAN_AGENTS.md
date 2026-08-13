@@ -218,12 +218,11 @@ against held-out examples at 0% fabrication, deterministically. `synthbench/phra
 phrasing sibling. Tests: `test/adapters/synth-rules.test.mjs`, `synth-phrasing.test.mjs`. This is
 harness-side machinery; nothing in the product path loads a synthesized rule yet.
 
-### 2.8 The offline agentic loops
+### 2.8 The offline agentic loop
 
-Both keep LLMs on the eval side, per the constitution:
+Keeps LLMs on the eval side, per the constitution:
 
-- `SKILL_BENCHMARK_CEFR_ENGLISH.md` — the autonomous chat tuning cycle (LLM-as-judge).
-- `SKILL_AGENT_STRATEGY_ADVISOR.md` — the background strategy-advisor recipe that rides it.
+- `SKILL_AGENT_STRATEGY_ADVISOR.md` — the background strategy-advisor recipe.
 
 ### 2.9 Measurement
 

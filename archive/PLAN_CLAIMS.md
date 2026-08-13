@@ -120,8 +120,6 @@ Facts every task may rely on without re-checking:
   source — this is the freshness-guard precedent the claims page copies.
 - `reports/BENCHMARK_CODE_INDEX_3.0.3.md` records idxbench IDX-0 through IDX-9, **25/25
   cases, zero fabrication across all 21 fabrication-check surfaces**. The number to reuse.
-- The chatbench pool is `test-benchmarks/chatbench/graded-pool.jsonl`, 139 rows, each a
-  judged chat case. `run.mjs`/`report.mjs` beside it drive the engine over the pool.
 - The planner behind plan.html solves puzzles taught in English (twenty-one sentences teach
   Tower of Hanoi), searches with a bounded breadth-first search, and prints the plan as PDDL
   and OWL triples. There is no PDDL *input* path, and no blocksworld or gripper domain exists
@@ -275,8 +273,8 @@ test/estate/claims.test.mjs` passes; `npm run test:fast` passes.
 Files: new `scripts/claims/claim-cite.mjs`, `package.json` (one line), committed
 `results/claims/cite.json`.
 
-Iterate every row of `test-benchmarks/chatbench/graded-pool.jsonl` (139 rows — stop if the
-count differs) through the engine the way `test-benchmarks/chatbench/run.mjs` drives it.
+Iterate every row of the graded chat-case pool (139 rows — stop if the count differs)
+through the engine, driving it the way the pool's own runner does.
 For each non-refusal answer, extract its `(source: …)` citations and resolve each
 provenance tag against the loaded graph's fact rows. Publish `value` = answers with ≥1
 resolvable citation, `detail.total` = non-refusal answers, headline N/N. A non-refusal
@@ -309,10 +307,9 @@ Files: new `scripts/claims/claim-determinism.mjs`, `package.json`, committed
 `results/claims/determinism.json`.
 
 Run the graded pool's case list twice, each from a fresh in-memory store seeded
-identically (the chatbench runner shows the seeding). Concatenate each run's transcripts
-and compare byte-for-byte per case. Publish `value` = identical cases, `detail.total` =
-cases, threshold min = total. Any diff lists the case id and the first differing line in
-`detail.failures`.
+identically. Concatenate each run's transcripts and compare byte-for-byte per case.
+Publish `value` = identical cases, `detail.total` = cases, threshold min = total. Any
+diff lists the case id and the first differing line in `detail.failures`.
 
 Acceptance: `npm run claim:determinism` exits 0; estate guard passes; `test:fast` passes.
 

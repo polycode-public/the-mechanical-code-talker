@@ -1,33 +1,31 @@
-# PLAN_BENCHMARK_LADDERS.md — a domain-appropriate ladder for each of the four benchmarks
+# PLAN_BENCHMARK_LADDERS.md — a domain-appropriate ladder for each of the three benchmarks
 
-Status: DELIVERED — implemented and measured at 2.6.0 (the four `BENCHMARK_*_2.6.0.md` reports; `CAPABILITIES_2.6.0.md` audit §4.3). The body below is the design as written.
+Status: DELIVERED — implemented and measured at 2.6.0 (the three `BENCHMARK_*_2.6.0.md` reports; `CAPABILITIES_2.6.0.md` audit §4.3). The body below is the design as written.
 
 ## Why this exists
 
-Four benchmarks measure tmct, and three of them wear the same borrowed clothes. CEFR's
-`A1…C2` letters were the right vocabulary for the language benchmark (`chatbench/graded.mjs`),
-and they leaked from there into AGENTBENCH (`A0…C2` in `agentbench/grade.mjs`) and INFBENCH
-(`INF-A1…INF-C2` in `infbench/grade.mjs`) as a local faux-standard. Each skill doc already
-carries a paragraph apologising for the collision and telling the reader not to compare an
-`AGENT C1` against a `CEFR C1` against an `INF-C1`. A shared letter is doing work a shared
-axis does not justify.
+Three benchmarks measure tmct, and two of them wear the same borrowed clothes: AGENTBENCH's
+`A0…C2` letters (`agentbench/grade.mjs`) and INFBENCH's `INF-A1…INF-C2` bands
+(`infbench/grade.mjs`) both grade on an A-to-C scale that reads as a shared axis when none
+exists. Each skill doc already carries a paragraph apologising for the collision and telling
+the reader not to compare an `AGENT C1` against an `INF-C1`. A shared letter is doing work a
+shared axis does not justify.
 
 This plan does three things:
 
 1. **Part 1** gives AGENT and INFERENCE a taxonomy drawn from their own domain (tool-use
-   capability; logic-fragment expressivity), keeps CEFR on CEFR, and renames CONVERSATION's
-   flow tiers so all four ladders read as distinct scales. It states how the rename keeps
-   comparability with the 2.5.0-era reports.
-2. **Part 2** adds two genuinely new top tiers to CEFR, AGENT, and INFERENCE — each a new
+   capability; logic-fragment expressivity), and renames CONVERSATION's flow tiers so all
+   three ladders read as distinct scales. It states how the rename keeps comparability with
+   the 2.5.0-era reports.
+2. **Part 2** adds two genuinely new top tiers to AGENT and INFERENCE — each a new
    dimension, the way C1+C2 added abstract and nuanced language over B1+B2, not more of the
    same rung.
 3. **Part 3** turns CONVERSATION's open-ended Tier 0–6 flow ladder into a bounded, gated
    ladder with a ratchet criterion per tier, and reconciles it with the persona sweep.
-4. **Part 4** states the one shared model the four then share: a bounded named ladder plus an
+4. **Part 4** states the one shared model the three then share: a bounded named ladder plus an
    unbounded edge-search that feeds it.
 
-The current reports the design starts from: `BENCHMARK_CEFR_ENGLISH_2.5.0.md` (mean 1.817,
-tier-1 108/109, the pool tests 9 of 23 construction shapes), `BENCHMARK_AGENT_2.5.0.md`
+The current reports the design starts from: `BENCHMARK_AGENT_2.5.0.md`
 (goal driver 56/56, every rung PASS, C2's 11 cases all green — "the ladder has more headroom
 than the corpus tests"), `BENCHMARK_INFERENCE_2.5.0.md` (259/259 chat, 90/90 kernel, INF-C2
 flipped from ceiling to live consistency detection), and `BENCHMARK_CONVERSATION_2.5.0.md`
@@ -42,29 +40,12 @@ build path, never a wall.
 
 ## Part 1 — a domain-appropriate taxonomy per benchmark
 
-### CEFR-English — keep CEFR, tighten the framing
-
-CEFR stays. This is the one benchmark where the borrowed vocabulary is not borrowed: it
-grades an English-language surface, and CEFR is the standard reference vocabulary for
-language difficulty. `chatbench/graded.mjs` keeps `GRADES = ["A1","A2","B1","B2","C1","C2"]`
-and the construction axis unchanged.
-
-One framing correction, no code change. The report already says the quiet part out loud:
-"the grade bands measure construction difficulty rather than a difficulty gradient tmct
-experiences" and "the ladder is still not monotonic (A1 at 1.636 sits below C1 at 1.867)".
-Make that explicit in `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 as a one-line statement of what the
-CEFR axis is: **CEFR grades the difficulty of the CONSTRUCTION under test, borrowing CEFR as a
-difficulty vocabulary. It is not a claim that tmct reads or writes at a CEFR level.** The real
-signal lives on the construction axis (the grade × construction cell), which is why the cell
-table, not the per-grade marginal, is where the report finds the floor. Nothing renames; the
-framing note removes the one reading the letters invite.
-
 ### AGENT (AGENTBENCH) — a tool-use capability ladder
 
 The `A0…C2` rungs measure agentic capability: can the router pick and sequence the right tool
 call(s) without hallucinating one and without exceeding what it can ground. `grade.mjs`'s own
 comments already describe each rung by its tool-use meaning. The rename gives each rung a name
-from that meaning and drops the CEFR letters.
+from that meaning and drops the borrowed letters.
 
 Proposed taxonomy — the **TOOL ladder**, `TOOL-0…TOOL-6`:
 
@@ -98,7 +79,7 @@ is the one the repo already reasons about: logic-fragment and description-logic 
 from atomic assertion through OWL 2 RL to EL and DL. `PLAN_SYLLOGIST_EL_DL.md` lays out that
 progression exactly (five RL kernels shipped, two steps just outside RL, then EL saturation,
 then a DL tableau). The current six bands map cleanly onto fragments, so the rename keeps the
-`INF-` prefix (which already reads as "inference", not CEFR) and replaces the CEFR letters with
+`INF-` prefix (which already reads as "inference") and replaces the borrowed letters with
 a fragment name and an ordinal.
 
 Proposed taxonomy — `INF-1…INF-6`, named by fragment:
@@ -120,8 +101,8 @@ those above it, and a clean 0% on an unbuilt capability is a ceiling marker.
 
 ### CONVERSATION — name the flow tiers as their own ladder
 
-The Tier 0–6 flow ladder is already domain-appropriate (it grades conversational complexity,
-not CEFR), and each tier already has a descriptive label in `SKILL_BENCHMARK_CONVERSATION.md`
+The Tier 0–6 flow ladder is already domain-appropriate (it grades conversational complexity),
+and each tier already has a descriptive label in `SKILL_BENCHMARK_CONVERSATION.md`
 §2.1. Two things to do: give the ladder a name that reads as its own scale, and make its
 ratchet mechanical (Part 3 below). The name: the **FLOW ladder**, `FLOW-0…FLOW-6`, carrying
 the existing tier meanings.
@@ -167,7 +148,6 @@ Concretely, per benchmark:
   `BAND_ALIASES` to `grade.mjs`. `test/estate/generated-artifacts.test.mjs` already guards the
   file's reproducibility, so it will confirm the regenerated set is the intended one and nothing
   else drifted.
-- **CHATBENCH.** No rename. CEFR stays, so there is nothing to alias.
 - **CONVERSATION.** The FLOW-* names are prose in the skill doc and the report, not a machine
   field, so the rename is a doc edit plus the alias line in the report's ladder-position
   section. No case set to migrate.
@@ -178,59 +158,11 @@ finds them where they look for the ladder.
 
 ---
 
-## Part 2 — two new top tiers each for CEFR, AGENT, INFERENCE
+## Part 2 — two new top tiers each for AGENT, INFERENCE
 
 Each pair below is a new dimension, not a taller version of the current top. For each: the new
 dimension and why it is a real jump, the two tier names in the new taxonomy, example cases
 (verbatim input + expected behaviour), and the exact append-only generator change.
-
-### CEFR — a new axis above the construction matrix (pragmatics, then discourse)
-
-**There is no CEFR band above C2, so the uplift is a new axis, not a seventh grade.** Every
-construction in the pool today is a single-utterance surface-parse difficulty: naming, passive
-voice, quantifier counting, garden-path recovery. The new axis is meaning that is not in the
-sentence's literal form (pragmatics) and meaning that spans turns (discourse composition).
-That is a genuine jump because the challenge stops being "parse this surface" and becomes
-"infer what was meant" and "compose across what was already answered". It is added as a new
-construction family layered on the existing grade × construction matrix, and it is explicitly
-**not** a claim that tmct handles a super-C2 language level — the CEFR letters still only
-vocabulary-grade construction difficulty.
-
-**Tier P1 — Implicature.** The answer depends on what is meant, not what is said: indirect
-speech acts, conversational implicature (Grice's maxims), presupposition beyond the parse.
-Grounding: Grice 1975 (cooperative principle / implicature), Searle on indirect speech acts,
-and the repo's `PLAN_DIALOGUE_ACTS.md`. Example cases (each authored at a real CEFR grade,
-construction `pragmatic-implicature`):
-
-- Input: `do you know what calls Widget?` — a yes/no in form, a request for the callers in
-  use. Expected: answer the callers, not "yes".
-- Input: `I don't suppose store.mjs imports anything?` — a negative-polarity indirect ask.
-  Expected: answer the imports, honouring the real question rather than the surface negation.
-- Input: `is only Widget untested, or are there others?` — the "or are there others" presupposes
-  a set. Expected: answer the untested set honestly, resolving the presupposition.
-
-**Tier P2 — Discourse composition.** A query whose meaning is complete only when composed
-across several prior turns — not single-hop anaphora (pronoun-binding already covers one
-referent), but composing multiple prior ANSWERS into a new inference. Grounding: centering /
-discourse-structure theory (Grosz, Joshi & Weinstein; Grosz & Sidner), and it is the axis
-CONVERSATION measures qualitatively but CEFR never has. Example cases (construction
-`cross-turn-composition`, graded C2):
-
-- Turns: `what does store.mjs import` → `and what do those import` → `which of all those is
-  untested`. Expected: the composed untested subset of the transitive import set, carried from
-  two prior answers.
-- Turns: `who calls createTask` → `who calls them` → `so what is the full call chain into
-  createTask`. Expected: the composed call chain, not a re-answer of the last turn alone.
-
-**Exact generator change (append-only).** In `chatbench/graded.mjs`, append two names to
-`CONSTRUCTIONS`: `"pragmatic-implicature"` and `"cross-turn-composition"` (and add their cells to
-`GRADED_MATRIX` at C1/C2). In `chatbench/graded-pool.jsonl`, append the new cases as ordinary
-graded-pool rows (`{ id, grade, construction, turns[], expectations, tags }`); the P2 rows carry
-multi-turn `turns[]`. No existing case is touched, satisfying the append-only rule. Record the
-addition in the write-up. Until the pragmatic/discourse routing exists in the product, these
-cases sit at the honest-miss floor and the judge scores them as misses — the tier is a named
-horizon, and the report says so, the same way INF-C2 sat as a ceiling marker before its
-capability shipped.
 
 ### AGENT — recovery, then composition under ambiguity
 
@@ -348,7 +280,7 @@ generated-artifacts.test.mjs` confirms the file is reproducible. No existing tem
 
 CONVERSATION today has an open-ended qualitative flow ladder (FLOW-0…FLOW-6, ratchet "only
 when the tier is clean") plus a persona sweep and a capped sprint. The open-endedness is the
-gap: "clean" is a judgment call, and there is no mechanical gate the way the other three
+gap: "clean" is a judgment call, and there is no mechanical gate the way the other two
 benchmarks have one. This part gives it the same shape: a bounded ladder with an explicit
 per-tier ratchet criterion, fed by the persona sweep as its edge-search.
 
@@ -371,15 +303,15 @@ A FLOW tier **ratchets clean** — unlocking the tier above — when both hold:
 
 Criterion 2 is what makes the ratchet mechanical rather than a vibe. A tier is not "clean
 because it felt clean this run"; it is clean because its accumulated regressions are green and
-a fresh pass finds nothing new. This mirrors the other three ladders: INFBENCH's gate is a
-grader receipt, AGENTBENCH's is the 0%-hallucination-at-50% metric pair, and CEFR's is the
-tier-1 deterministic row. FLOW's gate is "fresh-flow-clean AND frozen-regressions-green".
+a fresh pass finds nothing new. This mirrors the other two ladders: INFBENCH's gate is a
+grader receipt, and AGENTBENCH's is the 0%-hallucination-at-50% metric pair. FLOW's gate is
+"fresh-flow-clean AND frozen-regressions-green".
 
 ### The gate order
 
 FLOW tiers ratchet strictly FLOW-0 → FLOW-6. A tier that is not clean gates every tier above
 it, and the report says where the ladder currently sits and why — the same
-skipped-with-a-receipt discipline the other three use. At 2.5.0 the ladder sits at FLOW-0: the
+skipped-with-a-receipt discipline the other two use. At 2.5.0 the ladder sits at FLOW-0: the
 `i wanna know about a horse` teach-misroute (routed item 8) is a confident-wrong at Tier 0, so
 by criterion 1 the tier is not dead-end-free, and nothing above it is measured as ratcheted.
 
@@ -409,7 +341,7 @@ So the sweep is unbounded (it keeps finding new edges across new frames) and the
 bounded (it accumulates the fixed edges as gated content). The capped sprint (§3) and full
 ladder (§2) modes stay as they are; the sweep is the default single-run edge-search, and the
 FLOW ladder is what its findings graduate into. This is the same "a ladder plus a playtest
-edge-search" shape the other three benchmarks have — CONVERSATION just names both halves now.
+edge-search" shape the other two benchmarks have — CONVERSATION just names both halves now.
 
 ---
 
@@ -422,11 +354,10 @@ Every benchmark, after this plan, has two parts:
 - **an unbounded edge-search** that finds new failures, which then graduate into ladder
   content.
 
-The four instances:
+The three instances:
 
 | benchmark | ladder taxonomy | its edge-search |
 |---|---|---|
-| CEFR-English | CEFR grade × construction, plus the P-axis (implicature, discourse) | the full-pool `graded-pool-max.jsonl` sweep and new-construction authoring |
 | AGENT | TOOL-0…TOOL-8 tool-use tiers | adversarial and corpus-depth case authoring against the goal driver |
 | INFERENCE | INF-1…INF-8 logic-fragment tiers | the `PLAN_SYLLOGIST*` research horizon and generator-template growth |
 | CONVERSATION | FLOW-0…FLOW-6 flow tiers | the persona sweep (§3.4) |
@@ -434,7 +365,7 @@ The four instances:
 The ladder is the ruler: bounded, so it produces a number and a gate. The edge-search is the
 horizon-walker: unbounded, so it keeps finding what the ruler does not yet measure. A finding
 graduates from the second into the first when it is understood well enough to pin — a generator
-template, a case row, a frozen regression. That is the single model the four now share, and it
+template, a case row, a frozen regression. That is the single model the three now share, and it
 is why a taxonomy per benchmark matters: each ladder should read as a ruler for its own domain,
 not a borrowed set of letters.
 
@@ -462,16 +393,7 @@ benchmarks measure quality, not existence.
    ratchet criterion counts; the report records the ladder position with a receipt. The first
    concrete win to freeze is the routed backlog already in `BENCHMARK_CONVERSATION_2.5.0.md`.
 
-3. **CEFR's P-axis (Part 2), append-only.** Additive: two construction names in
-   `chatbench/graded.mjs`, new rows in `chatbench/graded-pool.jsonl`. Nothing else must change to
-   MEASURE the tier — the cases sit at the honest-miss floor until the pragmatic/discourse routing
-   exists, and the report names them as a horizon. Evidence: the graded-pool cases are tier-4
-   quality signal; when a routing capability lands, whoever lands it freezes a corpus lane row
-   (tier 2) and cites it. Watch the tier budgets — a new construction family must not push
-   `test:fast` past its budget; `npm run check:budgets` holds it, and a tier over budget is a bug
-   in the tier, cut content rather than raise the number.
-
-4. **AGENT's TOOL-7 / TOOL-8 (Part 2), append-only plus a grader extension.** Additive cases,
+3. **AGENT's TOOL-7 / TOOL-8 (Part 2), append-only plus a grader extension.** Additive cases,
    two new `RUNGS` entries, and the `expect.recover` / `expect.candidateResults` grading checks.
    The tiers gate at the honest floor on the current goal driver until the recovery and
    disambiguation capabilities ship. Evidence: unit tests in `agentbench/grade.mjs` for the new
@@ -479,7 +401,7 @@ benchmarks measure quality, not existence.
    (the skill's own rule); the router build (a replanning branch, a tied-candidate composer) is a
    separate, later change with its own regression tests, not part of authoring the cases.
 
-5. **INFERENCE's INF-7 / INF-8 (Part 2), append-only.** New generator templates and two new
+4. **INFERENCE's INF-7 / INF-8 (Part 2), append-only.** New generator templates and two new
    `BANDS` entries. INF-7 and most of INF-8 sit at ceiling markers until `PLAN_SYLLOGIST_EL_DL.md`
    Stage EL and Stage DL land; the `dlDisjointProofSoundness` case is the near-term exception,
    live as soon as the CONVERSATION-routed proof-path fix ships. Evidence: the generator
@@ -488,7 +410,7 @@ benchmarks measure quality, not existence.
    its corpus lane row (tier 2) is the existence evidence and the INF-8 soundness case is its
    benchmark witness.
 
-Across all five: any commit that reaches `main` runs the full `npm test`; a checkpoint or a
+Across all four: any commit that reaches `main` runs the full `npm test`; a checkpoint or a
 worktree commit runs `test:fast` plus the blast radius (the touched generator's regeneration
 guard, the touched grader's unit file). The rename in step 1 is the one change whose blast
 radius is wide by construction — it touches a shared, generated artifact (`infbench/cases.jsonl`)
@@ -501,18 +423,13 @@ radius is wide by construction — it touches a shared, generated artifact (`inf
    is not a semantic case edit (request/tools/expect are byte-unchanged, and the alias map
    preserves every prior comparison), so it is compatible with the append-only rule. That reading
    is the operator's to confirm, since the case set is called sacred. The alternative — keep `A0`
-   as the machine key forever and show `TOOL-0` only in rendering — leaves the borrowed CEFR
+   as the machine key and show `TOOL-0` only in rendering — leaves the borrowed
    letters in the data, which defeats the rename's point; this plan does not recommend it, but names
    it.
 2. **Author the INF-8 disjointness-soundness case now, or wait for Stage DL?** It is a live
    discriminator the moment the CONVERSATION-routed proof-path fix lands, long before the tableau.
    This plan recommends authoring it now, at the ceiling marker, so the fix has a benchmark witness
    the day it ships. Confirm.
-3. **The CEFR P-axis on a benchmark named CEFR_ENGLISH.** Adding a pragmatics/discourse axis to a
-   benchmark whose name and grades are CEFR is a naming tension worth a decision: keep it inside
-   CHATBENCH as a new construction family (this plan's choice, lowest friction), or split the
-   pragmatics/discourse axis into its own benchmark later. The plan frames it as a new axis, not a
-   super-C2 claim, but the housing is the operator's call.
-4. **The two new AGENT tiers need new `expect` fields** (`recover`, and the `candidateResults`
+3. **The two new AGENT tiers need new `expect` fields** (`recover`, and the `candidateResults`
    grading path). Confirm the grader extension is in scope with the case authoring, or whether the
    cases land first at a declared ceiling and the grader extension follows.

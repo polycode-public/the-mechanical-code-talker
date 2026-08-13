@@ -35,8 +35,8 @@ export const stripGoalLine = (t) => (t && typeof t.answer === "string"
  *
  *  `carryFocus: true` also threads `focus` forward turn to turn (off by
  *  default — the suites above never set focus, so leaving it off matches
- *  their exact prior `{config, last}`-only calls; chatbench-levers.test.mjs's
- *  repoDriver needs the focus thread, so it opts in). `strip` (e.g.
+ *  their exact prior `{config, last}`-only calls; a caller that needs the
+ *  focus thread opts in). `strip` (e.g.
  *  stripGoalLine) transforms each turn before it's collected. */
 export async function driveTurns(config, queries, { graph = null, carryFocus = false, strip = null } = {}) {
   const out = [];

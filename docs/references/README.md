@@ -50,7 +50,7 @@ docs/references/
   papers/
     README.md                     <- the papers index; ACE/APE + ELIZA/PARRY lineage still wanted
     crdt.md                       <- CRDTs: the four 2011 Shapiro et al. documents, and why tmct needs no OR-Set
-    graded-language-measures.md   <- the chatbench difficulty spectrum (TROG/CELF/CEFR)
+    graded-language-measures.md   <- the graded difficulty spectrum (TROG/CELF/CEFR)
   planning/
     README.md                     <- classical planning & KR: planning is not LLM-only
     PARTIAL_ORDER_PLANNING.md     <- least-commitment planning: causal links, threats
@@ -90,7 +90,7 @@ P2P layer actually replicates: a grow-only set of `(triple, source)` records mer
 "latest wins" as a read-time query rather than a CRDT primitive, and no OR-Set.
 **Consumer:** `src/adapters/memory/core.mjs`, `src/domain/memory/compaction.mjs`,
 `src/services/p2p-room.mjs`, `src/domain/p2p/`, `src/services/adventure.mjs`.
-[`papers/graded-language-measures.md`](papers/graded-language-measures.md) holds the chatbench
+[`papers/graded-language-measures.md`](papers/graded-language-measures.md) holds the graded
 difficulty spectrum and is still unverified.
 
 Still wanted: the ACE/APE papers and the ELIZA/PARRY lineage (Weizenbaum 1966;

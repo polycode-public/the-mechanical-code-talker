@@ -427,12 +427,6 @@ file-ownership-safe points so go-time scheduling is mechanical:
   a bindable verb. That is the safe side of the bar: a lost true mint, never a false one.
 - **E0's blast radius is real.** The last change to this file's guards re-pointed corpus
   rows and e2e pins across four suites. Budget the phase accordingly.
-- **Caveat prose lands in judged answers.** The read-back caveats change answer text in
-  lanes the CEFR judge scores; the operator chose visible honesty over benchmark stability.
-  The guard is tier-1 pins plus byte-pinned templates — no judged round is mandated, the
-  same accepted posture as the memory-backend plan's T4 enumeration marker. If a later
-  judged cycle moves on caveat-bearing cells, the templates are the first suspect and the
-  pins say exactly what they rendered.
 - **`mgx:nameFor`'s object is the scan's noun run, not the full complement.** "the time
   period that needs to be waited to see a result" stores as "time period" — the honest head
   run, losing the relative clause's qualification. That is the safe side: a shorter true

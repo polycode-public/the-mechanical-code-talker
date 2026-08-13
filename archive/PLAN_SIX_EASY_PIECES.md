@@ -15,8 +15,7 @@
 2026-07-20, operator instruction. The session started as a page-weight audit of
 `the-mechanical-code-talker-36445d.gitlab.io` and its six pages (`index.html` plus
 `public/{spider-fly,ledger,adventure,sprites,plan,chat}.html`), measured for real with Playwright/CDP
-against both the live site and a local rebuild — see `PAGE_WEIGHTS.md` for the full byte-level
-record and the capability-ladder analysis this plan builds on. From there the operator asked for a
+against both the live site and a local rebuild. From there the operator asked for a
 forward plan: tailor each of the six pages' language/knowledge capability to its actual job —
 chat.html toward general LLM-alternative capability with "wikipedia omniscience," the other five
 toward self-contained, domain-scoped depth with **no lazy loading** (zero runtime network
@@ -90,8 +89,7 @@ means exactly that, not a default to be argued back from cost.
 
 ### Researched, not yet built
 
-- **Wikipedia REST API as a live learn-on-miss fallback** (full findings in `PAGE_WEIGHTS.md`).
-  Verdict: feasible. Both the `opensearch` (free-text → title) and `page/summary` (title → article)
+- **Wikipedia REST API as a live learn-on-miss fallback.** Verdict: feasible. Both the `opensearch` (free-text → title) and `page/summary` (title → article)
   endpoints are genuinely CORS-open with no API key, verified live this session, with 200 req/min
   per-IP limits that don't pool across visitors since each browser calls Wikipedia directly. The
   extraction pipeline (`src/domain/reference-pack.mjs`'s `isReferenceArticleRow`) maps cleanly onto
@@ -125,7 +123,7 @@ means exactly that, not a default to be argued back from cost.
   chosen here, and a genuinely new, nontrivial dependency this project has otherwise avoided).
   Closes the gap where a taught (or future live-Wikipedia-fetched) fact vanishes on reload.
 - **Download-progress UI**: Fetch API's `Response.body` `ReadableStream` + `Content-Length`, no new
-  dependency — sketch and code snippet already in `PAGE_WEIGHTS.md`.
+  dependency.
 - **Fix the header the branding change shipped with.** `src/services/chat-page-viz.mjs` currently
   renders `<span class="eyebrow">the-mechanical-code-talker</span>` followed by a separate
   `<h1>Talk to it</h1>`, and `.eyebrow`'s CSS carries `text-transform: uppercase` — so the deployed
@@ -284,7 +282,7 @@ What's actually true today, checked this session rather than assumed — three o
 | page | today | proposed |
 |---|---|---|
 | **spider-fly.html** | Already grounded: `src/domain/spider-fly-world.mjs`'s `worldFactRows()` emits real cell/exit/web/taxonomy facts at session boot. Already zero lazy network requests (CDP-confirmed: 2 requests total, no third parties). | Audit structural-only concepts (vision radius, turn count) for whether each should also be a fact, so a player can ask about it directly. |
-| **adventure.html** | Already grounded from `corpus/worlds/src/ashcombe-hall.jsonl` (real subject/predicate/object triples), embedded at build time. One remaining lazy fetch: `sprites-pack/manifest.json` (560 KB) for the large-sprite tier. | Drop the lazy fetch — read the manifest at build time in `build-demo-site.mjs` and embed it directly, the same way this page's own world facts are already embedded. Verified sound this session: the manifest IS the entire large-sprite pack — `scripts/build-demo-sprites-pack.mjs` writes the full template set inline into that one file and nothing else, so embedding it leaves the page with zero runtime fetches. (`PAGE_WEIGHTS.md` describes the manifest as an index into a further per-sprite tier; that description predates the current one-file pack and the measurement record stands as written.) |
+| **adventure.html** | Already grounded from `corpus/worlds/src/ashcombe-hall.jsonl` (real subject/predicate/object triples), embedded at build time. One remaining lazy fetch: `sprites-pack/manifest.json` (560 KB) for the large-sprite tier. | Drop the lazy fetch — read the manifest at build time in `build-demo-site.mjs` and embed it directly, the same way this page's own world facts are already embedded. Verified sound this session: the manifest IS the entire large-sprite pack — `scripts/build-demo-sprites-pack.mjs` writes the full template set inline into that one file and nothing else, so embedding it leaves the page with zero runtime fetches. |
 | **plan.html** | Already grounded via taught English: `src/domain/hanoi-lesson.mjs`'s `hanoiLessonSentences()` runs real sentences ("disk-1 is smaller than disk-2.") through the same teach path a user's own input uses. One remaining lazy fetch: the wink-nlp CDN import (added this session, Part A). | Drop the CDN dependency — self-host wink through `src/adapters/wink-model.mjs`'s existing `registerWinkModel` seam (built specifically so a bundler-supplied pair works exactly like a CDN-supplied one). The real wire cost is ~3x what this doc's first draft claimed, and the right shape is one shared first-party asset, not an inline copy in each page's own bundle — measured numbers and the revised mechanism in "The wink de-lazying, measured" below. |
 | **ledger.html** | Query-only dock over a graph (the demo's own small `public/demo-graph.json`, or a user's real graph via the CLI). One remaining lazy fetch: the wink-nlp CDN import. | Same wink de-lazying as plan.html (the shared-asset shape, not a per-bundle copy). Graph itself stays basic, per the operator — this page's job is to query, not to carry a big corpus. Audit the existing query-template library for phrasing gaps; it's an audit, not a new grammar. |
 | **sprites.html** | **No chat dock, no facts, no NLP at all** — a pure visual sprite catalog + a freeform scene-composer text box (`src/services/sprite-catalog-viz.mjs`), with no grounding underneath either. | The one net-new build in this plan: a new pure generator `src/domain/sprite-facts.mjs`, following the `spider-fly-world.mjs` pattern (with one structural difference, named below), walking the parsed sprite template set's class/tier/parameter definitions into real OWL-shaped facts (`<class> rdf:type SpriteClass`, `<class> hasParameter <param>`, etc.). `sprite-catalog-viz.mjs` embeds them at build time (same mechanism adventure.html already uses) and gains a chat dock wired to the same engine, seeded with these facts — no lazy loading, matching every other page in this round. Makes "what classes can you render?" / "what parameters does a person sprite take?" real, fact-grounded answers instead of nonexistent ones. Two costs the first draft left unstated: the dock brings this page its first `*-browser.bundle.js` (~1.6 MB at the other pages' current size, taking the page from 1.2 MB to ~2.8 MB); and the dock needs an explicit wink decision — load the same shared first-party wink asset as the other docks (preferred: a return visitor has already cached it), or run adapter-less on `wink-model.mjs`'s documented null path with a degraded lemma tier. State the choice in the build, don't let it fall out of an import. |
@@ -375,9 +373,9 @@ Before committing ledger+plan to a bundled wink, the substitution was prototyped
   loose ends on the bundling question.
 - **The first draft's "+1.27 MB" cost figure was ~3x low.** The prototype bundle measures
   4,002,131 bytes unminified (the tier every current bundle ships at — `buildBundle` defaults
-  `minify: false`), 3,655,400 minified, 1,027,915 gzipped. The 1.29 MB figure in `PAGE_WEIGHTS.md`
+  `minify: false`), 3,655,400 minified, 1,027,915 gzipped. The 1.29 MB figure recorded earlier
   is esm.sh's *compressed* transfer (CDP measures post-compression bytes; the minified figure
-  above lands within 100 bytes of that doc's own uncompressed `curl` measurement, 3,655,472). This
+  above lands within 100 bytes of the uncompressed `curl` measurement, 3,655,472). This
   site's GitLab Pages deployment serves no content-encoding, so inlining wink costs ~3.7-4.0 MB of
   real wire per page — and inlining it into both `ledger-browser.bundle.js` and
   `plan-browser.bundle.js` pays that twice while giving up the cross-page HTTP-cache sharing the
@@ -466,7 +464,7 @@ phase, not one giant commit.
 ## Appendix — page weight, measured vs. predicted (2026-07-21)
 
 Nothing in Parts A-C below the "Shipped this session" list is built yet, so these are predictions
-against this session's real, measured baseline (`PAGE_WEIGHTS.md`), not new measurements. Where a
+against this session's real, measured baseline, not new measurements. Where a
 number is genuinely unmeasured, it's named as such rather than guessed at.
 
 | page | measured today | predicted on-load after this plan | max growth from lazy loading |

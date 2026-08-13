@@ -22,7 +22,7 @@ of them.
 
 > **Use it whenever you draft or edit human-facing text** in this repo: `README.md`,
 > `public/index.html` (the homepage at tmct.polycode.co.uk, also the landing surface), the `PLAN_*.md` design
-> docs, the `BENCHMARK_CEFR_ENGLISH_<version>.md` / `BENCHMARK_INFERENCE_<version>.md` / `BENCHMARK_AGENT_<version>.md` /
+> docs, the `BENCHMARK_INFERENCE_<version>.md` / `BENCHMARK_AGENT_<version>.md` /
 > `BENCHMARK_CONVERSATION_<version>.md` write-ups, the other skill docs, any other `*.md`, code comments,
 > and chat.
 
@@ -116,10 +116,10 @@ before they hit any methodology. Bury the value under proof apparatus and they l
 - Prefer whitespace and short blocks over dense paragraphs. If a section is a wall of text, a reader
   skips the whole wall.
 - State conditions in one clause, not three hedged paragraphs.
-- Link out for the proof: "full method and scores in the cycle write-up (`BENCHMARK_CEFR_ENGLISH_<version>.md`)."
+- Link out for the proof: "full method and scores in the cycle write-up (`BENCHMARK_INFERENCE_<version>.md`)."
 
-**Keep the full detail in the `BENCHMARK_CEFR_ENGLISH_<version>.md` write-ups** (and their sibling `BENCHMARK_INFERENCE_<version>.md`,
-`BENCHMARK_AGENT_<version>.md`, `BENCHMARK_CONVERSATION_<version>.md` reports — each bench family folds its own
+**Keep the full detail in the `BENCHMARK_INFERENCE_<version>.md` write-ups** (and their siblings,
+`BENCHMARK_AGENT_<version>.md` and `BENCHMARK_CONVERSATION_<version>.md` — each bench family folds its own
 transcript/evidence section into the one report file, no separate companion files). That is the
 home for the complete tables, the judge scores and spreads, the per-cell breakdowns, the
 tuning-cycle contract, the caveats, and the raw transcripts. The `PLAN_*.md` docs hold the
@@ -163,7 +163,7 @@ After drafting any human-facing text:
 3. **Read it as a stranger.** If a clause sounds like a press release or a model's default voice,
    rewrite it as the sentence a person would say out loud.
 4. **On a reader-facing surface, check the order.** Benefit first, then how to try it, then a short
-   claim with a link to the relevant `BENCHMARK_CEFR_ENGLISH_<version>.md`. If methodology arrives before benefit, move
+   claim with a link to the relevant `BENCHMARK_*_<version>.md`. If methodology arrives before benefit, move
    it.
 5. **Match the surrounding voice.** tmct's docs are terse and lowercase-leaning; a paragraph that
    suddenly turns formal and three-adjectived is a tell even if every word is fine.
@@ -180,7 +180,7 @@ of that, cut the LLM tells: em-dash sprinkling, "not X it's Y", announced-honest
 anthropomorphized parsers or benchmarks, hype, rule-of-three padding, listicle bloat. On the homepage
 (`public/index.html`) and README, lead with the benefit, state the headline claim in a sentence, and
 link to the proof instead of reproducing it; the full tables, judge scores, contract, caveats, and
-transcripts live in the `BENCHMARK_CEFR_ENGLISH_<version>.md` write-ups (and the sibling BENCH reports), and the
+transcripts live in the `BENCHMARK_*_<version>.md` write-ups, and the
 design detail in the `PLAN_*.md` docs. Base rules are the Plain English Campaign's
 (plainenglish.co.uk). Match the honest, terse voice the repo already uses. Applies to docs, code
 comments, site copy, and chat.

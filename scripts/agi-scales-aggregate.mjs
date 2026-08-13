@@ -6,9 +6,9 @@
 // Several entry rungs are facts a sibling bench already records — above all
 // abstention calibration (every bench's zero-fabrication gate) and goal-
 // origination distance (AGENTBENCH's reached ladder rung). This script reads
-// the sibling benches' MACHINE-READABLE artifacts (test-benchmarks/agentbench/envelope.json, test-benchmarks/infbench/envelope.json,
-// test-benchmarks/chatbench/envelope.json — the latter two read null-safe when absent, e.g. an
-// older checkout or a run where chatbench's envelope wasn't regenerated) and
+// the sibling benches' MACHINE-READABLE artifacts (test-benchmarks/agentbench/envelope.json,
+// test-benchmarks/infbench/envelope.json — the latter reads null-safe when absent, e.g. an
+// older checkout or a run where infbench's envelope wasn't regenerated) and
 // emits the per-scale row mechanically, so an AGI-scales cycle pastes measured
 // readings rather than re-deriving them.
 //
@@ -20,10 +20,10 @@
 //
 // Usage:
 //   node scripts/agi-scales-aggregate.mjs [--agentbench <envelope.json>]
-//     [--infbench <envelope.json>] [--chatbench <envelope.json>]
-//     [--child-manifest <manifest.json>] [--out <agi-scales-row.json>]
+//     [--infbench <envelope.json>] [--child-manifest <manifest.json>]
+//     [--out <agi-scales-row.json>]
 //     (defaults: test-benchmarks/agentbench/envelope.json, test-benchmarks/infbench/envelope.json,
-//      test-benchmarks/chatbench/envelope.json, corpus/child/manifest.json; stdout)
+//      corpus/child/manifest.json; stdout)
 
 import { access, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -53,12 +53,6 @@ export function goalNotchFromRung(rung) {
 // header above documents.
 const INFBENCH_COMPLETION_FLOOR = 0.5;
 
-// The honest-gate floor for CHATBENCH's judge-derived hard-fail rate: 0%,
-// exactly the zero-fabrication bar AGENTBENCH/INFBENCH hold their own gates to
-// (test-benchmarks/chatbench/judge.mjs's isHardFail is CHATBENCH's nearest analogue to a
-// confident, wrong, directional verdict).
-const CHATBENCH_HARD_FAIL_FLOOR = 0;
-
 // The eight scales, with the entry-rung text and source each one is held
 // against. `derive` (optional) pulls a MEASURED reading from the supplied bench
 // artifacts; absent or returning null, the scale reads assessment-only.
@@ -66,33 +60,28 @@ const SCALES = [
   {
     key: "abstention-calibration",
     entryRung: "fabrication 0% at ≥50% coverage on the graded pools",
-    source: "every bench's zero-fabrication gate (INFBENCH, AGENTBENCH, CHATBENCH)",
-    derive: ({ agentbench, infbench, chatbench }) => {
+    source: "every bench's zero-fabrication gate (INFBENCH, AGENTBENCH)",
+    derive: ({ agentbench, infbench }) => {
       const m = agentbench?.metrics?.overall;
       if (!m || m.hallucinationRate == null) return null;
       const cov = m.planCompletion ?? m.resultCompletion ?? null;
       if (m.hallucinationRate !== 0 || cov == null || cov < 0.5) return null;
       const agentbenchOnly = `fabrication 0% at ${(cov * 100).toFixed(0)}% completion on AGENTBENCH (gate-pass), the fixed-risk point`;
 
-      // Null-safe: infbench/chatbench envelopes may not exist yet (an older
-      // checkout, or a run where chatbench's paid judge pass wasn't re-run) —
-      // degrade to today's agentbench-only reading rather than crash or
-      // fabricate a cross-pool claim the missing artifact can't back up.
+      // Null-safe: the infbench envelope may not exist yet (an older checkout,
+      // or a run where it wasn't regenerated) — degrade to today's
+      // agentbench-only reading rather than crash or fabricate a cross-pool
+      // claim the missing artifact can't back up.
       const infChat = infbench?.capability?.chat;
       const infOk = infChat?.fabricationZero === true
         && infChat?.metrics?.overall?.completion != null
         && infChat.metrics.overall.completion >= INFBENCH_COMPLETION_FLOOR;
 
-      const cbOk = chatbench?.capability?.hardFailRate != null
-        && chatbench.capability.hardFailRate <= CHATBENCH_HARD_FAIL_FLOOR
-        && chatbench.capability.tier1PassRate != null;
-
-      if (!infOk || !cbOk) return agentbenchOnly;
+      if (!infOk) return agentbenchOnly;
 
       const infCov = (infChat.metrics.overall.completion * 100).toFixed(0);
-      const cbCov = (chatbench.capability.tier1PassRate * 100).toFixed(0);
-      return `fabrication/hard-fail 0% spans three pools: AGENTBENCH (gate-pass at ${(cov * 100).toFixed(0)}% completion), `
-        + `INFBENCH's chat arm (fabrication 0% at ${infCov}% completion), and CHATBENCH (hard-fail 0% over ${cbCov}% tier1-pass coverage) — the fixed-risk point`;
+      return `fabrication 0% spans two pools: AGENTBENCH (gate-pass at ${(cov * 100).toFixed(0)}% completion) `
+        + `and INFBENCH's chat arm (fabrication 0% at ${infCov}% completion) — the fixed-risk point`;
     },
   },
   {
@@ -127,12 +116,12 @@ const SCALES = [
 
 /** Build the AGI-scales row (pure over the supplied bench artifacts + version).
  *  Each scale reads a measured scalar when its `derive` produced one, else
- *  "entry rung held, assessment only". No scalar is ever invented. `infbench`/
- *  `chatbench`/`childManifest` are all optional and read null-safe — an older
+ *  "entry rung held, assessment only". No scalar is ever invented. `infbench`
+ *  and `childManifest` are both optional and read null-safe — an older
  *  checkout, or a run where one of the newer envelopes wasn't regenerated,
  *  degrades those scales back to assessment-only rather than crashing. */
-export function buildAgiRow({ agentbench = null, infbench = null, chatbench = null, childManifest = null, version = null } = {}) {
-  const artifacts = { agentbench, infbench, chatbench, childManifest };
+export function buildAgiRow({ agentbench = null, infbench = null, childManifest = null, version = null } = {}) {
+  const artifacts = { agentbench, infbench, childManifest };
   const scales = SCALES.map((s) => {
     const measuredReading = s.derive ? s.derive(artifacts) : null;
     return {
@@ -146,9 +135,6 @@ export function buildAgiRow({ agentbench = null, infbench = null, chatbench = nu
   return {
     benchmark: "AGI_SCALES",
     version,
-    generatedFrom: {
-      chatbench: chatbench?.generatedFrom?.chatbenchVersion ?? null,
-    },
     measuredCount: scales.filter((s) => s.measured).length,
     scales,
   };
@@ -182,13 +168,11 @@ function parseArgs(argv) {
     defaults: {
       agentbench: join(ROOT, "test-benchmarks", "agentbench", "envelope.json"),
       infbench: join(ROOT, "test-benchmarks", "infbench", "envelope.json"),
-      chatbench: join(ROOT, "test-benchmarks", "chatbench", "envelope.json"),
       childManifest: join(ROOT, "corpus", "child", "manifest.json"),
     },
     flags: {
       "--agentbench": { key: "agentbench" },
       "--infbench": { key: "infbench" },
-      "--chatbench": { key: "chatbench" },
       "--child-manifest": { key: "childManifest" },
       "--out": { key: "out" },
     },
@@ -199,12 +183,11 @@ export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const agentbench = await readJsonIfPresent(args.agentbench);
   const infbench = await readJsonIfPresent(args.infbench);
-  const chatbench = await readJsonIfPresent(args.chatbench);
   const childManifest = await readJsonIfPresent(args.childManifest);
   let version = null;
   try { version = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8")).version; } catch { /* unversioned */ }
 
-  const row = buildAgiRow({ agentbench, infbench, chatbench, childManifest, version });
+  const row = buildAgiRow({ agentbench, infbench, childManifest, version });
   const json = JSON.stringify(row, null, 2) + "\n";
   if (args.out) {
     await writeFile(args.out, json);

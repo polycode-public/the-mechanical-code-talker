@@ -136,10 +136,3 @@ Three things the original design called differently, kept because the page is be
   its name so it cannot be picked up by mistake.
 - **Crumb and morsel are the same hay bale** at the same target height. The two knobs stay
   separate so a later world can tell them apart.
-
-## Open
-
-1. **`reports/PAGE_WEIGHTS.md` has no figure for the vendored three build.** It is the page's
-   largest single asset and the only measurement of it anywhere is prose.
-   *Do:* fold `public/vendor/three.js` into the next page-weights pass. *Risk:* none beyond the
-   report going stale on the next three bump, which is what that report is for.

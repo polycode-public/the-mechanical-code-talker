@@ -17,9 +17,6 @@
 //
 // Note: scripts/check-licences.mjs walks `npm ls --omit=dev`, so three
 // (a devDependency) is never seen by it. three is MIT and would pass anyway.
-//
-// What the bundle costs is measured in reports/PAGE_WEIGHTS.md rather than
-// written here, because it moves every time three bumps.
 
 import { build } from "esbuild";
 import { writeFile, rename, mkdir } from "node:fs/promises";

@@ -662,7 +662,7 @@ shipped cax-dw gate applies ahead of both proof chases, extended to the tableau.
 `runAsk`'s stage 3 sets `via = "fact"` and `recordMiss = false` (`:15324-15326`). Premises render
 through `renderFactLine`, so provenance and trust read as they do everywhere else. An exhausted run
 sets `record.budgetExhausted = true` on the turn, the same marker `/prove` stamps at `:16437`, so
-chatbench and infbench can count budget misses apart from parse misses — and then returns nothing, so
+infbench can count budget misses apart from parse misses — and then returns nothing, so
 the existing recovery text renders untouched.
 
 ### 8.4 The budget posture

@@ -229,8 +229,8 @@ sits at:
   default logic, answer-set programming. Until that lands, a single-source positive and negative is
   surfaced rather than silently coalesced.
 - **Budget-exhausted proofs.** Any query whose tableau exceeds its step budget returns "can't prove
-  or disprove within budget", surfaced as an honest miss with its own marker so infbench and
-  chatbench count it separately from a parse miss.
+  or disprove within budget", surfaced as an honest miss with its own marker so infbench counts it
+  separately from a parse miss.
 - **Full FOL, probability, induction.** Research horizons with no generally accepted engineering to
   adopt today. Nothing here depends on them, and their absence is benchmark-observable.
 
@@ -1249,8 +1249,8 @@ Rendering, through the existing template machinery and nothing new:
 - `disproved`: `no — I can build a consistent picture where <subject> is not a <class>.` Name the
   premises that constrain it.
 - `exhausted`: the honest miss wall. `I can't prove or disprove that within my budget (<n> steps).
-  Nothing was guessed.` Mark the turn `miss: true` and tag the record so chatbench and infbench can
-  count budget misses separately from parse misses.
+  Nothing was guessed.` Mark the turn `miss: true` and tag the record so infbench can count budget
+  misses separately from parse misses.
 
 `/prove` stays an explicit command in phase 3. `PLAN_DL_ENGLISH_SURFACE.md` owns its promotion to an
 automatic ask-lane fallback.
@@ -1268,7 +1268,7 @@ TBox-internalization disjunction every proof passes through never does. A `dispr
 carries `miss: false` — E3/E4's own corpus sibling `inference.dl.counter-model` pins this: a
 consistent counter-model is a real "no", never a miss. The exhausted render names which
 `[reasoning]` knob (`prove_steps`/`prove_branches`/`prove_nodes`) ran out and its configured value,
-and the turn record carries `budgetExhausted: true` for chatbench/infbench to key on. Nothing here
+and the turn record carries `budgetExhausted: true` for infbench to key on. Nothing here
 writes to the store. Tests in `test/adapters/chat-prove-command.test.mjs`; corpus rows below.
 
 ### 8.8 Phase 3 tests

@@ -3,7 +3,7 @@
 // SYNTHBENCH-CODE grades one thing: can a bounded, no-LLM search produce a code
 // artifact a REAL toolchain then verifies, refusing rather than mangling when a
 // precondition fails. The levels are the SYN-0→SYN-8 rungs (this bench's own
-// scale, unrelated to CHATBENCH/AGENTBENCH/INFBENCH ladders). This module is
+// scale, unrelated to the AGENTBENCH/INFBENCH ladders). This module is
 // PURE: case lint, the four per-rung metrics, the honest gate, the ladder. The
 // real execution (synthesis, sandboxed verification) lives in run.mjs + verify/;
 // grade.mjs reads a computed outcome and never touches the network or a model.

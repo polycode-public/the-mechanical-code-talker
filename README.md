@@ -131,8 +131,8 @@ table. Choose the architecture that fits your use case.
 | `docs/` | reference docs: the adapter/repository-interface contracts, bibliography |
 | `test/` | the unit, corpus, and estate-guard test suite (`npm test`) |
 | `test-e2e/` | the end-to-end suite: real CLI/TUI spawns and Playwright browser journeys (`npm run test:e2e`) |
-| `test-benchmarks/` | the benchmark harnesses (agentbench, chatbench, idxbench, infbench, ingestbench, researchbench, synthbench) and their shared `benchlib/` |
-| `reports/` | benchmark write-ups (`BENCHMARK_*.md`) and `PAGE_WEIGHTS.md` — see the root `STATUS.md` for the one-page summary these feed |
+| `test-benchmarks/` | the benchmark harnesses (agentbench, idxbench, infbench, ingestbench, researchbench, synthbench) and their shared `benchlib/` |
+| `reports/` | benchmark write-ups (`BENCHMARK_*.md`) — see the root `STATUS.md` for the one-page summary these feed |
 | `playtests/` | numbered playtest session logs, one edge found and fixed per entry |
 | `archive/` | delivered `PLAN_*.md`/`BENCHMARK_*.md` docs, kept for history |
 | `public/` | the demo site: the hand-written home page, `help.html`, the six about pages, `receipts.html`, `claims.html`, the shared stylesheet and the model/screenshot assets. The demo pages and browser bundles beside them are gitignored build outputs of `npm run demo:build` |
@@ -1619,19 +1619,15 @@ and transcripts are in the linked write-ups.
 |---|---|---|---|
 | Multi-hop entailment | 379/379 chat cases and 100/100 kernel cases, 0% fabrication, all bands pass | The case set is unchanged from 2.6.0 (same templates, same counts). The one real move this cycle is INF-4's ceiling-graded count dropping 35→30: five cases that now pass as genuine capability instead of against the declared honest-miss floor. | `archive/BENCHMARK_INFERENCE_2.7.12.md` |
 | Tool-call planning | 68/68 cases, 100% plan-completion, 100% result-completion, 0% hallucination, every rung A0→C2 | Goal driver. 2.6.0 gated at TOOL-7 (62/66, 94%). This cycle's router uplift (a guarded RECOVER step, a tied-candidate composer) cleared it: a real capability move, not a ruler change. | `archive/BENCHMARK_AGENT_2.7.12.md` |
-| Groundedness | Every answer carries a source, and an empty graph reports itself empty. Judge-scored mean 1.809/2 over 138 cases, 5 hard fails, 136/138 tier-1. | Judged (`claude-haiku-4-5-20251001`, `judge-prompt-v2`) at N=1. The judge prompt moved v1→v2 since 2.6.0, so this is a measurement, not a clean lever comparison against the prior cycle. The judge runs in the offline eval harness, never in the product. | `archive/BENCHMARK_CEFR_ENGLISH_2.7.12.md` |
 | Abstention (the honest miss) | 0% fabrication across 479 inference rows (379 chat + 100 kernel) and 0% hallucination across 272 agent rows | Structural, not a tuned threshold. tmct abstains because nothing matched, so the rows test a property of a no-model design rather than a score. | `archive/BENCHMARK_INFERENCE_2.7.12.md`, `archive/BENCHMARK_AGENT_2.7.12.md` |
 | Determinism | Byte-identical on rerun: a 379-case `--replay` clean across 2 runs, no LLM, no network, $0 per turn | A property of the no-model pipeline. | `archive/BENCHMARK_INFERENCE_2.7.12.md` |
 | Dialogue robustness (persona sweep) | A 6-persona sweep (textbook logician, casual newcomer, new developer, adversarial sceptic, returning user, planning user) fixed 25 of the prior cycle's 29 routed findings (21 clean, 4 with a residual noted); 4 remain broken, 2 in a shape distinct from the original complaint | Free exploration across all six personas surfaced roughly 60 fresh findings beyond the ratchet check. The single highest-signal pattern: tmct's own suggested repair text was itself frequently broken when followed verbatim (since fixed, see `NEXT.md`). | `archive/BENCHMARK_CONVERSATION_2.7.11.md` |
 
-Seven offline benchmark rigs live in a clone (the harnesses themselves are
+Six offline benchmark rigs live in a clone (the harnesses themselves are
 not in the npm package; AGENTBENCH's capability envelope is, see "As a
 library" above). Each replays a committed case set through the real product
 and writes graded rows you can diff between runs:
 
-- `npm run chatbench:run` measures chat quality against CEFR-graded English
-  cases with deterministic tier-1 checks (the full tuning loop is in
-  `.claude/skills/benchmark-cefr-english/SKILL.md`);
 - `npm run infbench` generates inference cases, then runs each through both
   drive points, the reasoning kernel and the chat surface;
 - `npm run agentbench:run` measures the tool-loop behaviour, and every
@@ -1648,7 +1644,6 @@ The smallest real slice of each, the same invocations the test suite's
 bench-smoke lane replays:
 
 ```bash cwd=repo
-node test-benchmarks/chatbench/run.mjs --stamp smoke --only g-a1-naming-1 --out /tmp/chatbench-smoke
 node test-benchmarks/infbench/generate-cases.mjs --out /tmp/infbench-cases.jsonl
 node test-benchmarks/infbench/run.mjs --cases /tmp/infbench-cases.jsonl --only inf-1-lookup-subClassOf-001 --stamp smoke --out /tmp/infbench-smoke
 node test-benchmarks/agentbench/run.mjs --stamp smoke --driver stub --only ab-a0-describe-widget --out /tmp/agentbench-smoke
@@ -1658,7 +1653,7 @@ Grading beyond tier 1 uses an LLM as judge. The offline eval harness is the
 one place an LLM is allowed, never the product:
 
 ```bash skip=offline-eval-only
-npm run chatbench:judge -- --product /tmp/chatbench-smoke/product.jsonl
+npm run ingestbench:judge -- --product /tmp/ingestbench-smoke/product.jsonl
 ```
 
 ## Security and supply chain
@@ -1735,7 +1730,6 @@ edition, the retrieval date, the terms tmct uses, and what could not be verified
 
 | source | edition | what tmct uses it for |
 |---|---|---|
-| Council of Europe, CEFR — Companion volume | 2020, ISBN 978-92-871-8621-8 | The band labels A1–C2 the chat benchmark grades against. CEFR measures what a *person* can do communicatively; grading the difficulty of *prompts* by band is tmct's adaptation, not a CEFR-validated use. The band descriptions in `test-benchmarks/chatbench/GRADED.md` are tmct's own prose. |
 | Reiter, "On Closed World Data Bases" | *Logic and Data Bases*, Plenum, 1978, pp. 55–76 | Both halves of the honest miss. The planner's operator model is **closed-world**, which is what makes a plan checkable. The chat layer is **open-world**: it will not read "no matching rule" as "the answer is no". |
 | Chow, "On optimum recognition error and reject tradeoff" | *IEEE Trans. Information Theory* 16(1), 1970 | Prior art for the goal. The literature calls a refusal **abstention**, or selective prediction, and Chow's reject option is its root. Those methods threshold a confidence score; tmct has none, and abstains because nothing matched — which is why the row above names the mechanism. |
 | Ji et al., "Survey of Hallucination in Natural Language Generation" | *ACM Computing Surveys* 55(12), 2023 | Groundedness, and what tmct is avoiding by having no model to hallucinate with. |

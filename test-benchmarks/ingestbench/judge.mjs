@@ -2,10 +2,8 @@
 // (ING-8 meaning-preservation, ING-9 full-fidelity restatement). The ONLY paid
 // component of the bench: ING-0..ING-7 are deterministic and free; this scores
 // meaning-preservation where triple equality cannot reach, EVAL-SIDE ONLY —
-// never the product path (SKILL §1). It mirrors chatbench/judge.mjs's contract
-// (pinned model + pinned prompt, N samples, void-on-refusal, the same inline
-// --json-schema claude CLI invocation) without importing it — chatbench/ owns
-// its own files and this bench keeps its downward-only imports.
+// never the product path. Its contract is a pinned model + pinned prompt, N
+// samples, void-on-refusal, and an inline --json-schema claude CLI invocation.
 //
 //   judge model:    claude-haiku-4-5-20251001   (the FULL pinned id, never an alias)
 //   prompt version: ingest-judge-v1             (ingestbench/ingest-judge-v1.txt)

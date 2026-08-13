@@ -564,9 +564,9 @@ again — that is a product decision, not a purge one.
 
 ---
 
-## 7. Tests: 7 deletions, 13 renames
+## 7. Tests: 6 deletions, 12 renames
 
-149 test files and 1,601 cases in `test/`, 23 in `e2e/`. All 7 duplicates re-verified at the exact
+149 test files and 1,601 cases in `test/`, 23 in `e2e/`. All 6 duplicates re-verified at the exact
 stated lines at `HEAD 7858087`.
 
 **Clean bills of health (Rule 8).** No dead test files: both globs were verified empirically against
@@ -576,7 +576,7 @@ directory. No test imports a file or named export that doesn't exist. All 17 non
 live. One skipped test, conditional and legitimate — plus the `missingWordnet` skip-hole in §4.5,
 which is a coverage gap rather than a dead test.
 
-### 7.1 Delete (6 confirmed + 1 to verify)
+### 7.1 Delete (6 confirmed)
 
 | File:line | Why |
 |---|---|
@@ -586,7 +586,6 @@ which is a coverage gap rather than a dead test.
 | `test/tools/ask.test.mjs:614` | `ask-dual-strategy.test.mjs:187` is a strict superset (same `deepEqual` plus an `ambiguousParse` assert). |
 | `test/tools/ask.test.mjs:627` | `ask-dual-strategy.test.mjs:200` is a strict superset. |
 | `test/adapters/ask-dual-strategy.test.mjs:193` | `ask.test.mjs:619` is a strict superset. Note the direction reverses here. |
-| `test/adapters/chatbench-levers.test.mjs:51` | **Verify manually, don't bulk-delete.** Its fnAlpha half is a subset of `callgraph.test.mjs:26`, but the two use *different graphs* (raw `parseEntities` vs `ingestSchemaDocs` on top), and its importers half has no located superset. |
 
 `ask.test.mjs:555` and `:562` are why Rule 3 is written as it is. Both assert
 `parseQuery("what is the meaning of this codebase") === null`. Their names give **contradictory**
@@ -594,16 +593,12 @@ reasons: `:555` says a mandatory article stops it, `:562` says "meaning" isn't a
 term. Neither name is verified by anything — the assertion only ever sees `null`. Two tests, two
 explanations, one fact, zero checks on either explanation.
 
-**Mechanical note:** `chatbench-levers.test.mjs`'s `CLEAN_CALLS`/`CLEAN_IMPORTERS` consts sit at
-`:48-49`, **outside** the test block at `:51-63`, and feed the L1 tests at `:68`, `:75`, `:86`.
-Delete the `test(...)` block only. Deleting `:48-63` breaks three tests.
-
-### 7.2 Rename (13)
+### 7.2 Rename (12)
 
 Real behaviour under test, historical label bolted on. `corpus-conceptnet.test.mjs:77,104` (date +
-a doc that's gone), `compare.test.mjs:45`, `chat.test.mjs:484,497,511` (cites `CHATBENCH_006`, which
-does not exist), `telemetry.test.mjs:30`, `ask.test.mjs:91,365,614,681`, `memory-fold.test.mjs:85`,
-`chatbench.test.mjs:140`, `bias-weighting.test.mjs:136` ("today's behaviour" rots),
+a doc that's gone), `compare.test.mjs:45`, `chat.test.mjs:484,497,511` (cites a report label that
+never existed), `telemetry.test.mjs:30`, `ask.test.mjs:91,365,614,681`, `memory-fold.test.mjs:85`,
+`bias-weighting.test.mjs:136` ("today's behaviour" rots),
 `e2e/init.test.mjs:537`.
 
 **Do not pattern-match this.** "operator" in `trust.test.mjs:121`, `provenance.test.mjs:177` and
@@ -661,9 +656,9 @@ Commit `b7d833e` moved all 8 files but skipped the repoint step below, so it **c
 references** and broke NEXT's three baseline citations. The move is done; the repair it needed
 is §9.4's job.
 
-All four axes have a 2.0.3 write-up, so the pre-2.0.3 set moved to `archive/`:
+All three axes have a 2.0.3 write-up, so the pre-2.0.3 set moved to `archive/`:
 
-`BENCHMARK_AGENT_1.7.0.md`, `BENCHMARK_CEFR_ENGLISH_1.7.0.md`, `BENCHMARK_CEFR_ENGLISH_1.8.0.md`,
+`BENCHMARK_AGENT_1.7.0.md`,
 `BENCHMARK_CONVERSATION_1.7.0.md`, `BENCHMARK_CONVERSATION_1.8.14.md`, `BENCHMARK_INFERENCE_1.7.0.md`,
 and `CAPABILITIES_1.7.3.md`.
 
@@ -691,11 +686,10 @@ inventing one.
 citations), `SKILL_CAPABILITIES_AUDIT.md:118-121`, `README.md:180`, `PLAN_CODE.md:20`,
 `PLAN_SYLLOGIST.md:8`, `NEXT.md:106,122,127`.
 
-**Better than repointing, for NEXT.** Its three baseline claims are already restated in the
-2.0.3 write-ups (`BENCHMARK_AGENT_2.0.3.md:3,142`; `BENCHMARK_INFERENCE_2.0.3.md:3`;
-`BENCHMARK_CEFR_ENGLISH_2.0.3.md:260`). So cite the 2.0.3 doc as the baseline-of-record and let it
-carry the 1.7.0 comparison internally. One pointer, current, and it stops NEXT from ageing again
-at 2.1.
+**Better than repointing, for NEXT.** Its baseline claims are already restated in the
+2.0.3 write-ups (`BENCHMARK_AGENT_2.0.3.md:3,142`; `BENCHMARK_INFERENCE_2.0.3.md:3`). So cite the
+2.0.3 doc as the baseline-of-record and let it carry the 1.7.0 comparison internally. One pointer,
+current, and it stops NEXT from ageing again at 2.1.
 
 **`CAPABILITIES_1.7.3.md` no longer needs a decision.** `CAPABILITIES_2.0.3.md` exists, so it is
 superseded outright. It also overlays `CAPABILITIES_1.6.0.md`, which is gone, so ~120 of its rows
@@ -740,9 +734,9 @@ that do not exist.
 
 **`NEXT.md` — the entry-point doc sends every new session to three things that aren't there.**
 `:4` cites a ROADMAP section "Current capability surface"; ROADMAP has six headings and that is not
-one. `:198-199` cites `CEFR_ENGLISH_*`/`AGENTBENCH_*`/`INFBENCH_*`/`CONVERSATIONBENCH_*` artifacts —
-no file carries any of those prefixes, the convention is `BENCHMARK_<AXIS>_<version>.md`, and three
-of the four aren't a prefix-rename away. `:199` also cites ROADMAP's "Where we are now", which does
+one. `:198-199` cites `AGENTBENCH_*`/`INFBENCH_*`/`CONVERSATIONBENCH_*` artifacts —
+no file carries any of those prefixes, the convention is `BENCHMARK_<AXIS>_<version>.md`, and two
+of the three aren't a prefix-rename away. `:199` also cites ROADMAP's "Where we are now", which does
 not exist and which ROADMAP:4-6 explicitly disclaims holding.
 
 **`docs/references/planning/` — 4 files, all citing the deleted `PLAN_CAPABILITY_ROUTER.md`:**
@@ -753,7 +747,7 @@ target is `PLAN_AGENTS.md`, which absorbed the router doc; router status is at `
 `PLAN_CLASS_QUERY.md` (:9, :22, :26, :95 → `PLAN_BREADTH_FIRST_NLU.md`; :9 quotes its status section
 verbatim as this plan's whole origin, now unverifiable); `PLAN_ADVENTURE.md` (:145, :251 →
 `PLAN_SEED.md`); `PLAN_REPO_INDEX.md` (:148, :269 → `PLAN_UNTYPED_INTERFACES.md`, which never
-existed); `corpus/seon/README.md:53`; `chatbench/GRADED.md` (:71, :135, :140, :253, :308);
+existed); `corpus/seon/README.md:53`;
 `SKILL_BENCHMARK_CONVERSATION.md:3` (→ `SKILL_BENCHMARK_PLAYTEST.md`, never existed).
 
 ### 9.5 Duplication and drift
@@ -769,10 +763,7 @@ existed); `corpus/seon/README.md:53`; `chatbench/GRADED.md` (:71, :135, :140, :2
   §9.1 archives, computes `CAPABILITIES_1.8.14.md` (never existed), and says "even though
   `package.json` reads 1.12.1" (it reads 2.0.3). It is also self-undermining now, since all four
   axes sit at 2.0.3 with no carried-forward row — exactly what `CAPABILITIES_2.0.3.md:7` says.
-- **`chatbench/README.md:21`** documents `CEFR_ENGLISH_0NN.md` + a `_TRANSCRIPTS.md` appendix. Both
-  halves are wrong; `SKILL_BENCHMARK_CEFR_ENGLISH.md:43-48` superseded the split ("that split ends
-  here").
-- **`SKILL_BENCHMARK_*.md`** (4 docs, 88KB) each restate the same cycle scaffolding. A shared
+- **`SKILL_BENCHMARK_*.md`** (3 docs) each restate the same cycle scaffolding. A shared
   section would cut real bulk.
 
 ---
@@ -781,12 +772,11 @@ existed); `corpus/seon/README.md:53`; `chatbench/GRADED.md` (:71, :135, :140, :2
 
 **Tracked, needs your call.**
 
-- **`chatbench/results/raw/` and `agentbench/results/raw/` — 35 files.** Both directories hold a
-  `.gitignore` reading `raw/`, and the files were force-added past it. Someone meant to ignore these
-  and lost the argument, or meant to commit them and left the `.gitignore` lying. **Untrack them; do
-  not rewrite history.** They are 20MB checked out but only **1.23 MiB** of the 18.87 MiB pack, so a
-  rewrite would reclaim ~6.5% of the repo at the cost of changing every commit hash on a branch with
-  a live remote and CI that publishes to npm. Untracking stops the growth and costs nothing.
+- **`agentbench/results/raw/`.** The directory holds a `.gitignore` reading `raw/`, and the files
+  were force-added past it. Someone meant to ignore these and lost the argument, or meant to commit
+  them and left the `.gitignore` lying. **Untrack them; do not rewrite history.** Untracking stops
+  the growth and costs nothing, at a fraction of the repo pack's size — not worth changing every
+  commit hash on a branch with a live remote and CI that publishes to npm.
 - **`.idea/` — 6 files.** Shared team config or personal cruft?
 - **`STRATEGY_ADVISOR.log`** — **done: gitignored and untracked.** It is scratch written by the
   advisor skill, not a record, and its `!STRATEGY_ADVISOR.log` un-ignore was defeating the `*.log`
@@ -794,7 +784,7 @@ existed); `corpus/seon/README.md:53`; `chatbench/GRADED.md` (:71, :135, :140, :2
   `SKILL_AGENT_STRATEGY_ADVISOR.md` carries the rule and the log's own header repeats it for
   whoever opens the file.
 
-**Local only (Rule 9 — propose, don't delete).** `.tmct/` 45MB, `chatbench/results` 46MB,
+**Local only (Rule 9 — propose, don't delete).** `.tmct/` 45MB,
 `agentbench/results` 1MB, `infbench/results` 1.7MB, `.DS_Store` files, stray
 `examples/mini-webapp/.tmct/session-*.log`. All rebuildable, all your disk.
 

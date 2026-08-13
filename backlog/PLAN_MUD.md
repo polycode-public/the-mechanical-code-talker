@@ -11,10 +11,6 @@ documents link back here rather than restating them.
   per-user handles, the phasing, and the non-goals. RESEARCH / DESIGN, not yet implemented.
 - **`PLAN_MUD_DEMO.md`** — mud.html, the single-page burrow demo: proof of the shared
   multi-character world shape with no server anywhere. SHIPPED.
-- **`PLAN_MUD_WEBRTC.md`** — multi-browser worlds over WebRTC: serverless share/join by
-  copy-paste signaling, CRDT replication over the fact store. SHIPPED 2026-07-29 on mud.html
-  and chat.html, mesh introduction included; retraction replicates too, with a causal-stability
-  rule behind a gate.
 - **`PLAN_MUD_MUDIII.md`** — MUDIII: a Three.js town square (fox and goblins) over the
   spider-fly planning engine, with its coordinator/sub-agent delivery packaging. BUILT AND
   DEPLOYED: `mudiii.html` is live alongside https://tmct.polycode.co.uk/mud.html.

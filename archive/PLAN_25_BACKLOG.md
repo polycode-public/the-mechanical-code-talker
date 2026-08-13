@@ -1,13 +1,13 @@
 # PLAN_25_BACKLOG.md — close the 2.5.0 open items
 
-**Status: DELIVERED (2026-07-18 run; measured by the four BENCHMARK_*_2.6.0.md reports). This is the build order for the seven items `NEXT.md`
+**Status: DELIVERED (2026-07-18 run; measured by the three BENCHMARK_*_2.6.0.md reports). This is the build order for the seven items `NEXT.md`
 carries after the 2.5.0 benchmark round.** Work it top to bottom: the order is by evidence strength and blast radius,
 not by area. Every fix ships with its pin — no row, not done. Evidence lands at the tool layer
 (`test/tools/`) wherever a tool serves the shape (`SKILL_CAPABILITIES_AUDIT.md` §1); a chat-only
 shape gets a keyed corpus row.
 
 Sources: `BENCHMARK_CONVERSATION_2.5.0.md` (the routed backlog, 11 confident-wrong + the honest-miss
-clusters), `BENCHMARK_CEFR_ENGLISH_2.5.0.md`, `BENCHMARK_AGENT_2.5.0.md`, `CAPABILITIES_2.5.0.md`,
+clusters), `BENCHMARK_AGENT_2.5.0.md`, `CAPABILITIES_2.5.0.md`,
 and `archive/PLAN_OPEN_ITEMS.md` / `archive/PLAN_NORMATIVE.md` for the tails and the two decisions.
 
 ## Every fix site below was verified, not inherited
@@ -549,39 +549,7 @@ absence. F20's pin belongs with §1's `inference.disjoint.*` key.
 
 ---
 
-## 8. The two CEFR follow-ups
-
-### 8.1 `be-honest-empty` — a frozen expectation drifted out of sync (PICK)
-
-The bootstrap-empty product reply was reworded this cycle to lead with the general-vocabulary /
-taught-facts path. The case `be-honest-empty` still expects the old strings
-(`answerMatch: ["is empty — no entities to answer from yet", "folds the conversation"]`), so its
-tier-1 check fails even though the answer is an honest miss the judge scores 2/2. Verified: the live
-reply is now "I can't answer that as a code question — no code graph is loaded in this session…"
-(reproduced in-process; it is the same string `zeus is not mortal` lands on).
-
-**The append-only rule.** The CHATBENCH case set is append-only mid-arc — the case cannot be edited
-here. Two ways to reconcile, and this is a real choice for the operator:
-
-- **Restore the wording in the product path** so the frozen `answerMatch` matches again. Cheapest,
-  and it keeps the case honest without touching the case set. The reword was a product decision,
-  though, so reverting it trades the newer, more helpful bootstrap-empty message for a green tier-1.
-- **Record a deliberate expectation revision next cycle** — supersede the case with a new id whose
-  `answerMatch` tracks the reworded string, at the next arc boundary where the append-only set may
-  grow.
-
-**Recommendation.** Keep the reworded product string (it is the better message — it points the user
-at the taught-facts path that actually works) and record the expectation revision at the next arc
-boundary. The tier-1 miss is a measurement artifact, not a behaviour regression; do not degrade a
-good product string to satisfy a frozen check. Until the revision lands, the report already documents
-why tier-1 sits at 108/109 rather than 109/109.
-
-**Build (once decided).** If the operator picks restore: change the bootstrap-empty reply in the
-chat path back to include "is empty — no entities to answer from yet"; pin the wording with a
-`test/tools/` assertion so it cannot drift again unnoticed. If the operator picks revise: add the
-superseding case to `chatbench/` at the arc boundary. No `src/` change in the revise path.
-
-### 8.2 `gq-impact-a` — `(imports it)` on a depth-2 transitive dependent
+## 8. `gq-impact-a` — `(imports it)` on a depth-2 transitive dependent
 
 **DELIVERED** (endgame problems pass) — `renderImpact` keeps the depth-1 verb receipt and renders
 every deeper dependent as "(reaches it through an intermediary)"; pinned beside the other
@@ -890,7 +858,7 @@ Optionally add and pin the `mgx:relatedTo rdfs:seeAlso skos:related` ontology an
 3. **§4** — the Tier-0 vocabulary lane. What unpins the conversation ladder; chat-only, corpus-pinned.
 4. **§6** — the board-read and goal-frame gaps. Chat-only, planner-adjacent.
 5. **§7** — the honest-miss clusters. Lowest of the CONVERSATION backlog by class (misses, not lies).
-6. **§8, §9** — the CEFR follow-ups and the two parser tails. Small, well-scoped.
+6. **§8, §9** — the impact-label fix and the two parser tails. Small, well-scoped.
 7. **§10, §11** — the two decisions. §10 is investigated: no resolver plan to restore, evidence in
    the section, expectation change back with the operator. §11 waits on the operator's pick.
 8. **§12, §13** — the ontology-vocabulary test and the SKOS consumer surface. Self-contained; §13
