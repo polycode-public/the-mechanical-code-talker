@@ -26,7 +26,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-None open.
+1. [ ] **A declared tool request over HTTP returns `end_turn`, not `tool_use`.**
+   `selectTool`'s `askFallback` refuses when `isConversational` is true, and that
+   now catches any request of three words or fewer, so a host that declared
+   `tmct_ask` and sent a short structural query gets a text answer and no tool
+   call. The seam keeps the closed phrase lists — greetings, thanks,
+   acknowledgements, capability and identity phrases — and drops the word-count
+   catch-all; interactive chat keeps it. No wording-based inference comes back.
 
 ## Discipline
 
