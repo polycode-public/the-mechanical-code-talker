@@ -672,27 +672,65 @@ test("subgraphAround's inSense test bounds both what it collects and what it wal
   assert.ok(scoped.some((r) => r.id === "fact:israel"), "the terms it admits still walk to their own neighbours");
 });
 
+// readFactRows keeps observedAt on the assertion records and never on the row
+// itself, so a fixture setting a top-level stamp is a row shape no store ever
+// hands the cap. These rows carry theirs where a real one does.
+function storedRow(id, subject, predicate, object, { observedAt = NOW, ...extra } = {}) {
+  const built = row(id, subject, predicate, object, extra);
+  delete built.observedAt;
+  built.assertions = [{ observedAt, createdAt: observedAt }];
+  return built;
+}
+
 test("evictNewsFacts never selects a non-news row", () => {
   const rows = [
-    row("fact:1", "a", "rdf:type", "x", { provenance: "news:hacker-news@i1", observedAt: "2026-08-01T00:00:00Z" }),
-    row("fact:2", "b", "rdf:type", "x", { provenance: "teach:chat:s1@2026-08-01T00:00:00Z", observedAt: "2026-08-01T00:00:00Z" }),
-    row("fact:3", "c", "rdf:type", "x", { provenance: "news-fixture:usgs@i2", observedAt: "2026-08-01T00:00:00Z" }),
-    row("fact:4", "d", "rdf:type", "x", { provenance: "research:wikipedia:d", observedAt: "2026-08-01T00:00:00Z" }),
+    storedRow("fact:1", "a", "rdf:type", "x", { provenance: "news:hacker-news@i1", observedAt: "2026-08-01T00:00:00Z" }),
+    storedRow("fact:2", "b", "rdf:type", "x", { provenance: "teach:chat:s1@2026-08-01T00:00:00Z", observedAt: "2026-08-01T00:00:00Z" }),
+    storedRow("fact:3", "c", "rdf:type", "x", { provenance: "news-fixture:usgs@i2", observedAt: "2026-08-01T00:00:00Z" }),
+    storedRow("fact:4", "d", "rdf:type", "x", { provenance: "research:wikipedia:d", observedAt: "2026-08-01T00:00:00Z" }),
   ];
   const evicted = evictNewsFacts(rows, { cap: 0 });
   assert.deepEqual(evicted, ["fact:1"]);
 });
 
-test("evictNewsFacts orders oldest observedAt first, ties by id, and stops once at cap", () => {
+test("evictNewsFacts ranks by the stamp a stored row actually carries, oldest first, ties by id", () => {
   const rows = [
-    row("fact:c", "a", "rdf:type", "x", { provenance: "news:src@i1", observedAt: "2026-08-03T00:00:00Z" }),
-    row("fact:a", "b", "rdf:type", "x", { provenance: "news:src@i2", observedAt: "2026-08-01T00:00:00Z" }),
-    row("fact:b", "c", "rdf:type", "x", { provenance: "news:src@i3", observedAt: "2026-08-01T00:00:00Z" }),
-    row("fact:d", "d", "rdf:type", "x", { provenance: "news:src@i4", observedAt: "2026-08-04T00:00:00Z" }),
+    storedRow("fact:c", "a", "rdf:type", "x", { provenance: "news:src@i1", observedAt: "2026-08-03T00:00:00Z" }),
+    storedRow("fact:a", "b", "rdf:type", "x", { provenance: "news:src@i2", observedAt: "2026-08-01T00:00:00Z" }),
+    storedRow("fact:b", "c", "rdf:type", "x", { provenance: "news:src@i3", observedAt: "2026-08-01T00:00:00Z" }),
+    storedRow("fact:d", "d", "rdf:type", "x", { provenance: "news:src@i4", observedAt: "2026-08-04T00:00:00Z" }),
   ];
   assert.deepEqual(evictNewsFacts(rows, { cap: 4 }), []);
   assert.deepEqual(evictNewsFacts(rows, { cap: 2 }), ["fact:a", "fact:b"]);
   assert.deepEqual(evictNewsFacts(rows, { cap: 3 }), ["fact:a"]);
+
+  // Age decides, not id order: the youngest row sorts first by id and still
+  // survives every eviction the cap makes.
+  const youngestSortsFirst = [
+    storedRow("fact:a", "a", "rdf:type", "x", { provenance: "news:src@i1", observedAt: "2026-08-09T00:00:00Z" }),
+    storedRow("fact:b", "b", "rdf:type", "x", { provenance: "news:src@i2", observedAt: "2026-08-01T00:00:00Z" }),
+  ];
+  assert.deepEqual(evictNewsFacts(youngestSortsFirst, { cap: 1 }), ["fact:b"]);
+});
+
+test("evictNewsFacts evicts a claim and the attributions naming it as one unit", () => {
+  const oldClaim = "fact:00000000000000a2";
+  const oldAttribution = "fact:00000000000000b1";
+  const rows = [
+    storedRow(oldClaim, "russia", "tmct:releases", "robert gilman", { provenance: "news:src@i1", observedAt: "2026-08-01T00:00:00Z" }),
+    storedRow(oldAttribution, oldClaim, "mgx:attributedTo", "president trump", { provenance: "news:src@i1", observedAt: "2026-08-01T00:00:00Z" }),
+    storedRow("fact:00000000000000c1", "chile", "mgx:hit", "a quake", { provenance: "news:src@i2", observedAt: "2026-08-05T00:00:00Z" }),
+  ];
+  assert.deepEqual(evictNewsFacts(rows, { cap: 3 }), []);
+  // One row over the cap, and the pair still goes whole: keeping the claim
+  // while dropping its speaker is what leaves a surface unable to say who said
+  // it, and keeping the speaker alone leaves an attribution naming nothing.
+  assert.deepEqual(evictNewsFacts(rows, { cap: 2 }), [oldClaim, oldAttribution]);
+  assert.deepEqual(
+    evictNewsFacts([...rows].reverse(), { cap: 2 }),
+    [oldClaim, oldAttribution],
+    "and the same pair whichever order the two halves arrive in",
+  );
 });
 
 // ---- the newsworthiness gate (PLAN_NEWS_FEED.md section 17) ----------------

@@ -83,13 +83,21 @@ const FACT_REFERENCE_TERM_RE = /^fact:[0-9a-f]{16}$/;
 
 const namesAFactRow = (term) => FACT_REFERENCE_TERM_RE.test(String(term ?? "").trim().toLowerCase());
 
-/** True when either side of `row` names a fact rather than a thing — a row
- *  ABOUT another row, never a claim about the world. Every card lane scores,
- *  walks and prints terms, and `looksLikeEntityTerm` reads a bare
+/** The fact `row` is ABOUT, when either of its sides names one rather than a
+ *  thing, else "". */
+function referencedFactId(row) {
+  const subject = String(row?.subject ?? "").trim().toLowerCase();
+  if (namesAFactRow(subject)) return subject;
+  const object = String(row?.object ?? "").trim().toLowerCase();
+  return namesAFactRow(object) ? object : "";
+}
+
+/** True when `row` is about another row rather than about the world. Every card
+ *  lane scores, walks and prints terms, and `looksLikeEntityTerm` reads a bare
  *  `fact:285cf1618315591b` as a perfectly good one-word name, so a row like this
  *  loose in a lane can head a card with a hex id. */
 export function isFactReferenceRow(row) {
-  return namesAFactRow(row?.subject) || namesAFactRow(row?.object);
+  return Boolean(referencedFactId(row));
 }
 
 const ATTRIBUTED_TO_PREDICATE = "mgx:attributedTo";
@@ -1752,19 +1760,42 @@ export function buildNewsItems(rows, {
 // is the deliberate exclusion the fixture-replay rows need.
 const NEWS_PROVENANCE_RE = /(?:^|[:|]\s*)news:/;
 
-/** News-tagged fact ids to retract, oldest observedAt first, ties by id —
- *  the eviction the service applies at ingest time so the graph cannot grow
- *  past `cap` unattended. Never selects a seed/taught/research/fixture-
- *  replay row. */
+/** News-tagged fact ids to retract, oldest observation first, ties by id — the
+ *  eviction the service applies at ingest time so the graph cannot grow past
+ *  `cap` unattended. Never selects a seed/taught/research/fixture-replay row.
+ *
+ *  A claim and the attributions naming it evict as ONE unit. They carry the same
+ *  news tag and the same stamp but not the same id, so choosing row by row
+ *  routinely kept one half and dropped the other, leaving a speaker with no
+ *  claim or a claim whose surface can no longer say who said it. A unit that
+ *  straddles the cap goes whole: the graph lands under `cap`, never on half a
+ *  pair.
+ *
+ *  The stamp comes from `rowObservedMs`, which is where a read row actually
+ *  carries it — `readFactRows` keeps observedAt on the assertion records, so
+ *  reading `row.observedAt` scored every real news row 0 and left the cap
+ *  evicting by id order. */
 export function evictNewsFacts(rows, { cap }) {
   const newsRows = rows.filter((r) => NEWS_PROVENANCE_RE.test(String(r.provenance || "")));
   if (newsRows.length <= cap) return [];
-  const sorted = newsRows.slice().sort((a, b) => {
-    const at = toMs(a.observedAt || "");
-    const bt = toMs(b.observedAt || "");
-    const an = Number.isFinite(at) ? at : 0;
-    const bn = Number.isFinite(bt) ? bt : 0;
-    return an - bn || byId(a, b);
-  });
-  return sorted.slice(0, newsRows.length - cap).map((r) => r.id);
+
+  const units = new Map();
+  for (const row of newsRows) {
+    const key = referencedFactId(row) || row.id;
+    let unit = units.get(key);
+    if (!unit) units.set(key, (unit = { key, ids: [], observedMs: Infinity }));
+    unit.ids.push(row.id);
+    const t = rowObservedMs(row);
+    unit.observedMs = Math.min(unit.observedMs, Number.isFinite(t) ? t : 0);
+  }
+
+  const target = newsRows.length - cap;
+  const evicted = [];
+  const oldestFirst = [...units.values()]
+    .sort((a, b) => a.observedMs - b.observedMs || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  for (const unit of oldestFirst) {
+    if (evicted.length >= target) break;
+    evicted.push(...unit.ids.slice().sort());
+  }
+  return evicted;
 }
