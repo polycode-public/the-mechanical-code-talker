@@ -827,42 +827,6 @@ e2e:deployed:shell:
       test-e2e/memory-ask-browser-bundle.test.mjs test-e2e/readme-examples.test.mjs
       test-e2e/cli-render-views.test.mjs
 
-# Every page the site ships, plus the engine-level and CLI files that shared a
-# channel with them. The largest slice by file count — capped so at most 4 of
-# these run their own real Chromium instance at once, regardless of how many
-# cores the runner has. pages-mud (one of the pipeline-2717061891 failures,
-# since removed) used to live here; the other three files that failed under
-# contention across pipelines 2717061891 and 2717201943 moved to
-# `e2e:deployed:pages-timing` below, since none of them were actually
-# pages-research.test.mjs (since removed; that file had never failed either
-# pipeline) — every failure was in pages-chat-research.test.mjs,
-# pages-chat-live-toggle.test.mjs, or pages-chat-persistence.test.mjs.
-# pages-ingest.test.mjs (since removed) and pages-chat-export.test.mjs
-# joined them after pipeline 2721958621: both
-# reproduced 0/13 and 0/3 locally (single file, no concurrency) but failed
-# 3/3 retries here under real 4x contention — a Playwright click/waitFor
-# timing out, not a code defect.
-e2e:deployed:pages:
-  extends: .e2e-deployed-base
-  script:
-    - >-
-      node --disable-warning=ExperimentalWarning --test --test-concurrency=4
-      test-e2e/pages-chat-fullscreen.test.mjs
-      test-e2e/pages-chat-digest.test.mjs
-      test-e2e/browser-chat.test.mjs test-e2e/chat-prompt.test.mjs
-      test-e2e/chat-browser-bundle.test.mjs test-e2e/build-chat-assets.test.mjs
-      test-e2e/pages-chat-taught-capability-chain.test.mjs
-      test-e2e/web-chat-memory.test.mjs
-      test-e2e/pages-ledger.test.mjs
-      test-e2e/pages-ledger-teach.test.mjs test-e2e/pages-ledger-research.test.mjs
-      test-e2e/ledger-viz-cli.test.mjs test-e2e/ledger-viz.test.mjs
-      test-e2e/pages-plan.test.mjs test-e2e/plan-cli.test.mjs
-      test-e2e/plan-browser-entry.test.mjs test-e2e/pages-adventure.test.mjs
-      test-e2e/pages-adventure-edit.test.mjs test-e2e/pages-adventure-scenarios.test.mjs
-      test-e2e/pages-mudiii.test.mjs
-      test-e2e/pages-mudiii-river.test.mjs
-      test-e2e/pages-screenshot-sweep.test.mjs
-
 # The three files whose own assertions race a real elapsed-time budget
 # against a mocked round trip that runs through THIS Node process (a fetch's
 # own abort timeout in pages-chat-live-toggle, an auto-play ticker's pacing
@@ -892,12 +856,12 @@ e2e:deployed:pages-timing:
 # Everything else in the deployed matrix proves the row round trip, the turn
 # endpoint and the page's own markup, none of which presses it, so a worker
 # failing on every real invoke could sit behind an otherwise green pipeline.
-# Its own job, not folded into e2e:deployed:pages, because its wait budget
-# (a couple of minutes, for a real worker cycle against real external feeds)
-# is an order of magnitude past every other file in this matrix, and a slow
-# real-network file sharing a job with fast markup files would either starve
-# the fast files of their own concurrency slot or force the whole job's
-# budget up to match one file's own tail.
+# Its own job, because its wait budget (a couple of minutes, for a real
+# worker cycle against real external feeds) is an order of magnitude past
+# every other file in this matrix, and a slow real-network file sharing a job
+# with fast markup files would either starve the fast files of their own
+# concurrency slot or force the whole job's budget up to match one file's
+# own tail.
 e2e:deployed:news-live:
   extends: .e2e-deployed-base
   script:
