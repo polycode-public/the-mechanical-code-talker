@@ -9,7 +9,7 @@ import { buildNewsItems } from "../../src/domain/news-feed.mjs";
 const NOW = "2026-08-12T12:00:00.000Z";
 const HOUR = 60 * 60 * 1000;
 
-const HEADLINE_TERM = "tim king, amigados developer, has died";
+const HEADLINE_TERM = '"tim king, amigados developer, has died"';
 const HEADLINE_TEXT = "Tim King, AmigaDOS developer, has died";
 
 function row(id, subject, predicate, object, extra = {}) {
@@ -96,7 +96,7 @@ test("the paragraph still leads with the report and follows it with what the art
   const card = cardFor([...reportRows(), ...definitionRows()], { articleEntityNames: namesInHeadline });
   assert.equal(
     card.paragraph,
-    "hackernews discuss tim king, amigados developer, has died."
+    'hackernews discuss "tim king, amigados developer, has died".'
     + " amigados is part of amigaos. amigados is a kind of operating system."
     + " Around it: hackernews discuss a rust compiler rewrite.",
   );
