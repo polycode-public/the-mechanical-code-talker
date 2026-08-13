@@ -26,17 +26,7 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-The work list, ranked by value.
-
-1. [ ] **Remove the browser-to-browser sharing feature.** Every surface and
-   every document. Fact merging and the determinism machinery stay —
-   `fact-order.mjs`, `causal-stability.mjs` and `retraction.mjs` are not part of
-   this. The invariant CLAUDE.md anchors on `p2p-room.mjs`'s
-   `sortFactIndividualsById` needs a surviving example if that file goes.
-2. [ ] **`STRUCT_WORDS` still gates relation-verb minting.** Five sites in
-   `chat.mjs` read `call`, `use`, `test` and `contains` as structural, so
-   "I use a spoon to eat soup" cannot mint a `uses` relation. The intent
-   classifier that shared this list is gone; the verb filter is not.
+None open.
 
 ## Discipline
 
