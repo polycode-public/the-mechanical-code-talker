@@ -29,37 +29,17 @@ const REPO_ROOT = join(HERE, "..");
 const OUT_DEFAULT = join(REPO_ROOT, "corpus", "reference");
 
 // A loss is a term that HAD an isa before this recompute and has none after.
-// Every entry here was individually reviewed and is a deliberate, defensible
-// null, not a regression — an unreviewed new loss still stops the run. Two
-// families:
-//
-// - member/body composition: the of-chain lands on "member" or "body" (kept
-//   out of the read-through set on purpose — see reference-pack.mjs) either
-//   directly ("a body of water") or one hop further out ("a part of the
-//   body" reads through "part" and then stops on the still-excluded "body").
-//   An existing test already pins "a lake is a large body of water" to null.
-// - already-superseded generic class: the shipped isa came from either the
-//   pre-2026-07-23 of-chain algorithm (unconditional last-"of" jump, replaced
-//   for treating composition as classification) or from a raw-string/plural
-//   mismatch in the generic-head check this same change fixed — both bugs,
-//   already decided against, just never applied to the shipped pack until
-//   now. "gas is a form", "diet is a number", "tampon is a mass" are exactly
-//   the vacuous classifications ISA_GENERIC_HEADS exists to reject.
-//
-// One further term (envy) traces to neither family: the parenthetical strip
-// exposed a pre-existing gap in the window/clause heuristic (a reduced
-// relative clause with no relative pronoun picks the wrong final word) that
-// is unrelated to the of-chain read-through set this change owns.
+// Every entry here was individually reviewed against the row's own opening
+// sentence and is a false subClassOf the pack is better off without — an
+// unreviewed new loss still stops the run. All of them shared one cause: the
+// isa window ran past the head noun and through an "about"/"around" phrase
+// onto a noun that was never the class. "Diplomacy is about relations between
+// countries" is not a country; "The lips are a body part around the mouth" is
+// not a mouth. The head noun each window should have stopped on is either
+// outside the lexicon (miniseries, thinking) or a generic classifier the pack
+// declines to store (part, term), so the corrected read is no isa at all.
 const EXPECTED_RESIDUAL_LOSSES = new Set([
-  // member/body composition
-  "abdomen", "articulator", "bay", "brain", "dung", "ear", "head", "lake",
-  "neck", "pelvis", "sponge", "throat", "tiger", "torso", "truffle", "vagina",
-  // already-superseded generic class
-  "analogy", "bone", "clot", "craft", "custom", "decimal", "fabric", "fat",
-  "feather", "gas", "natural", "ounce", "plant", "symbolism", "system",
-  "tampon", "tool",
-  // window/clause heuristic gap, unrelated to the of-chain read-through set
-  "envy",
+  "diplomacy", "education", "liberal", "lip", "offer", "watershed",
 ]);
 
 function arg(name, fallback) {

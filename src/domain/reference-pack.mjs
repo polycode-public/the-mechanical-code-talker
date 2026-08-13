@@ -226,9 +226,14 @@ function withoutParentheticals(text) {
 
 // Words that end the noun phrase: a relative clause or a trailing modifier
 // carries detail, not the category ("a place where ships shelter" → place).
+// "about"/"around"/"roughly"/"approximately" open a comparison or a topic
+// that reads like more of the head phrase but is not ("a small marsupial
+// about the size of a large cat" is a marsupial, not a size; "a book about
+// dogs" is a book).
 const ISA_CLAUSE_CUT = new Set([
   "that", "which", "where", "who", "whose", "whom", "when", "used", "found",
   "made", "with", "in", "on", "for", "from", "by", "to", "and", "or",
+  "about", "around", "roughly", "approximately",
 ]);
 // Classifier heads carry no category of their own ("a member of the cat
 // family" names family membership, not what the thing is) — no isa beats a
