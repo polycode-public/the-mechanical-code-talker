@@ -33,26 +33,26 @@ The method is `PLAN_NEWS_FEED_QUALITY.md`: run
 (`node scripts/news-bench/capture-fixtures.mjs`, then
 `node scripts/news-bench/run-live-cycle.mjs`), show every card whole in the
 four-part form, fix the top item below, merge, repeat — never waiting on
-pipelines. Position: iterations 1–10 run. The russia card carries the
-neighbourhood fix live (anatomy gone, twelve geography rows in its place), and
-the extraction widenings that give it a second and third sentence are built and
-awaiting merge. Harness note: `run-live-cycle.mjs` starts fresh state each run,
+pipelines. Position: iterations 1–11 run, and the whole wave is merged and
+pushed. Iteration 11 measured the extraction widenings: 9 cards became 14,
+enrichment defined 6 terms where it defined 4, and 2 lookups missed where 4 did.
+The russia card carries the neighbourhood fix live (anatomy gone, twelve
+geography rows in its place) and states its act once, though the headline says
+"Freed" and the body "released". Next run should show the london card headed by
+the frenzy and no `year ⊑ eclipse` in the research rows.
+Harness note: `run-live-cycle.mjs` starts fresh state each run,
 so the negative cache resets and the same misses re-burn lookup slots per run;
 the deployed worker persists state and does not.
 
 The work list, ranked by value against the plan's target card.
 
-1. [~] **Extraction widenings, shape by shape** — CODE COMPLETE, merged as
-   `1ef4b7a5`, awaiting the full suite at the next push. Six shapes widened:
-   clause-shaped terms, Title Case headline reading, passives with and without a
-   named actor, comma crossing plus name trimming, reported speech, and the term
-   ledger. Iteration 11 measured the result: 9 cards became 14, enrichment
-   defined 6 terms where it defined 4, and only 2 lookups missed where 4 did.
-   Remainder, still open: an unwrapped claim is not attributed to its speaker on
-   the row. That needs a new name in the memory layer's closed findings
-   vocabulary (`src/adapters/memory/shacl.mjs`, `core.mjs`'s byte-pinned
-   vocabulary note, `docs/adapter-contract.md`). The speaker still reaches the
-   enrichment queue, and every row rides its article's provenance.
+1. [ ] **A report's claim is not attributed to its speaker** — the recognizer now
+   unwraps "President Trump said X" to the claim X, but the row states X flatly
+   with no record of who said it. Naming the speaker on the row needs a new name
+   in the memory layer's closed findings vocabulary
+   (`src/adapters/memory/shacl.mjs`, `core.mjs`'s byte-pinned vocabulary note,
+   `docs/adapter-contract.md`). The speaker still reaches the enrichment queue,
+   and every row rides its article's provenance.
 2. [ ] **An unplaced hub turns the sense scope off entirely** — when `topsOf(hub)`
    is empty the bands never place it, the hub-anchored scope switches off, and
    every neighbour is admitted as filler. Iteration 11 killed the `bright`
@@ -62,67 +62,55 @@ The work list, ranked by value against the plan's target card.
    cures one card; the class needs the scope to do something better than switch
    off. One measured non-answer already: anchoring on the hub's seeds plus the
    far side of its reported rows reshuffles noise rather than cutting it.
-3. [ ] **`buildMemoryIndex` rebuilt per write** — the remainder of the engine
-   speed work, which shipped the other two (removal patching 2231→409 ms, the
-   load-time migrations settled 21.8→0.0 ms, and the seed's ord map handed to
-   the projection rather than rebuilt, appendFact 341.7→288.8 ms). Two cheap
-   restructurings of the index build measured neutral and were reverted. Making
+3. [ ] **The lexicon arm's object scan doesn't read through a count of-chain** —
+   "The blast triggers hundreds of evacuations." mints
+   `blast | tmct:triggers | hundred`. The newswire frame reads through the count
+   (`skipCountPhrase`); Pass 2a/2b's `nearestEntity(i, +1)` does not. Fixing it
+   changes the object scan for every lexicon verb in every corpus lane, not just
+   news, which is why it is its own item rather than a remainder of the frame
+   work that found it.
+4. [ ] **`isaOf`'s window runs past the head noun** — `quokka ⊑ size`, from "a
+   small marsupial about the size of a large cat". `about`/`around`/`roughly`/
+   `approximately` belong in `ISA_CLAUSE_CUT`, which would also fix "a book
+   about dogs". Separate from the definition-body work that found it because
+   `isaOf` in `src/domain/reference-pack.mjs` also computes the shipped pack's
+   stored `isa` values: changing it means re-running
+   `scripts/recompute-reference-isa.mjs` over the pack, clearing its
+   reviewed-losses gate, and re-measuring the chat reference lane.
+5. [ ] **`buildMemoryIndex` rebuilt per write** — worth ~74 ms of a ~280 ms
+   write. Two cheap restructurings measured neutral and were reverted. Making
    the index survive across writes needs a handle-level index beside
    `handle.cachedPayload` with a copy-on-write overlay per mutate — the copy
    gives every individual a new object identity, so `individualsById` can't be
    reused as-is, and `factRecordsByGroup`'s values are arrays that call sites
    mutate in place, so the overlay must copy on read. ~15 call sites plus
-   `patchAssembledPayload`. Worth ~74 ms of a ~280 ms write.
-4. [ ] **Enrichment mints junk off a definition body** — in flight on
-   `worktree-agent-acb29adac571da0a8`. Iteration 11 wrote
-   `year | rdfs:subClassOf | eclipse` from simple-wikipedia's solar_eclipse
-   body, and it reached a live card's background. Same family as the wikidata
-   rows already fixed, through a different source path.
-5. [~] **Phrasal verbs split, and one event states itself twice** — CODE
-   COMPLETE on `worktree-agent-a98d6491e094d48a8`, awaiting the full suite at
-   the next push. `worktree-agent-a8807a5a6b26758d7` was never merged and can
-   be deleted: its work is ported, not taken.
-6. [~] **Thin cards crowd the feed** — CODE COMPLETE, merged as `2685a438`,
-   awaiting the full suite at the next push. The source was the wrong key: the
-   tim-king card comes off the same bodyless source and is the plan's first
-   target-shaped card, so a rule keyed on Hacker News would have thrown it away.
-   A card is now ranked by what it carries — its own claims, the headline
-   mentions that only restate its ORIGINAL TEXT block, and its background rows —
-   and the scores print admission per source, which is plan §4.2's line. Nothing
-   is dropped: a thin card still builds, still cites its source, still prints,
-   and carries its counts.
-7. [~] **Fact-listing line order tracks arrival order** — CODE COMPLETE, merged
-   as `4d5505d6`, full suite already green on the branch (8262 pass, 0 fail).
-   `factOrderKey` in `src/domain/memory/fact-order.mjs` breaks ties on content
-   for `rankByBiasThenTrust`, chat's `byTrust`, the four readers that render
-   rows without ranking, `capability.mjs` and `digest/select.mjs`. Two
-   remainders:
-   - `news-feed.mjs`'s `tierOf` and `/memory`'s listing are still
-     arrival-dependent. Reaching them means sorting `foldFactRows`' output at
-     the root, which is the wider fix.
-   - `"what do you know about cache"` ends rather than opens on "cache is a kind
-     of store". Nothing pins it, so it is a voice decision, not a defect.
-8. [ ] **The world editor supersedes a placement by arriving last** —
+   `patchAssembledPayload`.
+6. [ ] **The world editor supersedes a placement by arriving last** —
    `foldWorldState` ranks placements by `(epoch, turn)` with `turn >= prior.turn`,
    so at equal turn the row later in the array wins, and `adventure-editor.mjs`
    supersedes by appending an untimed duplicate that only wins by arrival order.
    `crdt.md` already documents the fold as arbitrary at ties, and a p2p store
    gets content-address order from `sortFactIndividualsById` today, so this is
-   already broken there. Found when a root-level content sort made the edit
-   silently vanish (`adventure-editor.test.mjs:180`). The fix is to stamp an
-   editor edit `snapshotSubject(subject, turn + 1, epoch)` so it outranks rather
-   than relying on arrival. Doing this unblocks the root sort above: of the 13
-   pins that moved under it, this was the only real break, 4 are already fixed
-   and 8 were benign reorderings.
+   already broken there. The fix is to stamp an editor edit
+   `snapshotSubject(subject, turn + 1, epoch)` so it outranks rather than relying
+   on arrival. Do this one before item 7 — it is what item 7 breaks.
+7. [ ] **The readers the content tiebreak couldn't reach** — `news-feed.mjs`'s
+   `tierOf` and `/memory`'s listing still order by arrival. Reaching them means
+   sorting `foldFactRows`' output at the root so `readFactRows` hands out content
+   order and every downstream reader inherits it. Measured: 13 pins move, 4 are
+   already fixed, 8 are benign reorderings, and 1 is item 6's editor break.
 8. [ ] **Wikidata** — the pinned dated dump
    (`wikidata-20260810-all.json.gz`, 155,457,882,747 bytes) is downloading in
    the operator's terminal via `bash scripts/resume-wikidata-dump.sh`, which
    resumes from wherever a break left it — re-run it after any interruption.
    At 2026-08-13 00:33 BST it stood at 82.7 GB, 53%, holding ~4.1 MB/s with
-   roughly 4.5 hours left. When the loop's evidence says live lookups are too
-   thin (plan §5.5), build the bulk band with row count and DynamoDB write cost
-   printed before any load. Until then: nothing. The 12-QID slice band is a
-   pipeline proof only.
+   roughly 4.5 hours left. Plan §5.5 gates the bulk band on live lookups proving
+   too thin or slow per term, and iterations 8–11 point the other way: iteration
+   11 resolved 6 of 8 lookups live, and the misses have been phrases and people
+   ("yemeni government says", "canadian companies", "genevieve glatsky") that a
+   dump would not define either. So the case to make is coverage breadth, not
+   rescuing these misses. Row count and DynamoDB write cost print before any
+   load. The 12-QID slice band is a pipeline proof only.
 
 ## Discipline
 
