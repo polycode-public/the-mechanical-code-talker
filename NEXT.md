@@ -56,40 +56,15 @@ The work list, ranked by value against the plan's target card.
    and a trust penalty is banned outright by the findings vocabulary's own
    constitution. **The invariant: a surface that cannot render the attribution
    must not render the claim.**
-   - Merged: the `normFactTerm` carve-out (a `fact:` id survives the CURIE strip,
-     without which the reference is unrecoverable), the phrase layer, the chat
-     caveat, and the finding at all five vocabulary sites with an estate guard
-     parsing each one live.
-   - CODE COMPLETE and DELIBERATELY UNMERGED on
-     `worktree-agent-ad6f9b1744d17d6b2`: the write path and
-     `resolution.mjs`'s `MERGE_PREDICATE_STEMS` entry (without which two outlets
-     attributing one claim to two speakers read as a contradiction). Merging it
-     alone breaks the invariant — the russia card renders the claim with no
-     speaker, and where the seed graph does not out-rank it,
-     `looksLikeEntityTerm` accepts `fact:285cf16183…` as a one-word term and
-     heads a card with the hex id.
-   - In flight on `worktree-agent-abdd759e4cdcb7f98`: the card read side, which
-     unblocks that merge. Suppress attribution rows from every card lane at the
-     top of `buildNewsItems`, and read the speaker off the entry's WHOLE `rows`
-     array — on the russia card the kept sentence is the headline row while the
-     folded row carries the speaker.
-   - Still open: the full chat route, where `foldFactRows` attaches an
-     `attributedTo` field so every reader inherits it, rather than chat showing
-     only the caveat. And retraction does not cascade — `removeFacts` scrubs
-     `objectProperties` edges, while an attribution holds the claim id in an
-     attribute value, so retracting a claim leaves its attribution behind.
-2. [ ] **The news fact cap evicts by content hash, not by age** —
-   `evictNewsFacts` reads `r.observedAt` off the row, but `readFactRows` keeps
-   `observedAt` on the assertion records; `rowObservedMs` exists for exactly
-   that and eviction does not call it, though three other readers in the same
-   file do. Every news row therefore scores 0 and the sort collapses to id
-   order, so the cap drops whichever facts happen to hash low rather than the
-   oldest. `test/domain/news-feed.test.mjs`'s eviction test passes only
-   because its fixture sets a top-level `observedAt` that no real row
-   carries — so the test needs fixing alongside the code, or it will keep
-   passing over the bug. Found while measuring the attribution write's
-   eviction hazard; separate from it, and live today.
-3. [ ] **`localeCompare` over fact rows, in ten places** — a locale-divergence
+   - Still open, in flight on `worktree-agent-a68f3be2d47c247b0`: the full chat
+     route, where `foldFactRows` attaches an `attributedTo` field so every reader
+     inherits it rather than chat showing only the caveat; and the retraction
+     cascade — `removeFacts` scrubs `objectProperties` edges, while an
+     attribution holds the claim id in an attribute value, so retracting a claim
+     leaves its attribution behind.
+2. [ ] **`localeCompare` over fact rows** — in flight on
+   `worktree-agent-af3258a7474da26d1` (digest and ledger-viz) and
+   `worktree-agent-a68f3be2d47c247b0` (core.mjs's two). A locale-divergence
    class rather than an arrival-order one: two readers on machines with
    different locales sort the same rows differently, which breaks the same
    pure-function-of-the-fact-set invariant by another route. `fact-order.mjs`
