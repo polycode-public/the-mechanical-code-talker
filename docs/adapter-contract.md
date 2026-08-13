@@ -422,7 +422,7 @@ Other pages (chat.html, ledger.html) run their engines in-page and do not call t
 
 ## Corpus bands and the loader
 
-Corpus data lives in the same table under reserved partitions (pk `corpus:<band>`). One band ships with tmct: `corpus:wordnet-complete`, Open English WordNet under CC-BY-4.0, with its attribution in the band manifest.
+Corpus data lives in the same table under reserved partitions (pk `corpus:<band>`). Three bands ship with tmct, each with its attribution in the band manifest: `corpus:wordnet-complete` (Open English WordNet, CC-BY-4.0), `corpus:conceptnet` (the ConceptNet slice, CC-BY-SA-4.0) and `corpus:child` (the child vocabulary pack, ConceptNet-derived, CC-BY-SA-4.0).
 
 A consumer builds and loads their own bands under any other name. The loader takes the band name it is given, and a band outside tmct's own licence table loads with a null licence rather than a guessed one.
 

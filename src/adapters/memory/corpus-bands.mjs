@@ -29,6 +29,8 @@ export const MANIFEST_SORT_KEY = "manifest";
 
 /** The bands this repo ships a build pipeline and a loader for. */
 export const FIRST_CLASS_BANDS = Object.freeze([
+  "child",
+  "conceptnet",
   "wordnet-complete",
 ]);
 
@@ -38,6 +40,10 @@ export const FIRST_CLASS_BANDS = Object.freeze([
  *  `notice` is a repo-relative path to the human-readable attribution file;
  *  null when the licence carries no attribution burden. */
 export const BAND_LICENSES = Object.freeze({
+  // The child pack is ConceptNet-derived, so it carries ConceptNet's own
+  // share-alike terms rather than the maintainer-owned seed script's.
+  child: Object.freeze({ license: "CC-BY-SA-4.0", notice: "corpus/child/LICENSE-NOTICE" }),
+  conceptnet: Object.freeze({ license: "CC-BY-SA-4.0", notice: "corpus/conceptnet/LICENSE-NOTICE" }),
   "wordnet-complete": Object.freeze({ license: "CC-BY-4.0", notice: "corpus/wordnet/LICENSE-NOTICE" }),
 });
 

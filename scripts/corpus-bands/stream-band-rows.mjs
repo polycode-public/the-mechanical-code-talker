@@ -20,7 +20,17 @@ export async function writeRowsStreaming(outPath, rows) {
   const hash = createHash("sha256");
   let bytes = 0;
   let failure = null;
-  stream.on("error", (err) => { failure = failure || err; });
+  // Every wait below races this. A stream that errors (an unwritable path, a
+  // full disk) emits neither the `drain` nor the `finish` the waits are
+  // otherwise sitting on, so without the race the pipeline hangs silently
+  // instead of reporting what went wrong.
+  let rejectOnFailure = () => {};
+  const failed = new Promise((_resolve, reject) => { rejectOnFailure = reject; });
+  failed.catch(() => {});
+  stream.on("error", (err) => {
+    failure = failure || err;
+    rejectOnFailure(failure);
+  });
 
   const write = async (chunk) => {
     hash.update(chunk);
@@ -28,8 +38,7 @@ export async function writeRowsStreaming(outPath, rows) {
     const flushed = stream.write(chunk);
     if (failure) throw failure;
     if (!flushed) {
-      await new Promise((resolve) => stream.once("drain", resolve));
-      if (failure) throw failure;
+      await Promise.race([new Promise((resolve) => stream.once("drain", resolve)), failed]);
     }
   };
 
@@ -39,10 +48,7 @@ export async function writeRowsStreaming(outPath, rows) {
     for (const row of rows) await write(`${JSON.stringify(row)}\n`);
   }
 
-  await new Promise((resolve, reject) => {
-    if (failure) { reject(failure); return; }
-    stream.end(() => resolve());
-  });
+  await Promise.race([new Promise((resolve) => { stream.end(() => resolve()); }), failed]);
   if (failure) throw failure;
 
   return { bytes, digest: hash.digest("hex") };

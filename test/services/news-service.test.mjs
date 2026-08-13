@@ -352,9 +352,8 @@ test("a term every KB source misses still grounds when the wordnet-complete band
     subject: "harbor", predicate: "rdfs:subClassOf", object: "inlet", provenance, band: "wordnet-complete",
   });
   ctx.providers.queryBandTerm = async ({ band, term }) => {
-    assert.equal(band, "wordnet-complete");
     assert.equal(term, "harbor");
-    return { rows: [row], lastEvaluatedKey: null };
+    return { rows: band === "wordnet-complete" ? [row] : [], lastEvaluatedKey: null };
   };
 
   const result = await enrichTopTerms(ctx);
@@ -368,6 +367,116 @@ test("a term every KB source misses still grounds when the wordnet-complete band
 
   const afterLedger = ledgerFromPayload(ctx.state.ledger);
   assert.equal(afterLedger.terms.get("harbor").status, "grounded");
+});
+
+// ---- the corpus-band fan-out -------------------------------------------------
+
+/** A ctx whose KB sources all miss, so every enrich falls through to the
+ *  bands, with `term` the only candidate. */
+async function makeBandFallbackCtx(term) {
+  const config = clampNewsConfig({ enrichTermsPerCycle: 1, kbSources: ["simple-wikipedia"], negativeCacheTtlHours: 24 });
+  const made = await makeCtx({ config });
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map([[term, 3]]), "item1", FIXED_NOW, new Map());
+  made.ctx.state.ledger = ledgerPayload(ledger);
+  made.ctx.providers.getResearchProvider = () => ({
+    name: "simple-wikipedia",
+    origin: "https://example.org",
+    provenanceTag: (t) => `research:simple-wikipedia:${t}`,
+    async lookup() { return null; },
+  });
+  return made;
+}
+
+const bandRowFor = (band, subject, predicate, object) => bandFactRow({
+  subject, predicate, object, provenance: `corpus:${band} ${subject} ${predicate} ${object}`, band,
+});
+
+test("every band is read at once, not one after another, and all three bands' facts reach the graph", async () => {
+  const { ctx } = await makeBandFallbackCtx("penguin");
+  const rowsByBand = new Map([
+    ["child", bandRowFor("child", "penguin", "rdfs:subClassOf", "bird")],
+    ["conceptnet", bandRowFor("conceptnet", "penguin", "mgx:capableOf", "swim")],
+    ["wordnet-complete", bandRowFor("wordnet-complete", "penguin", "rdfs:subClassOf", "seabird")],
+  ]);
+
+  // Each Query waits for every band to have been asked. A sequential fan-out
+  // never gets past the first one, so this test would time out rather than
+  // pass with a weaker assertion.
+  const asked = [];
+  let allAsked;
+  const everyBandAsked = new Promise((resolve) => { allAsked = resolve; });
+  ctx.providers.queryBandTerm = async ({ band, term }) => {
+    assert.equal(term, "penguin");
+    asked.push(band);
+    if (asked.length === rowsByBand.size) allAsked();
+    await everyBandAsked;
+    return { rows: [rowsByBand.get(band)], lastEvaluatedKey: null };
+  };
+
+  const result = await enrichTopTerms(ctx);
+  assert.deepEqual(asked.slice().sort(), ["child", "conceptnet", "wordnet-complete"]);
+  assert.deepEqual(result.enriched, ["penguin"]);
+
+  const stored = readFactRows(await loadMemory(ctx.memoryDir)).filter((r) => r.subject === "penguin");
+  for (const [band, row] of rowsByBand) {
+    const object = JSON.parse(row.json).individual.attributes.find((a) => a.key === "object").value;
+    const match = stored.find((r) => r.object === object);
+    assert.ok(match, `${band}'s fact reaches the graph`);
+    assert.match(match.provenance, new RegExp(`^corpus:${band} `), "each fact keeps its own band's provenance");
+  }
+});
+
+test("a band with nothing for the term costs the bands that do have it nothing", async () => {
+  const { ctx } = await makeBandFallbackCtx("harbor");
+  const row = bandRowFor("wordnet-complete", "harbor", "rdfs:subClassOf", "inlet");
+  ctx.providers.queryBandTerm = async ({ band }) => (
+    band === "wordnet-complete" ? { rows: [row], lastEvaluatedKey: null } : { rows: [], lastEvaluatedKey: null }
+  );
+
+  const result = await enrichTopTerms(ctx);
+  assert.deepEqual(result.enriched, ["harbor"]);
+  const stored = readFactRows(await loadMemory(ctx.memoryDir));
+  assert.ok(stored.some((r) => r.subject === "harbor" && r.object === "inlet"));
+});
+
+test("a band whose Query throws loses only its own rows", async () => {
+  const { ctx } = await makeBandFallbackCtx("harbor");
+  const row = bandRowFor("conceptnet", "harbor", "rdfs:subClassOf", "inlet");
+  ctx.providers.queryBandTerm = async ({ band }) => {
+    if (band === "child") throw new Error("simulated DynamoDB failure");
+    return { rows: band === "conceptnet" ? [row] : [], lastEvaluatedKey: null };
+  };
+
+  const result = await enrichTopTerms(ctx);
+  assert.deepEqual(result.enriched, ["harbor"], "the surviving band still grounds the term");
+  const stored = readFactRows(await loadMemory(ctx.memoryDir));
+  assert.ok(stored.some((r) => r.subject === "harbor" && r.object === "inlet"));
+});
+
+test("a band that never answers loses only its own rows", async () => {
+  const { ctx } = await makeBandFallbackCtx("harbor");
+  const row = bandRowFor("wordnet-complete", "harbor", "rdfs:subClassOf", "inlet");
+  ctx.providers.queryBandTerm = async ({ band }) => {
+    if (band === "child") return new Promise(() => {});
+    return { rows: band === "wordnet-complete" ? [row] : [], lastEvaluatedKey: null };
+  };
+
+  const result = await enrichTopTerms(ctx);
+  assert.deepEqual(result.enriched, ["harbor"]);
+  const stored = readFactRows(await loadMemory(ctx.memoryDir));
+  assert.ok(stored.some((r) => r.subject === "harbor" && r.object === "inlet"));
+});
+
+test("a fan-out where no band answers in time is a miss, never a guess", async () => {
+  const { ctx } = await makeBandFallbackCtx("harbor");
+  ctx.providers.queryBandTerm = async () => new Promise(() => {});
+
+  const result = await enrichTopTerms(ctx);
+  assert.deepEqual(result.enriched, []);
+  assert.deepEqual(result.missed, ["harbor"]);
+  assert.equal(readFactRows(await loadMemory(ctx.memoryDir)).some((r) => r.subject === "harbor"), false);
+  assert.equal(ledgerFromPayload(ctx.state.ledger).terms.get("harbor").status, "missed");
 });
 
 test("a term neither a KB source nor the band carries enters the negative cache, and a band Query that throws never stops the cycle", async () => {
@@ -392,7 +501,7 @@ test("a term neither a KB source nor the band carries enters the negative cache,
   };
 
   const result = await enrichTopTerms(ctx);
-  assert.deepEqual(asked.sort(), ["loud", "quiet"]);
+  assert.deepEqual([...new Set(asked)].sort(), ["loud", "quiet"]);
   assert.deepEqual(result.enriched, []);
   assert.deepEqual(result.missed.sort(), ["loud", "quiet"]);
 

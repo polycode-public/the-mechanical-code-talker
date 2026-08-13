@@ -28,19 +28,14 @@
 // loader at that same file, so this pipeline emits no NOTICE of its own.
 
 import { loadSlice, loadMap, toFacts, WORDNET_DIR } from "../../src/adapters/corpus/conceptnet.mjs";
-import { bandFactRow, bandLicenseInfo } from "../../src/adapters/memory/corpus-bands.mjs";
+import { bandLicenseInfo } from "../../src/adapters/memory/corpus-bands.mjs";
+import { bandRowsFromFacts } from "./band-rows-from-facts.mjs";
 import { writeRowsStreaming } from "./stream-band-rows.mjs";
 import { join } from "node:path";
 
 export const WORDNET_COMPLETE_BAND = "wordnet-complete";
 export const DEFAULT_SOURCE = join(WORDNET_DIR, "wordnet-full.jsonl");
 export const DEFAULT_OUT = "wordnet-complete.band.jsonl";
-
-const byPredicateThenTriple = (a, b) => (
-  a.predicate !== b.predicate ? (a.predicate < b.predicate ? -1 : 1)
-    : a.subject !== b.subject ? (a.subject < b.subject ? -1 : 1)
-      : a.object < b.object ? -1 : a.object > b.object ? 1 : 0
-);
 
 /** The band's wire rows, built from a ConceptNet-shape assertions dump at
  *  `sourcePath` (default: the committed wordnet-full.jsonl). Sorted by
@@ -50,9 +45,7 @@ const byPredicateThenTriple = (a, b) => (
  *  needs no relation this repo's own conceptnet-map.toml lacks. */
 export async function buildWordnetCompleteRows(sourcePath = DEFAULT_SOURCE, { mapPath } = {}) {
   const [assertions, map] = await Promise.all([loadSlice(sourcePath), loadMap(mapPath)]);
-  const facts = toFacts(assertions, map, `corpus:${WORDNET_COMPLETE_BAND}`);
-  const sorted = facts.slice().sort(byPredicateThenTriple);
-  return sorted.map((fact, ord) => bandFactRow({ ...fact, band: WORDNET_COMPLETE_BAND, ord }));
+  return bandRowsFromFacts(toFacts(assertions, map, `corpus:${WORDNET_COMPLETE_BAND}`), WORDNET_COMPLETE_BAND);
 }
 
 function flagValue(argv, name) {

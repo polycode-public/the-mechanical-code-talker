@@ -1,0 +1,5 @@
+{"start":"/c/en/penguin","rel":"/r/IsA","end":"/c/en/bird","weight":1,"surfaceText":"[[penguin]] IsA [[bird]]"}
+{"start":"/c/en/bird","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[bird]] IsA [[animal]]"}
+{"start":"/c/en/bird","rel":"/r/CapableOf","end":"/c/en/fly","weight":1,"surfaceText":"[[bird]] CapableOf [[fly]]"}
+{"start":"/c/en/feather","rel":"/r/PartOf","end":"/c/en/bird","weight":1,"surfaceText":"[[feather]] PartOf [[bird]]"}
+{"start":"/c/en/penguin","rel":"/r/RelatedTo","end":"/c/en/antarctica","weight":1,"surfaceText":"[[penguin]] RelatedTo [[antarctica]]"}
