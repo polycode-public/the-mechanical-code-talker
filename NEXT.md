@@ -32,13 +32,32 @@ News-card work runs through the `news-feed-quality` skill
 
 The work list, ranked by value.
 
-1. [ ] **Reshape the seed's band set** — add `child`, `namenet`, `prose` and
-   `domains/code` to what seeds the store; delete and purge `aws`, `python` and
-   `java` from the repo entirely. The band set is read from `package.json`'s own
-   `init:xl`, so the browser seed and the CLI cannot drift on it. The seed is a
-   generated artifact many things pin — README transcripts and the demo pages
-   answer out of it — so expect moved pins, and a demo that can no longer answer
-   its own question is a real loss to report, not a pin to rewrite.
+1. [ ] **Reshape the seed's band set.** `child`, `namenet` and `domains/code`
+   seed, and `aws`/`python`/`java` are purged. Two parts are still open.
+
+   `prose` is not a band. `corpus/prose/` is 80 `.txt` files with a sha256
+   manifest, and nothing in the repo turns that prose into `{start, rel, end}`
+   rows — `corpus/generated/ace-surface-variants.jsonl` is a sentence-rewrite
+   log, not triples, and its own README puts it outside the product path.
+   Making `prose` a band needs an extraction step that does not exist yet.
+   `scripts/template-coverage.mjs` already measures how much of that prose the
+   ACE grammar parses, so its coverage number is where to start sizing the work.
+
+   The browser seed carries 2,000 of the child band's 58,552 new facts. The
+   uncapped set is 174.2 MB against a 100 MiB `SEED_BYTE_CEILING`, so
+   `SEED_BAND_CAPS` caps `child` and the shipped asset lands 1.5 MB under the
+   ceiling. Two levers, both changing what the deployed demo can answer: hand
+   `conceptnet`'s cap (28,000 today, 36.4 MB) to `child`, or raise the ceiling,
+   which needs `test-e2e/pages-chat-boot-budget.test.mjs` re-measured in a real
+   browser first.
+2. [ ] **`appendFacts` costs more the fuller the store gets.** `tmct import
+   --corpus child` on the sqlite backend takes about 9 minutes wall for 68,955
+   facts, with the WAL peaking near 240 MB. The in-memory path is unaffected —
+   the same 127,404-fact `init:xl` set seeds in about 13s in-process. This is
+   why `npm run init:xl` and `npm run check:readme`'s heavy block are now
+   ten-minute commands. Promoted out of item 1 rather than held as its
+   remainder: the cost is in the engine's own append path, not in the band set
+   that exposed it.
 
 ## Discipline
 
