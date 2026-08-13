@@ -6,6 +6,7 @@
 `src/services/p2p-room.mjs`, `src/domain/p2p/facts.mjs`,
 `src/domain/p2p/provenance-relabel.mjs`, `src/services/adventure.mjs` (`foldWorldState`,
 `rulingTestimonyClaim`), `src/services/adventure-editor.mjs` (`planWorldEditorSync`),
+`src/services/mud-editor.mjs` (`planMudEditorSync`),
 `src/services/mudiii-turn.mjs` and `src/services/predator-prey.mjs` (`foldTownSquareState`),
 `PLAN_MUD_WEBRTC.md`. Those are the replication layer. The read layer is wider — `inspect.mjs`
 (`/memory`), `news-feed.mjs`, `digest/select.mjs`, `completions/infer.mjs`,
@@ -199,11 +200,12 @@ over four fields, so its fold is order-independent by construction.
 **The writers keep off the tie.** The sort makes a tie land the same way everywhere; a writer that
 never ties needs no sort at all. Every write to a fold-versioned family stamps its own
 `(epoch, turn)` at one past the world's current turn count, so it outranks what it supersedes by
-rank. A played turn always did this. The world editor now does too: `planWorldEditorSync` returns
-its placement and openness rows already stamped `subject@turnN`, where it used to hand back a bare
-triple. A bare triple folds as turn 0 of the current epoch, which ties with the base row it was
-meant to replace and beats it only by sitting later in the array — so an edit to a world nobody
-had played yet was exactly that tie, and reversing the row order made the edit disappear. The
+rank. A played turn always did this. The world editor now does too: `planWorldEditorSync` and its
+burrow counterpart `planMudEditorSync` return their placement, openness and (for the burrow) mass
+rows already stamped `subject@turnN`, where they used to hand back a bare triple. A bare triple
+folds as turn 0 of the current epoch, which ties with the base row it was meant to replace and
+beats it only by sitting later in the array — so an edit to a world nobody had played yet was
+exactly that tie, and reversing the row order made the edit disappear. The
 "other" family (types, exits, the container and puzzle facts) keeps its bare subject, because every
 reader takes those raw and none of them ranks. `mgx:placed-by` is the same lesson in the town
 square: `placeFood` writes the first placer bare when it mints an item, so `mudiii-turn.mjs` stamps

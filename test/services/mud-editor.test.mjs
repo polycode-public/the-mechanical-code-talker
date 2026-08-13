@@ -10,6 +10,9 @@ import assert from "node:assert/strict";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
 import { foldWorldState, worldActionRows } from "../../src/services/adventure.mjs";
 import {
+  createInMemoryStore, appendFacts, loadMemory, readFactRows,
+} from "../../src/adapters/memory/core.mjs";
+import {
   renderMudEditorText, parseMudEditorLine, parseMudEditorText, planMudEditorSync,
   planTaughtMudTriple, editableMudOtherRows, wordBeforeCursor,
 } from "../../src/services/mud-editor.mjs";
@@ -95,6 +98,12 @@ test("placement, openness and mass are appended rather than retracted, and only 
   ).triples);
   assert.equal(moved.toAppend.length, 3, "each of the three changed, so each is written");
   assert.deepEqual(moved.toRemoveIds, [], "still nothing retracted — the fold reads the newest write");
+  assert.equal(moved.editTurn, state.turnCount + 1);
+  assert.deepEqual(
+    moved.toAppend.map((t) => t.subject).sort(),
+    ["basket@turn1", "mole-1@turn1", "mole-1@turn1"].sort(),
+    "each fold-versioned row carries its own turn stamp, not a bare subject",
+  );
 });
 
 test("one subject's placement, openness and mass are tracked apart, not collapsed into one", () => {
@@ -104,6 +113,74 @@ test("one subject's placement, openness and mass are tracked apart, not collapse
     "Basket is fixed in the sett-1.\nBasket is closed.\nBasket weighs 5.\n",
   ).triples);
   assert.equal(toAppend.length, 3, "all three land — no family silences another for the same subject");
+  assert.ok(toAppend.every((t) => t.subject === "basket@turn1"), "all three stamp the same base subject at the same edit turn");
+});
+
+test("the superseding placement is stamped one turn past the world's own count, so it outranks by rank and not by arriving last", () => {
+  const rows = [
+    { id: "a", subject: "mole-1", predicate: "mgx:currently-in", object: "garden" },
+    { id: "b", subject: "mole-1@turn4", predicate: "mgx:currently-in", object: "sett-1" },
+  ];
+  const state = foldWorldState(rows);
+  assert.equal(state.turnCount, 4);
+  const { toAppend, editTurn } = planMudEditorSync(rows, state, parseMudEditorText("Mole-1 stands in the garden.\n").triples);
+  assert.equal(editTurn, 5);
+  assert.deepEqual(toAppend.map((t) => t.subject), ["mole-1@turn5"]);
+});
+
+test("a world on a later epoch stamps its edit into that epoch, so the recast still outranks the run it replaced", () => {
+  const rows = [
+    { id: "a", subject: "mole-1", predicate: "mgx:currently-in", object: "garden" },
+    { id: "b", subject: "world", predicate: "mgx:world-epoch", object: "2" },
+  ];
+  const state = foldWorldState(rows);
+  assert.equal(state.epoch, 2);
+  const { toAppend } = planMudEditorSync(rows, state, parseMudEditorText("Mole-1 stands in the sett-1.\n").triples);
+  assert.deepEqual(toAppend.map((t) => t.subject), ["mole-1@epoch2@turn1"]);
+});
+
+test("the world an edited store folds to is the same one whichever order its rows arrive in — forward, reversed, and in content-address order", async () => {
+  const dir = createInMemoryStore();
+  clearWorldsPackCache();
+  const world = await getWorldsPackProvider({}).load("mud-garden");
+  await appendFacts(dir, world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:mud-garden" })));
+  const rows = readFactRows(await loadMemory(dir));
+  const state = foldWorldState(rows);
+  const text = renderMudEditorText(rows, state);
+  const edited = text
+    .replace("Mole-1 stands in the garden.", "Mole-1 stands in the sett-1.")
+    .replace("Mole-1 weighs 8.", "Mole-1 weighs 5.")
+    .replace("Basket is open.", "Basket is closed.");
+  const { toAppend, editTurn } = planMudEditorSync(rows, state, parseMudEditorText(edited).triples);
+  await appendFacts(dir, toAppend.map((f) => ({
+    subject: f.subject, predicate: f.predicate, object: f.object,
+    provenance: f.kind === "other" ? "world:mud-garden" : `world:mud-garden:turn${editTurn}`,
+  })));
+
+  const freshRows = readFactRows(await loadMemory(dir));
+  const byContentAddress = [...freshRows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const orderings = [
+    ["forward", freshRows],
+    ["reversed", [...freshRows].reverse()],
+    ["content-address order", byContentAddress],
+  ];
+  const readable = (world) => JSON.stringify({
+    placements: [...world.placements].map(([s, p]) => [s, p.predicate, p.object]).sort(),
+    positions: [...world.positions].map(([s, p]) => [s, p.predicate, p.object]).sort(),
+    openness: [...world.openness].map(([s, o]) => [s, o.open]).sort(),
+    masses: [...world.masses].map(([s, m]) => [s, m.value]).sort(),
+    turnCount: world.turnCount,
+    epoch: world.epoch,
+  });
+  const [, forwardRows] = orderings[0];
+  const expected = readable(foldWorldState(forwardRows));
+  for (const [name, order] of orderings) {
+    const folded = foldWorldState(order);
+    assert.equal(folded.placements.get("mole-1").object, "sett-1", `the placement edit still rules in ${name}`);
+    assert.equal(folded.masses.get("mole-1").value, 5, `and so does the mass edit in ${name}`);
+    assert.equal(folded.openness.get("basket").open, false, `and so does the openness edit in ${name}`);
+    assert.equal(readable(folded), expected, `the whole folded world is identical in ${name}`);
+  }
 });
 
 test("changing a raw fact retracts the row it replaced, since the engine reads those unfolded", () => {
