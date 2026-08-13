@@ -811,11 +811,6 @@ site:ready:
 
 # The site shell, also run pre-deploy as e2e-web-index. Eight single-context
 # pages — the lightest slice, so it keeps node's default concurrency.
-# pages-service-worker.test.mjs moved to pages-timing (below): it precaches
-# the ~93MB chat-seed.json as part of its normal flow, which broke the
-# "everything here is light" assumption this job's concurrency relies on —
-# reproduced clean standalone and against the live site directly, but failed
-# repeatedly here running concurrently with 8 other live Chromium instances.
 e2e:deployed:shell:
   extends: .e2e-deployed-base
   script:
@@ -826,29 +821,6 @@ e2e:deployed:shell:
       test-e2e/pages-examples.test.mjs
       test-e2e/memory-ask-browser-bundle.test.mjs test-e2e/readme-examples.test.mjs
       test-e2e/cli-render-views.test.mjs
-
-# The three files whose own assertions race a real elapsed-time budget
-# against a mocked round trip that runs through THIS Node process (a fetch's
-# own abort timeout in pages-chat-live-toggle, an auto-play ticker's pacing
-# in pages-chat-research, a debounced autosave window in
-# pages-chat-persistence's reset-to-seed test) — each one documents the race
-# in its own comments already. Reproduced locally: doubling this repo's own
-# --test-concurrency=4 30-file run (two copies at once, to load the box the
-# way a 2-vCPU runner is loaded by 4 real concurrent Chromium instances)
-# reliably reproduced the exact pipeline-2717201943 failures in these three
-# files and only these three, never in pages-research.test.mjs (since
-# removed). Alone, at
-# concurrency 1, none of the three have anything left to contend with.
-e2e:deployed:pages-timing:
-  extends: .e2e-deployed-base
-  script:
-    - >-
-      node --disable-warning=ExperimentalWarning --test --test-concurrency=1
-      test-e2e/pages-chat-persistence.test.mjs
-      test-e2e/pages-chat-research.test.mjs
-      test-e2e/pages-chat-live-toggle.test.mjs
-      test-e2e/pages-chat-export.test.mjs
-      test-e2e/pages-service-worker.test.mjs
 
 # The hero clip: about 75 seconds of the live mudiii square playing itself,
 # recorded off the deployed site and uploaded as a build artifact for a human
