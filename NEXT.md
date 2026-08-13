@@ -46,8 +46,9 @@ the deployed worker persists state and does not.
 The work list, ranked by value against the plan's target card.
 
 1. [ ] **A report's claim is not attributed to its speaker** — spec settled in
-   `PLAN_ATTRIBUTION.md`, nine commits, the first in flight on
-   `worktree-agent-aaf657f8c9ee51365`. The two findings that shaped it:
+   `PLAN_ATTRIBUTION.md`, nine commits. Commit 1 (the `normFactTerm` carve-out)
+   is merged; commits 2 and 5 (the phrase layer and the chat caveat) are in
+   flight. The two findings that shaped it:
    reification over a Fact is unprecedented in this store, and `normFactTerm`
    strips the `fact:` prefix so the reference is unrecoverable at read time
    until a carve-out lands. An attributed claim stays grounded and every
