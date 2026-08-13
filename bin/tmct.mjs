@@ -1440,7 +1440,7 @@ async function main() {
     const rest = process.argv.slice(3);
     const { resolveRuntimeConfig, strFlag } = await import("../src/services/cli-args.mjs");
     const { newsTurn, resolveNewsConfig, createNewsState } = await import("../src/services/news.mjs");
-    const { loadMemory, readFactRows, appendFacts, openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+    const { loadMemory, readFactRows, appendFacts, removeFacts, openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
     // The same fetcher factory news.html's own session builds from
     // (src/surfaces/web/news-browser-entry.mjs) — real sources over Node's
     // own global fetch, each behind createNewsFetcher's courtesy gate so a
@@ -1453,7 +1453,7 @@ async function main() {
     // news facts must land in the store chat reads back.
     const backendChoice = String(process.env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
     const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
-    const store = { loadMemory, readFactRows, appendFacts };
+    const store = { loadMemory, readFactRows, appendFacts, removeFacts };
     const memory = await loadMemory(memoryDir);
     const rows = readFactRows(memory);
     // resolveNewsConfig unwraps `toml?.news` itself (the tmct.toml [news]
