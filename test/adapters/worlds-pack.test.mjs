@@ -110,6 +110,27 @@ test("no default-contains fact is a pure pass-through", () => {
   assert.equal(expandWorldDefaultContents(facts), facts, "same array, untouched");
 });
 
+test("defaults mint in codepoint order, not locale order, and the same way whichever order the rows arrived", () => {
+  // "zebra-room" sorts BEFORE "élan-room" in codepoint order (z=0x7A < é=0xE9),
+  // but AFTER it under locale-aware collation (é collates next to e, well
+  // before z). The two rooms compete for the same class name, so whichever
+  // order wins the mint decides which room keeps the bare "widget" id.
+  const facts = [
+    { subject: "zebra-room", predicate: "rdf:type", object: "room" },
+    { subject: "élan-room", predicate: "rdf:type", object: "room" },
+    { subject: "zebra-room", predicate: "mgx:default-contains", object: "widget" },
+    { subject: "élan-room", predicate: "mgx:default-contains", object: "widget" },
+  ];
+  const minted = (rows) => rows.filter((r) => !facts.includes(r));
+  const forward = minted(expandWorldDefaultContents(facts));
+  const reversed = minted(expandWorldDefaultContents([...facts].reverse()));
+  assert.deepEqual(forward, reversed, "arrival order of the input rows never changes what gets minted");
+
+  const mintedIn = (rows, room) => rows.find((r) => r.predicate === "mgx:located-in" && r.object === room)?.subject;
+  assert.equal(mintedIn(forward, "zebra-room"), "widget", "codepoint order visits zebra-room first");
+  assert.equal(mintedIn(forward, "élan-room"), "widget-2", "élan-room loses the name race under codepoint order");
+});
+
 // ---- the fs loader over the committed fixture -------------------------------
 
 test("the fixture mini-world loads: facts, rules and the meta row, junk rows skipped", () => {

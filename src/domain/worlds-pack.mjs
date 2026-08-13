@@ -72,6 +72,10 @@ export function worldProvenanceTag(worldName) {
 
 const DEFAULT_CONTAINS_PREDICATE = "mgx:default-contains";
 
+// Codepoint order, never localeCompare — two readers loading the same world
+// facts on different locales must mint the same instance ids.
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** Materialize a world's class-default contents: for every
  *  `<room> mgx:default-contains <class>` fact, mint one placed, portable
  *  instance of that class in that room unless the room already holds one. A
@@ -87,7 +91,7 @@ export function expandWorldDefaultContents(facts) {
   const rows = facts || [];
   const defaults = rows
     .filter((r) => r.predicate === DEFAULT_CONTAINS_PREDICATE)
-    .sort((a, b) => `${a.subject}\0${a.object}`.localeCompare(`${b.subject}\0${b.object}`));
+    .sort((a, b) => byCodepoint(`${a.subject}\0${a.object}`, `${b.subject}\0${b.object}`));
   if (!defaults.length) return rows;
 
   const instanceIds = new Set(rows.filter((r) => r.predicate === "rdf:type").map((r) => r.subject));
