@@ -238,6 +238,7 @@ The extractor records named structural findings about how a sentence was parsed.
 | `clause-fallback` | the row grounded from a clause fragment after the whole sentence declined |
 | `pronoun-carry` | the subject was substituted from the paragraph's pronoun carry, not stated in the sentence |
 | `definitional-frame` | the row is a `mgx:nameFor` edge minted from a definitional copula frame ("the name for Y") |
+| `reported-speech` | the row was read from a reported-speech clause; its speaker is attributed separately via `mgx:attributedTo` |
 
 `relative-clause-verb` and `fragment-term` are decline reasons: candidates bearing these findings are not stored at all, named only in the ingest result.
 
@@ -250,6 +251,7 @@ The extractor records named structural findings about how a sentence was parsed.
 | `clause-fallback` | `(read from a clause fragment)` |
 | `pronoun-carry` | `(subject carried from the previous sentence)` |
 | `identifier-token` | `(identifier token)` |
+| `reported-speech` | `(read from reported speech)` |
 
 `definitional-frame` needs no caveat: its own phrase ("is the name for") already says how the row was read. Decline reasons (never stored) carry no caveats.
 
