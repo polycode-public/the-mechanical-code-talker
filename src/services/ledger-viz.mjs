@@ -25,6 +25,11 @@ import { dirname, join } from "node:path";
 
 const LEDGER_ROW_LIMIT_DEFAULT = 20000;
 
+/** Codepoint order, never localeCompare — every string sorted below (a fact
+ *  row's id or createdAt, a term label, a source bundle key, a predicate) is
+ *  read off the stored fact set, so two locales have to render the same page. */
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 // The ledger reads as an observability dashboard (dense stat tiles, bar
 // panels, a log-style fact stream) rather than an editorial page, so its
 // chrome runs the system sans everywhere instead of THEME_TOKENS_CSS's
@@ -168,7 +173,7 @@ export function computeLedgerDataFromPayload(payload, { focus, term, rowLimit = 
       src: r.provenance || (r.sourceTypes || []).join(" ") || "unrecorded",
     };
   });
-  rows.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "") || a.id.localeCompare(b.id));
+  rows.sort((a, b) => byCodepoint(b.createdAt || "", a.createdAt || "") || byCodepoint(a.id, b.id));
 
   // Term index + adjacency.
   const termMap = new Map(); // term -> { degree, best: {trust, prov}, newest }
@@ -187,7 +192,7 @@ export function computeLedgerDataFromPayload(payload, { focus, term, rowLimit = 
   }
   const terms = [...termMap.values()]
     .map(({ term: t, degree, prov, newest }) => ({ term: t, degree, prov, newest }))
-    .sort((a, b) => b.degree - a.degree || a.term.localeCompare(b.term));
+    .sort((a, b) => b.degree - a.degree || byCodepoint(a.term, b.term));
   const edges = rows.map((r) => ({ s: r.s, o: r.o, id: r.id }));
 
   // Focus: the asked term when it resolves; otherwise the newest taught
@@ -382,11 +387,11 @@ export function computeLedgerStats(rows, terms, contradictions) {
   }
   const bundles = [...bundleCounts.entries()]
     .map(([key, count]) => ({ key, label: bundleLabelFor(key), count }))
-    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+    .sort((a, b) => b.count - a.count || byCodepoint(a.key, b.key))
     .slice(0, BUNDLE_TOP_N);
   const predicates = [...predicateCounts.entries()]
     .map(([predicate, v]) => ({ predicate, phrase: v.phrase, count: v.count }))
-    .sort((a, b) => b.count - a.count || a.predicate.localeCompare(b.predicate))
+    .sort((a, b) => b.count - a.count || byCodepoint(a.predicate, b.predicate))
     .slice(0, PREDICATE_TOP_N);
 
   const totalDegree = (terms || []).reduce((sum, t) => sum + (t.degree || 0), 0);
