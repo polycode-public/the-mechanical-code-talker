@@ -14,6 +14,7 @@ import {
   filterRankedTermEntries, newsTurn, articleEntityNames,
 } from "../../src/services/news.mjs";
 import { openMemoryBackend, loadMemory, readFactRows, appendFacts, removeFacts } from "../../src/adapters/memory/core.mjs";
+import { bandFactRow } from "../../src/adapters/memory/corpus-bands.mjs";
 import { normalizeFeedItems } from "../../src/domain/feed-normalize.mjs";
 import { renderNewsParagraph } from "../../src/domain/news-feed.mjs";
 import { createTermLedger, bumpTerms, ledgerPayload, ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
@@ -329,6 +330,75 @@ test("enrichTopTerms caps at enrich_terms_per_cycle, walks kb sources in config 
   // gamma gets a turn.
   await enrichTopTerms(ctx);
   assert.deepEqual(calls["simple-wikipedia"], ["alpha", "beta", "gamma"], "beta was not retried inside the TTL");
+});
+
+test("a term every KB source misses still grounds when the wordnet-complete band carries it, keeping the band's own corpus provenance", async () => {
+  const config = clampNewsConfig({ enrichTermsPerCycle: 1, kbSources: ["simple-wikipedia"], negativeCacheTtlHours: 24 });
+  const { ctx } = await makeCtx({ config });
+
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map([["harbor", 3]]), "item1", FIXED_NOW, new Map());
+  ctx.state.ledger = ledgerPayload(ledger);
+
+  ctx.providers.getResearchProvider = () => ({
+    name: "simple-wikipedia",
+    origin: "https://example.org",
+    provenanceTag: (term) => `research:simple-wikipedia:${term}`,
+    async lookup() { return null; },
+  });
+
+  const provenance = "corpus:wordnet-complete a harbor is a kind of inlet";
+  const row = bandFactRow({
+    subject: "harbor", predicate: "rdfs:subClassOf", object: "inlet", provenance, band: "wordnet-complete",
+  });
+  ctx.providers.queryBandTerm = async ({ band, term }) => {
+    assert.equal(band, "wordnet-complete");
+    assert.equal(term, "harbor");
+    return { rows: [row], lastEvaluatedKey: null };
+  };
+
+  const result = await enrichTopTerms(ctx);
+  assert.deepEqual(result.enriched, ["harbor"]);
+  assert.deepEqual(result.missed, [], "the band grounded it before it could enter the negative cache");
+
+  const rows = readFactRows(await loadMemory(ctx.memoryDir));
+  const harborRow = rows.find((r) => r.subject === "harbor" && r.object === "inlet");
+  assert.ok(harborRow, "the band's own fact reaches the graph");
+  assert.equal(harborRow.provenance, provenance);
+
+  const afterLedger = ledgerFromPayload(ctx.state.ledger);
+  assert.equal(afterLedger.terms.get("harbor").status, "grounded");
+});
+
+test("a term neither a KB source nor the band carries enters the negative cache, and a band Query that throws never stops the cycle", async () => {
+  const config = clampNewsConfig({ enrichTermsPerCycle: 2, kbSources: ["simple-wikipedia"], negativeCacheTtlHours: 24 });
+  const { ctx } = await makeCtx({ config });
+
+  const ledger = createTermLedger();
+  bumpTerms(ledger, new Map([["quiet", 3], ["loud", 2]]), "item1", FIXED_NOW, new Map());
+  ctx.state.ledger = ledgerPayload(ledger);
+
+  ctx.providers.getResearchProvider = () => ({
+    name: "simple-wikipedia",
+    origin: "https://example.org",
+    provenanceTag: (term) => `research:simple-wikipedia:${term}`,
+    async lookup() { return null; },
+  });
+  const asked = [];
+  ctx.providers.queryBandTerm = async ({ term }) => {
+    asked.push(term);
+    if (term === "loud") throw new Error("simulated DynamoDB failure");
+    return { rows: [], lastEvaluatedKey: null };
+  };
+
+  const result = await enrichTopTerms(ctx);
+  assert.deepEqual(asked.sort(), ["loud", "quiet"]);
+  assert.deepEqual(result.enriched, []);
+  assert.deepEqual(result.missed.sort(), ["loud", "quiet"]);
+
+  const afterLedger = ledgerFromPayload(ctx.state.ledger);
+  assert.equal(afterLedger.terms.get("quiet").status, "missed");
+  assert.equal(afterLedger.terms.get("loud").status, "missed", "a thrown Query degrades to a miss, never an uncaught error");
 });
 
 test("an enriched term arrives with the relations its article states, and reads back through the same paraphrase a polled item gets", async () => {
