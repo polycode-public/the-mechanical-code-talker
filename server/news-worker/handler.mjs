@@ -31,6 +31,7 @@ import { rankedTerms, ledgerFromPayload } from "../../src/domain/term-ledger.mjs
 import { createNewsFetcher, newsSourceRecords, normalizeNewsSourceIds } from "../../src/adapters/corpus/news-sources.mjs";
 import { getResearchProvider } from "../../src/adapters/corpus/wikipedia-live.mjs";
 import { DEFAULT_MIN_INTERVAL_MS } from "../../src/adapters/corpus/courtesy.mjs";
+import { termQueryOverDocumentClient } from "../../src/services/subgraph-retrieval.mjs";
 
 export const MAX_FACT_LINES_PER_CARD = 24;
 export const MAX_FEED_DOCUMENT_BYTES = 350 * 1024;
@@ -312,6 +313,12 @@ async function materializeFeed(ctx, rawBackend) {
  *  `createFetchers(config)` — sourceId -> `{ id, fetchItems() }`, built fresh
  *  per cycle so a narrowed `body.sources` (poll) takes effect.
  *  `getResearchProvider({ source })` — the KB lookup seam enrich walks.
+ *  `queryBandTerm({band, term, exclusiveStartKey, limit})` — the corpus band
+ *  Query seam enrich falls back on once every KB source has come back empty
+ *  for a term; the AWS entry point below builds it over the same DynamoDB
+ *  client and table the row backend already uses (subgraph-retrieval.mjs's
+ *  `termQueryOverDocumentClient`). Absent by default, so a caller with no
+ *  band to read from sees no behavior change.
  *  `seedPayload` — the base payload `loadMemory` overlays session rows onto
  *  (the full xl seed in production; §3.22's grounding-parity reasoning).
  *  `seedStore` — the same seed held as an open read-only sqlite store
@@ -329,6 +336,7 @@ export function createNewsWorker({
   createSessionBackend,
   createFetchers = () => new Map(),
   getResearchProvider: getProvider = () => null,
+  queryBandTerm = null,
   seedPayload = null,
   seedStore = null,
   seedStamp = "",
@@ -387,6 +395,7 @@ export function createNewsWorker({
         // skip it entirely rather than build fetchers nothing will call.
         newsFetchers: mode === "poll" ? gatedFetchers(createFetchers(config), sourceGate) : new Map(),
         getResearchProvider: getProvider,
+        queryBandTerm,
       },
       now,
       shouldAbort: () => nowMs() >= deadlineMs,
@@ -528,6 +537,10 @@ const WORKER_SAFETY_MARGIN_MS = 30_000;
  *  pending items the aborted cycle left behind. */
 const POLL_CYCLE_BUDGET_CAP_MS = 60_000;
 const CORPUS_BREAKER_META_PARTITION_KEY = "_meta";
+// A page big enough for the enrich fallback's per-term Query — news.mjs caps
+// the read at BAND_TERM_LOOKUP_LIMIT rows and races it against its own
+// timeout, so this only bounds one DynamoDB page size, not the cycle.
+const NEWS_BAND_QUERY_PAGE_SIZE = 50;
 
 let cachedDynamoClientPromise = null;
 async function loadDocumentClient() {
@@ -686,6 +699,7 @@ export const handler = async (event, context) => {
     createSessionBackend: (sessionKey) => createDynamoRowBackend({ client, tableName, sessionKey, softDelete: true, ttlSeconds }),
     createFetchers: (config) => buildRealFetchers(config, {}),
     getResearchProvider: ({ source } = {}) => getResearchProvider({ source }),
+    queryBandTerm: termQueryOverDocumentClient({ client, tableName, pageSize: NEWS_BAND_QUERY_PAGE_SIZE }),
     seedPayload,
     seedStore,
     seedStamp,

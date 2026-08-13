@@ -10,15 +10,17 @@ import { createNewsWorker, createInMemorySourceGate } from "./handler.mjs";
 /** `getSessionBackend(sessionKey)` should be the SAME function the row
  *  service double uses for its own routes, so the worker reads and writes
  *  through the identical backend instance a test's HTTP calls observe.
- *  `fetchersFor(config)` and `getResearchProvider` are fixtures a test
- *  injects per source; both default to nothing so a poll/enrich cycle with
- *  no wiring simply finds nothing to fetch rather than reaching the network.
+ *  `fetchersFor(config)`, `getResearchProvider` and `queryBandTerm` are
+ *  fixtures a test injects per source; all default to nothing so a
+ *  poll/enrich cycle with no wiring simply finds nothing to fetch or query
+ *  rather than reaching the network.
  *  `sourceGate` defaults to one in-memory gate shared across every call this
  *  double makes — the local analogue of the DynamoDB `_meta` throttle. */
 export function createLocalNewsWorker({
   getSessionBackend,
   fetchersFor = () => new Map(),
   getResearchProvider = () => null,
+  queryBandTerm = null,
   seedPayload = null,
   seedStamp = "",
   now,
@@ -31,6 +33,7 @@ export function createLocalNewsWorker({
     createSessionBackend: getSessionBackend,
     createFetchers: (config) => fetchersFor(config),
     getResearchProvider,
+    queryBandTerm,
     seedPayload,
     seedStamp,
     sourceGate,

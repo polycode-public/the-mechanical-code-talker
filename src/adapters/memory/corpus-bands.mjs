@@ -145,3 +145,28 @@ export function bandFactRow({ subject, predicate, object, provenance = "", band,
   };
   return assertValidRow(row, { provenance });
 }
+
+/** The inverse of `bandFactRow`: the `{subject, predicate, object,
+ *  provenance}` triple a band's own wire row carries, read back off its
+ *  `json` field. A caller that grounds a term straight from a band Query (no
+ *  article, no extraction) hands this triple to `appendFacts` unchanged, so
+ *  the fact lands under the SAME content-addressed id and the SAME
+ *  `corpus:<band> ...` provenance the band shipped it with — trust reads it
+ *  as a corpus source, not a live research one.
+ *
+ *  Null when `json` fails to parse or the individual carries no
+ *  rdf:subject/predicate/object triple — a malformed row degrades to
+ *  "nothing to fold in" rather than a throw, since a caller reads a whole
+ *  page of rows and one bad one should not cost the rest. */
+export function factFromBandRow(row) {
+  let parsed;
+  try { parsed = JSON.parse(row?.json ?? ""); } catch { return null; }
+  const attributes = parsed?.individual?.attributes;
+  if (!Array.isArray(attributes)) return null;
+  const valueOf = (prop) => attributes.find((a) => a?.prop === prop)?.value;
+  const subject = valueOf("rdf:subject");
+  const predicate = valueOf("rdf:predicate");
+  const object = valueOf("rdf:object");
+  if (!subject || !predicate || !object) return null;
+  return { subject, predicate, object, provenance: valueOf("mgx:factProvenance") || "" };
+}

@@ -23,10 +23,14 @@
 //              ledger is built from state.ledger via ledgerFromPayload only
 //              for the span of one call, then folded back with ledgerPayload.
 //   providers  { newsFetchers: Map<sourceId, { id, fetchItems }>,
-//              getResearchProvider({ source }), preflightNewsUrl?(url) } —
+//              getResearchProvider({ source }), preflightNewsUrl?(url),
+//              queryBandTerm?({band, term, exclusiveStartKey, limit}) } —
 //              every fetcher and provider this session may call, already
 //              constructed (adapters own I/O construction, never this
-//              module).
+//              module). `queryBandTerm` is subgraph-retrieval.mjs's
+//              `termQueryOverDocumentClient`, built once over the caller's own
+//              DynamoDB client; absent (the browser surface, tests with no
+//              band fixture) simply skips the band-grounding fallback below.
 //   now        a function returning the caller's clock reading (ISO string
 //              or ms), or a fixed reading directly. Never read from here —
 //              the wall clock enters only through this parameter.
@@ -59,6 +63,7 @@ import {
 } from "../adapters/corpus/news-sources.mjs";
 import { DEFAULT_MIN_INTERVAL_MS } from "../adapters/corpus/courtesy.mjs";
 import { researchFacts } from "../adapters/corpus/research-source.mjs";
+import { factFromBandRow } from "../adapters/memory/corpus-bands.mjs";
 import { throughSourceBreaker, sourceSkipStatusLine } from "../domain/source-breaker.mjs";
 import {
   ingestText, readsAsEntityTerm, ungroundedTermOccurrences, termsUsedOnlyAsVerbs,
@@ -948,6 +953,68 @@ async function ingestResearchArticle(ctx, term, provider, article) {
   return { facts: distinct.size, derived };
 }
 
+// The one band this fallback reads. WordNet is dictionary content — real
+// words, not news entities — so it grounds the everyday nouns a headline
+// mentions in passing ("harbor", "senator") without ever costing a KB round
+// trip on those.
+const BAND_TERM_LOOKUP_BAND = "wordnet-complete";
+const BAND_TERM_LOOKUP_LIMIT = 50;
+// A local DynamoDB Query has no courtesy throttle and nothing external to
+// protect, but it still has to return: the enrich cycle shares the same wall
+// budget every other phase does, and this runs once per candidate term. A
+// slow or hung Query loses the race and reads as a miss — a timeout is a
+// miss, never a guess — rather than stalling the whole cycle behind it.
+const BAND_TERM_LOOKUP_TIMEOUT_MS = 750;
+
+/** `term`'s rows from the wordnet-complete band, as `{subject, predicate,
+ *  object, provenance}` triples ready for `appendFacts` — or `[]` when the
+ *  band carries nothing for it, the query errors, or it doesn't return in
+ *  time. `ctx.providers.queryBandTerm` is absent on the browser surface and
+ *  in most tests, so this is a no-op there by construction, not a special
+ *  case here. */
+async function groundTermFromBand(ctx, term) {
+  const queryBandTerm = ctx.providers?.queryBandTerm;
+  if (typeof queryBandTerm !== "function") return [];
+  const timeout = new Promise((resolve) => { setTimeout(() => resolve(null), BAND_TERM_LOOKUP_TIMEOUT_MS); });
+  let response;
+  try {
+    response = await Promise.race([
+      queryBandTerm({ band: BAND_TERM_LOOKUP_BAND, term, limit: BAND_TERM_LOOKUP_LIMIT }),
+      timeout,
+    ]);
+  } catch {
+    return [];
+  }
+  if (!response) return [];
+  const facts = [];
+  for (const row of response.rows || []) {
+    const fact = factFromBandRow(row);
+    if (fact) facts.push(fact);
+  }
+  return facts;
+}
+
+/** Grounds `term` from `facts` — a band's own rows, already resolved
+ *  `{subject, predicate, object, provenance}` triples with no article prose
+ *  to walk, so this skips straight to append + syllogise rather than
+ *  repeating ingestResearchArticle's structured/prose split. Same shape of
+ *  return as ingestResearchArticle, so the caller folds it in identically. */
+async function ingestBandFacts(ctx, facts) {
+  const { memoryDir, store, config } = ctx;
+  await store.appendFacts(memoryDir, facts);
+  invalidateCache(ctx.cache);
+  const distinct = new Set(facts.map(
+    (f) => `${normFactTerm(f.subject)}\0${normFactPredicate(f.predicate)}\0${normFactTerm(f.object)}`,
+  ));
+  let derived = 0;
+  if (config.syllogismsPerIngest > 0) {
+    const focus = [...termFocusOf(facts)];
+    const res = await syllogise(memoryDir, { focus, expandFocus: true, budget: config.syllogismsPerIngest, store });
+    derived = res?.count || 0;
+  }
+  return { facts: distinct.size, derived };
+}
+
 /** One KB lookup behind its source's circuit breaker. A source that has been
  *  timing out or throttling is skipped without a round trip, and the skip is
  *  reported so the cycle can tell "this source had nothing" from "this source
@@ -1016,6 +1083,20 @@ export async function enrichTopTerms(ctx, { limit } = {}) {
     // pending so the next cycle picks it up, never into the negative cache.
     if (aborted) { markTerm(ledger, entry.term, "pending", nowVal); break; }
     if (!hit) {
+      // Every configured KB source came back empty (or none is configured) —
+      // try the wordnet-complete band before giving up. It's another source
+      // the resolver can reach, not a replacement for the KB walk above: a
+      // headline's proper nouns still need a KB lookup, but its everyday
+      // vocabulary is often already sitting in the band.
+      const bandFacts = await groundTermFromBand(ctx, entry.term);
+      if (bandFacts.length) {
+        const res = await ingestBandFacts(ctx, bandFacts);
+        factsTotal += res.facts;
+        derivedTotal += res.derived;
+        markTerm(ledger, entry.term, "grounded", nowVal);
+        enriched.push(entry.term);
+        continue;
+      }
       // No source was asked, so nothing learned this term is missing —
       // the same posture a stop takes, for the same reason.
       markTerm(ledger, entry.term, askedAnySource ? "missed" : "pending", nowVal);
