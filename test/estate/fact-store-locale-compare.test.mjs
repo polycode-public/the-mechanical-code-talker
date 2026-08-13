@@ -28,6 +28,10 @@ const GUARDED_FILES = [
   join(ROOT, "src", "services", "chat.mjs"),
   join(ROOT, "src", "services", "ledger-viz.mjs"),
   join(ROOT, "src", "domain", "news-feed.mjs"),
+  join(ROOT, "src", "domain", "tableau.mjs"),
+  join(ROOT, "src", "domain", "syllogise.mjs"),
+  join(ROOT, "src", "domain", "ask.mjs"),
+  join(ROOT, "src", "domain", "domain.mjs"),
 ];
 
 /** Every `.localeCompare(` call site in `text` that isn't inside a comment,

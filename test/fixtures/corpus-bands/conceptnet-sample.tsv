@@ -1,8 +1,0 @@
-/a/[/r/IsA/,/c/en/dog/,/c/en/animal/]	/r/IsA	/c/en/dog	/c/en/animal	{"weight": 1.0, "surfaceText": "[[dog]] is a type of [[animal]]"}
-/a/[/r/IsA/,/c/en/dog/,/c/en/mammal/]	/r/IsA	/c/en/dog	/c/en/mammal	{"weight": 2.0, "surfaceText": "[[dog]] is a type of [[mammal]]"}
-/a/[/r/IsA/,/c/en/dog/,/c/en/mammal/]	/r/IsA	/c/en/dog	/c/en/mammal	{"weight": 5.0, "surfaceText": "[[dog]] is a type of [[mammal]]"}
-/a/[/r/PartOf/,/c/en/wheel/,/c/en/car/]	/r/PartOf	/c/en/wheel	/c/en/car	{"weight": 1.0}
-/a/[/r/Synonym/,/c/en/happy/,/c/en/glad/]	/r/Synonym	/c/en/happy	/c/en/glad	{"weight": 1.0}
-/a/[/r/EtymologicallyRelatedTo/,/c/en/dog/,/c/en/dogge/]	/r/EtymologicallyRelatedTo	/c/en/dog	/c/en/dogge	{"weight": 1.0}
-/a/[/r/IsA/,/c/fr/chien/,/c/fr/animal/]	/r/IsA	/c/fr/chien	/c/fr/animal	{"weight": 1.0}
-/a/[/r/IsA/,/c/en/dog/n/,/c/en/canine/]	/r/IsA	/c/en/dog/n	/c/en/canine	{"weight": 1.0}

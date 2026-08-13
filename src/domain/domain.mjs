@@ -37,10 +37,17 @@ const optionalTerm = (value) => {
   return t === "" ? undefined : t;
 };
 
+/** Codepoint order, never localeCompare. Every string this file sorts came out
+ *  of the fact/Rule store. The planner walks actions, signatures and state rows
+ *  in exactly the order these comparators leave them, so a locale-sensitive
+ *  compare would let two machines holding one taught domain return different
+ *  plans from it. */
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 const rowSort = (a, b) =>
-  a.subject.localeCompare(b.subject) ||
-  a.predicate.localeCompare(b.predicate) ||
-  a.object.localeCompare(b.object);
+  byCodepoint(a.subject, b.subject) ||
+  byCodepoint(a.predicate, b.predicate) ||
+  byCodepoint(a.object, b.object);
 
 const normRow = (row) => ({
   subject: normTerm(row.subject),
@@ -108,13 +115,13 @@ export function compileDomain(factRows, ruleRows) {
       });
     }
   }
-  const actions = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const actions = [...byName.values()].sort((a, b) => byCodepoint(a.name, b.name));
   for (const action of actions) {
     action.signatures.sort((a, b) =>
-      a.subjectClass.localeCompare(b.subjectClass) || a.targetClass.localeCompare(b.targetClass));
-    action.preconds.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
-    action.effects.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
-    action.constraints.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+      byCodepoint(a.subjectClass, b.subjectClass) || byCodepoint(a.targetClass, b.targetClass));
+    action.preconds.sort((a, b) => byCodepoint(JSON.stringify(a), JSON.stringify(b)));
+    action.effects.sort((a, b) => byCodepoint(JSON.stringify(a), JSON.stringify(b)));
+    action.constraints.sort((a, b) => byCodepoint(JSON.stringify(a), JSON.stringify(b)));
   }
 
   // Class membership from typing edges. A member is a subject with a typing

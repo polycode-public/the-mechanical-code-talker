@@ -1,7 +1,0 @@
-{"id": "Q144", "labels": {"en": {"language": "en", "value": "dog"}}, "claims": {"P31": [{"mainsnak": {"snaktype": "value", "property": "P31", "datavalue": {"value": {"entity-type": "item", "id": "Q729"}}}}], "P279": [{"mainsnak": {"snaktype": "value", "property": "P279", "datavalue": {"value": {"entity-type": "item", "id": "Q39201"}}}}]}}
-{"id": "Q146", "labels": {"en": {"language": "en", "value": "cat"}}, "claims": {"P31": [{"mainsnak": {"snaktype": "value", "property": "P31", "datavalue": {"value": {"entity-type": "item", "id": "Q729"}}}}]}}
-{"id": "Q729", "labels": {"en": {"language": "en", "value": "animal"}}, "claims": {}}
-{"id": "Q39201", "labels": {"en": {"language": "en", "value": "canine"}}, "claims": {}}
-{"id": "Q5", "labels": {"en": {"language": "en", "value": "human"}}, "claims": {"P31": [{"mainsnak": {"snaktype": "novalue", "property": "P31"}}]}}
-{"id": "Q99999999", "labels": {}, "claims": {}}
-{"id": "Q999998", "labels": {"en": {"language": "en", "value": "unlabeled-object-claim"}}, "claims": {"P31": [{"mainsnak": {"snaktype": "value", "property": "P31", "datavalue": {"value": {"entity-type": "item", "id": "Q99999999"}}}}]}}

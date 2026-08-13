@@ -43,6 +43,23 @@ import { pickPhrase } from "./answer-variants.mjs";
 export { normalizeQuery, applyNegationFrames };
 import { defaultNlp } from "./interpret/nlp-registry.mjs";
 
+/** Codepoint order, never localeCompare. Every string sorted through this is a
+ *  label, id or attribute value read off the graph. Several of these sorts get
+ *  read at `[0]` (the newest commit a query substitutes in, the entry-point
+ *  module a where-defined answer names) or cut to a top-N, so the comparator
+ *  picks WHICH individual the answer is about. A locale-sensitive compare would
+ *  let two readers ask one graph the same question and be told about different
+ *  commits. */
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Commits newest first, ties broken on the commit's own id. The date is
+ *  ISO-8601, so a codepoint compare IS the date compare, and undated commits
+ *  sort last. The id tiebreak is what makes `[0]` a pure function of the
+ *  graph: two commits sharing a date would otherwise be separated by whichever
+ *  edge happened to be walked first. */
+const byNewestCommit = (dateOf) => (a, b) =>
+  byCodepoint(dateOf(b), dateOf(a)) || byCodepoint(String(a.id), String(b.id));
+
 // Per-graph, per-kind memo; a local copy of codegraph.mjs's private
 // edgesOfKind. Named differently from codegraph.mjs's own cache: the inlined
 // viewer bundle concatenates a stripped codegraph.mjs + this file into one
@@ -2045,7 +2062,7 @@ function computeFind(graph, entityType, term) {
  *  the architecture map prints, so the two surfaces agree. */
 function packageIndividuals(graph) {
   return [...packageCounts(modulesOf(graph)).entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .sort((a, b) => b[1] - a[1] || byCodepoint(a[0], b[0]))
     .map(([dir]) => ({ id: `pkg:${dir}`, label: dir, class: "Package" }));
 }
 
@@ -2364,7 +2381,7 @@ export function degreeMetric(graph, ind, metric) {
 function evalRecentCommits(graph) {
   const commits = graph.individuals.filter((i) => i.class === "Commit");
   const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
-  commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+  commits.sort(byNewestCommit(dateOf));
   return { compositeKind: "recentCommits", matches: commits };
 }
 
@@ -2407,7 +2424,7 @@ function evalCommitFilter(graph, ast) {
       if (op === "after") return d > pivotDate;
       return d === pivotDate; // "on"
     })
-    .sort((a, b) => dateOf(b).localeCompare(dateOf(a)) || String(a.id).localeCompare(String(b.id)));
+    .sort(byNewestCommit(dateOf));
   // A kind-headed window reads what the qualifying commits touched at that
   // grain; the bare shape answers with the commits themselves.
   const touched = entityType && entityType !== "Commit" && entityType !== "Change"
@@ -2450,7 +2467,7 @@ function evalTemporal(graph, ast, opts) {
   // reverseOverSet(touches) collects touching commits across both grains.
   const commits = reverseOverSet(graph, "touches", "Commit", ids);
   const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
-  commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+  commits.sort(byNewestCommit(dateOf));
   return { compositeKind: "temporal", matches: commits, entityType: ast.entityType, innerCount: inner.length };
 }
 
@@ -3899,7 +3916,7 @@ function rankEntryPointModules(graph, term) {
       fixture: isTestFixturePath(ind.label) ? 1 : 0,
     }))
     .sort((a, b) => (b.named - a.named) || (a.depth - b.depth) || (a.fixture - b.fixture)
-      || String(a.ind.label).localeCompare(String(b.ind.label)))
+      || byCodepoint(String(a.ind.label), String(b.ind.label)))
     .map((x) => x.ind);
 }
 
@@ -3939,7 +3956,7 @@ function subclassClosure(graph, ind, kind) {
     found.set(next.id, next);
     queue.push(...childrenOf(next));
   }
-  return [...found.values()].sort((a, b) => String(a.label).localeCompare(String(b.label)));
+  return [...found.values()].sort((a, b) => byCodepoint(String(a.label), String(b.label)));
 }
 
 /** A graph's own vocabulary nodes carry their definition text under one of
@@ -4171,7 +4188,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
         const c = graph.byId.get(e.subject);
         if (c && c.class === "Commit") commits.push(c);
       }
-      commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+      commits.sort(byNewestCommit(dateOf));
     }
     // The dated commit this answer named is a discourse `event` referent, so a
     // later "was that before X was touched" binds it (see evalCommitFilter).
@@ -4203,7 +4220,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
       const c = graph.byId.get(e.subject);
       if (c && c.class === "Commit") commits.push(c);
     }
-    commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+    commits.sort(byNewestCommit(dateOf));
     // The dated commit behind the "who last touched X" answer is the same
     // `event` referent the when-shape registers, so either phrasing feeds a
     // later temporal comparison. Registered only when the commit carries a date.
@@ -5371,7 +5388,7 @@ function substituteLastCommitPhrase(graph, query) {
   const commits = graph.individuals.filter((i) => i.class === "Commit");
   if (!commits.length) return q;
   const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
-  const newest = [...commits].sort((a, b) => dateOf(b).localeCompare(dateOf(a)))[0];
+  const newest = [...commits].sort(byNewestCommit(dateOf))[0];
   if (!newest) return q;
   const out = q.replace(LAST_COMMIT_PHRASE_RE, `commit ${newest.label}`);
   const bareTrimmed = out.trim().replace(/[?.!]+$/, "");
@@ -5559,7 +5576,7 @@ function evalWorldRelation(graph, ast) {
   // never placed outright.
   const pairs = [...stated.values(), ...[...taught.values()].filter((p) => !stated.has(p.subject.id))]
     .sort((a, b) => (
-      String(a.subject.id).localeCompare(String(b.subject.id)) || String(a.object).localeCompare(String(b.object))
+      byCodepoint(String(a.subject.id), String(b.subject.id)) || byCodepoint(String(a.object), String(b.object))
     ));
   return {
     compositeKind: "worldRelation",
