@@ -1,9 +1,10 @@
-// The extraction-findings closed vocabulary is declared in four places that
+// The extraction-findings closed vocabulary is declared in five places that
 // nothing else cross-checks: shacl.mjs's EXTRACTION_FINDINGS (the source of
-// truth), the SHACL shape's message, the ontology property's comment, and the
-// adapter contract doc's table. Each parses its own file rather than holding
-// a second hand-kept list, so this guard drifts exactly when the declarations
-// it is checking drift, never independently of them.
+// truth), the SHACL shape's message, the ontology property's comment, the
+// adapter contract doc's table, and core.mjs's own MEMORY_VOCABULARY note.
+// Each parses its own file rather than holding a second hand-kept list, so
+// this guard drifts exactly when the declarations it is checking drift,
+// never independently of them.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -16,6 +17,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SHAPES_FILE = join(ROOT, "ontology", "memory-shapes.ttl");
 const CORE_FILE = join(ROOT, "ontology", "tmct-core.ttl");
 const CONTRACT_FILE = join(ROOT, "docs", "adapter-contract.md");
+const CORE_MJS_FILE = join(ROOT, "src", "adapters", "memory", "core.mjs");
 
 /** Pulls the pipe-joined name list out of a "... closed vocabulary a | b | c
  *  ..." sentence fragment, wherever it stops (a following space, paren or
@@ -38,6 +40,13 @@ async function coreFindingNames() {
   const block = /mgx:extractionFinding a owl:DatatypeProperty ;[\s\S]*?rdfs:comment "([^"]*)"/.exec(text);
   assert.ok(block, "mgx:extractionFinding property not found in tmct-core.ttl");
   return closedVocabularyNames(block[1], "tmct-core.ttl's mgx:extractionFinding rdfs:comment");
+}
+
+async function coreMjsFindingNames() {
+  const text = await readFile(CORE_MJS_FILE, "utf8");
+  const note = /"mgx:extractionFinding", note: "([^"]*)"/.exec(text);
+  assert.ok(note, "mgx:extractionFinding entry not found in core.mjs's MEMORY_VOCABULARY");
+  return closedVocabularyNames(note[1], "core.mjs's MEMORY_VOCABULARY mgx:extractionFinding note");
 }
 
 async function contractFindingNames() {
@@ -66,14 +75,16 @@ async function contractCaveatEntries() {
   return Object.fromEntries(rows.map((m) => [m[1], m[2]]));
 }
 
-test("the extraction-findings closed vocabulary matches across shacl.mjs, both ontology files, and the adapter contract doc", async () => {
+test("the extraction-findings closed vocabulary matches across shacl.mjs, both ontology files, core.mjs, and the adapter contract doc", async () => {
   const code = [...EXTRACTION_FINDINGS].sort();
   const shapes = (await shapesFindingNames()).sort();
   const core = (await coreFindingNames()).sort();
+  const coreMjs = (await coreMjsFindingNames()).sort();
   const contract = (await contractFindingNames()).sort();
 
   assert.deepEqual(shapes, code, "ontology/memory-shapes.ttl's closed list drifted from EXTRACTION_FINDINGS");
   assert.deepEqual(core, code, "ontology/tmct-core.ttl's closed list drifted from EXTRACTION_FINDINGS");
+  assert.deepEqual(coreMjs, code, "core.mjs's MEMORY_VOCABULARY note drifted from EXTRACTION_FINDINGS");
   assert.deepEqual(contract, code, "docs/adapter-contract.md's findings vocabulary table drifted from EXTRACTION_FINDINGS");
 });
 
