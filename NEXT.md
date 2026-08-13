@@ -45,16 +45,18 @@ the deployed worker persists state and does not.
 
 The work list, ranked by value against the plan's target card.
 
-1. [ ] **A report's claim is not attributed to its speaker** — spec settled in
-   `PLAN_ATTRIBUTION.md`, nine commits. Commit 1 (the `normFactTerm` carve-out)
-   is merged; commits 2 and 5 (the phrase layer and the chat caveat) are in
-   flight. The two findings that shaped it:
-   reification over a Fact is unprecedented in this store, and `normFactTerm`
-   strips the `fact:` prefix so the reference is unrecoverable at read time
-   until a carve-out lands. An attributed claim stays grounded and every
-   rendering names the speaker; the invariant is that a surface which cannot
-   render the attribution must not render the claim. Commits 2–5 are blocked
-   only on other agents' files, 6–8 on `core.mjs` and `extract-facts.mjs`.
+1. [ ] **A report's claim is not attributed to its speaker** — spec in
+   `PLAN_ATTRIBUTION.md`. Commits 1, 2, 5 and 6 are merged: the `normFactTerm`
+   carve-out, the phrase layer, the chat caveat, and every vocabulary site with
+   an estate guard that parses all five live. What remains is the write path
+   (commit 7, `extract-facts.mjs`), the card read side (commit 4,
+   `news-feed.mjs`), `resolution.mjs` site 10, and the full chat route
+   (commit 8). `reportedClauseOf` currently discards the speaker — its own
+   comment says so — and neither of its two regexes captures it, so both need a
+   capture group and its return type becomes `{ claim, speaker }`. It is
+   exported and pinned, so that signature change is a real edit. The invariant
+   to hold throughout: a surface that cannot render the attribution must not
+   render the claim.
 2. [ ] **The graph's own false fact becomes an anchor's sense** — in flight on
    `worktree-agent-a8aed6d0760b04093`. The unplaced-hub scope landed and the
    syrian card is byte-identical, because its strays never came through the hub
