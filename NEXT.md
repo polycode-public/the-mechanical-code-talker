@@ -96,16 +96,29 @@ The work list, ranked by value against the plan's target card.
    and the scores print admission per source, which is plan §4.2's line. Nothing
    is dropped: a thin card still builds, still cites its source, still prints,
    and carries its counts.
-7. [ ] **Fact-listing line order tracks arrival order** — in flight on
-   `worktree-agent-a8ebf6f96b26ab822`. The repo invariant says
-   any read-time resolver over the fact store is a pure function of the fact
-   set, and the listing reader is not yet one in its ordering.
-   `rankByBiasThenTrust` is a stable sort, so equal-trust rows keep ingestion
-   order: feed the same facts forward and reversed and "what do you know about
-   X" gives the same fact SET in a different line order. Measured on both sides
-   of the sense-screen change, so it predates it. The fix is a
-   content-addressed tiebreak on every fact listing, which redraws pinned
-   outputs across the estate — that width is why it is its own item.
+7. [~] **Fact-listing line order tracks arrival order** — CODE COMPLETE, merged
+   as `4d5505d6`, full suite already green on the branch (8262 pass, 0 fail).
+   `factOrderKey` in `src/domain/memory/fact-order.mjs` breaks ties on content
+   for `rankByBiasThenTrust`, chat's `byTrust`, the four readers that render
+   rows without ranking, `capability.mjs` and `digest/select.mjs`. Two
+   remainders:
+   - `news-feed.mjs`'s `tierOf` and `/memory`'s listing are still
+     arrival-dependent. Reaching them means sorting `foldFactRows`' output at
+     the root, which is the wider fix.
+   - `"what do you know about cache"` ends rather than opens on "cache is a kind
+     of store". Nothing pins it, so it is a voice decision, not a defect.
+8. [ ] **The world editor supersedes a placement by arriving last** —
+   `foldWorldState` ranks placements by `(epoch, turn)` with `turn >= prior.turn`,
+   so at equal turn the row later in the array wins, and `adventure-editor.mjs`
+   supersedes by appending an untimed duplicate that only wins by arrival order.
+   `crdt.md` already documents the fold as arbitrary at ties, and a p2p store
+   gets content-address order from `sortFactIndividualsById` today, so this is
+   already broken there. Found when a root-level content sort made the edit
+   silently vanish (`adventure-editor.test.mjs:180`). The fix is to stamp an
+   editor edit `snapshotSubject(subject, turn + 1, epoch)` so it outranks rather
+   than relying on arrival. Doing this unblocks the root sort above: of the 13
+   pins that moved under it, this was the only real break, 4 are already fixed
+   and 8 were benign reorderings.
 8. [ ] **Wikidata** — the pinned dated dump
    (`wikidata-20260810-all.json.gz`, 155,457,882,747 bytes) is downloading in
    the operator's terminal via `bash scripts/resume-wikidata-dump.sh`, which
