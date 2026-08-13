@@ -24,10 +24,15 @@
 // Two predicate families sync differently, for the reason adventure-editor.mjs's
 // own header sets out:
 //   - PLACEMENT (currently-in/located-in/fixed-in/hidden-in), OPENNESS and MASS
-//     are fold-versioned — foldWorldState already reads the newest write as the
-//     current truth, which is how every turn's own move and mass drain lands — so
-//     an edit to one is a plain new write superseding the old, never a
-//     retraction. Mass belongs here and not below precisely because it MOVES: a
+//     are fold-versioned — foldWorldState ranks these rows by the (epoch, turn)
+//     pair stamped on the subject, which is how every turn's own move and mass
+//     drain lands — so an edit to one is a plain new write superseding the old,
+//     never a retraction. The superseding write is stamped one turn past the
+//     world's own turn count, exactly the way every in-game action's commit()
+//     writes, so it OUTRANKS what it replaces instead of merely arriving after
+//     it — at equal turn the fold takes whichever row comes later in the array,
+//     and array order is nobody's to promise once a peer's facts have merged
+//     in. Mass belongs here and not below precisely because it MOVES: a
 //     playing animal's weight is a fold over turn snapshots, so an editor
 //     diffing raw mass rows would show the seed and fight the drain.
 //   - Everything else (typing, the class hierarchy, exits, the predator flag,
@@ -36,6 +41,8 @@
 //     only applies its removals when the whole document parsed cleanly: a line
 //     that fails to parse this keystroke must never be read as "this fact is
 //     gone".
+
+import { snapshotSubject } from "../domain/world-snapshot.mjs";
 
 export { wordBeforeCursor } from "./viz-theme.mjs";
 
@@ -296,15 +303,26 @@ export function editableMudOtherRows(rows) {
 
 /** Plan the fact-store writes one parsed edit implies, from already-parsed
  *  `triples` against the world's current `rows`/`state`. Returns
- *  `{ toAppend, toRemoveIds }` — pure, no I/O.
+ *  `{ toAppend, toRemoveIds, editTurn }` — pure, no I/O. `toAppend` rows are
+ *  store-ready: a fold-versioned one already carries its `subject@turnN`
+ *  stamp, and `editTurn` is the turn every one of them was stamped at, for
+ *  the caller's own provenance tag.
  *
- *  Placement and openness triples are never retracted: one joins `toAppend` only
- *  when it actually differs from the subject's current folded value, so
- *  re-asserting an unchanged line doesn't append a no-op duplicate per keystroke.
- *  Everything else gets a real add/remove diff — but the CALLER decides whether
- *  `toRemoveIds` is safe to apply, and must skip it whenever the parse reported
- *  any unrecognized line. */
+ *  Placement, openness and mass triples are never retracted: one joins
+ *  `toAppend` only when it actually differs from the subject's current folded
+ *  value, so re-asserting an unchanged line doesn't append a no-op duplicate
+ *  per keystroke. Each one is stamped one turn past the world's own turn
+ *  count, which is what makes it outrank the row it supersedes rather than
+ *  tie with it and win on array position.
+ *
+ *  Everything else keeps its bare subject — every reader takes those raw, and
+ *  a stamped one names a subject no verb resolves. They get a real add/remove
+ *  diff — but the CALLER decides whether `toRemoveIds` is safe to apply, and
+ *  must skip it whenever the parse reported any unrecognized line. */
 export function planMudEditorSync(rows, state, triples) {
+  const editTurn = (state?.turnCount ?? 0) + 1;
+  const editEpoch = state?.epoch ?? 0;
+  const stampedForFold = (t) => ({ ...t, subject: snapshotSubject(t.subject, editTurn, editEpoch) });
   const toAppend = [];
   // One "already said this" set per fold-versioned family, never one shared set:
   // a subject can carry a placement, an openness and a mass at once, and a
@@ -320,13 +338,13 @@ export function planMudEditorSync(rows, state, triples) {
     seen.add(t.subject);
     if (t.kind === PLACEMENT_KIND) {
       const current = state.placements?.get(t.subject);
-      if (!current || current.predicate !== t.predicate || current.object !== t.object) toAppend.push(t);
+      if (!current || current.predicate !== t.predicate || current.object !== t.object) toAppend.push(stampedForFold(t));
     } else if (t.kind === OPENNESS_KIND) {
       const current = state.openness?.get(t.subject);
-      if (!current || current.open !== (t.object === "true")) toAppend.push(t);
+      if (!current || current.open !== (t.object === "true")) toAppend.push(stampedForFold(t));
     } else {
       const current = state.masses?.get(t.subject);
-      if (!current || Number(current.value) !== Number(t.object)) toAppend.push(t);
+      if (!current || Number(current.value) !== Number(t.object)) toAppend.push(stampedForFold(t));
     }
   }
 
@@ -342,7 +360,7 @@ export function planMudEditorSync(rows, state, triples) {
   for (const [key, id] of currentKeys) {
     if (!newOtherKeys.has(key)) toRemoveIds.push(id);
   }
-  return { toAppend, toRemoveIds };
+  return { toAppend, toRemoveIds, editTurn };
 }
 
 /** The additive half of planMudEditorSync, for ONE already-parsed triple: the
@@ -350,7 +368,13 @@ export function planMudEditorSync(rows, state, triples) {
  *  document says what the world contains, so a fact missing from it has gone;
  *  one sentence only ever says what it says, so nothing it leaves out is
  *  evidence of anything. Re-asserting a fact the world already holds appends
- *  nothing, and `reason` says which of the two happened. Pure. */
+ *  nothing, and `reason` says which of the two happened. Pure.
+ *
+ *  The triple comes back with its bare subject, unlike planMudEditorSync's
+ *  rows: a taught sentence can MINT the thing it talks about, and the caller
+ *  picks the fresh id, so only the caller knows which subject the fold stamp
+ *  belongs on. world-teach.mjs stamps a fold-versioned one at `turnCount + 1`
+ *  there, for the same reason planMudEditorSync does. */
 export function planTaughtMudTriple(rows, state, triple) {
   if (!triple?.subject || !triple?.object) return { toAppend: [], reason: "nothing parsed" };
   if (triple.kind === PLACEMENT_KIND) {

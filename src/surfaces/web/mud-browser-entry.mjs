@@ -38,7 +38,7 @@ import {
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines, objectClassChain, recordExamined,
   diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
-  roomKindOf, isMudStatePredicate, worldEpochFact, snapshotSubject,
+  roomKindOf, isMudStatePredicate, worldEpochFact,
 } from "../../services/adventure.mjs";
 import { waveFact, playedByFact, P2P_PREDICATES } from "../../domain/p2p/facts.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
@@ -264,24 +264,20 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
    *  parseMudEditorText), plan the writes it implies, and apply them — scoped to
    *  THIS world's provenance tag only. Returns `{ unrecognized, added, removed }`.
    *
-   *  Two things this does that a fresh, unplayed world would not need.
    *  Retractions run only when the WHOLE document parsed cleanly, so a half-typed
-   *  line is never read as "this fact is gone". And a fold-versioned write
-   *  (a placement, an openness, a mass) is stamped `subject@turnN` at one past
-   *  the world's own turn count, exactly the way every in-game action's commit
-   *  writes: the fold takes the newest turn, so an untagged row would sit at turn
-   *  zero and lose to the snapshot the last played turn already left behind —
-   *  the edit would look accepted and change nothing. */
+   *  line is never read as "this fact is gone". A placement, openness or mass
+   *  edit arrives from the planner already written as a TURN SNAPSHOT, the way
+   *  every played turn writes one, so all this has to add is the matching
+   *  provenance tag. */
   async function applyEdit(text) {
     const allRows = readFactRows(await loadMemory(memoryDir));
     const worldRows = allRows.filter((r) => typeof r.provenance === "string" && r.provenance.indexOf(tag) === 0);
     const state = foldWorldState(worldRows);
     const { triples, unrecognized } = parseMudEditorText(text);
-    const { toAppend, toRemoveIds } = planMudEditorSync(worldRows, state, triples);
-    const editTurn = state.turnCount + 1;
+    const { toAppend, toRemoveIds, editTurn } = planMudEditorSync(worldRows, state, triples);
     if (toAppend.length) {
       await appendFacts(memoryDir, toAppend.map((f) => ({
-        subject: f.kind === "other" ? f.subject : snapshotSubject(f.subject, editTurn, state.epoch),
+        subject: f.subject,
         predicate: f.predicate,
         object: f.object,
         provenance: f.kind === "other" ? tag : `${tag}:turn${editTurn}`,
