@@ -19,6 +19,10 @@ import { renderMemory } from "../../src/adapters/memory/inspect.mjs";
 import { selectFacts } from "../../src/domain/digest/select.mjs";
 import { closerRootsFor } from "../../src/domain/digest/compose.mjs";
 import { computeLedgerDataFromPayload, computeLedgerStats } from "../../src/services/ledger-viz.mjs";
+import { deriveSubClassClosure, deriveTypePropagation } from "../../src/domain/syllogise.mjs";
+import { buildTableauKb, findTableauViolations } from "../../src/domain/tableau.mjs";
+import { compileDomain, stateFromFacts, stateKeyFor, movesFromRules } from "../../src/domain/domain.mjs";
+import { ask as askGraph } from "../../src/domain/ask.mjs";
 
 const EMPTY_GRAPH = parseEntities({ individuals: [], objectProperties: [] });
 const fact = (subject, predicate, object) => ({ subject, predicate, object });
@@ -262,4 +266,188 @@ test("the ledger's predicate leaderboard breaks a tied count by codepoint order,
   const row = (predicate) => ({ p: predicate, phrase: predicate, src: "corpus:x", prov: "corpus", trustTier: 1, createdAt: "" });
   const stats = computeLedgerStats([row("apple"), row("Bravo")], [], []);
   assert.deepEqual(stats.predicates.map((p) => p.predicate), ["Bravo", "apple"]);
+});
+
+// ---- the reasoning layer: order decides the CONCLUSION, not the listing ----
+// Everything above checks that one fact set renders the same bytes whatever
+// order it arrived in. The derivation and query layers raise the stakes: their
+// sorts get read at [0], or cut at a budget, or walked as a rule-firing order,
+// so the comparator picks which fact the engine concludes FROM. A locale-
+// dependent compare there lets two machines forward-chain one graph into two
+// different fact sets, or answer one question with two different commits.
+//
+// "zebra" against "éclair" is the pair that separates the two orders: codepoint
+// puts "zebra" first (z is 0x7A, é is 0x00E9), while locale collation files é
+// beside e and puts "éclair" first. Both survive normFactTerm's lowercasing,
+// which a case-only pair like "Bravo"/"apple" would not.
+
+test("locale and codepoint disagree about the pair the reasoning proofs rest on", () => {
+  assert.ok("zebra" < "éclair", "codepoint puts zebra first");
+  assert.ok("zebra".localeCompare("éclair") > 0, "locale puts éclair first");
+});
+
+// ---- syllogise.mjs: the budget cut, and the premise the proof cites --------
+
+test("a budget-limited subclass closure keeps the codepoint-first derivation, not the locale-first one", () => {
+  // Two independent two-hop chains, each entailing exactly one new edge. A
+  // budget of 1 admits one of them, and the candidate sort alone decides
+  // which — so this pins a DERIVED FACT SET, not a row order.
+  const edges = [
+    ["éclair", "pastry"], ["pastry", "food"],
+    ["zebra", "equine"], ["equine", "animal"],
+  ];
+  const derived = deriveSubClassClosure(edges, { budget: 1 });
+  assert.equal(derived.length, 1);
+  assert.deepEqual(derived[0], { subject: "zebra", object: "animal", via: "equine" });
+});
+
+test("a subclass closure cites the codepoint-first middle term as the premise it reasoned through", () => {
+  // One conclusion (fennec ⊑ carnivore) reachable through two middle terms.
+  // Dedup keeps the first candidate per (subject, object) key, so the
+  // comparator picks which premise the derivation records in `via` — the fact
+  // a proof goes on to name. The two middles are otherwise interchangeable.
+  const edges = [
+    ["fennec", "élevage"], ["élevage", "carnivore"],
+    ["fennec", "vulpine"], ["vulpine", "carnivore"],
+  ];
+  const derived = deriveSubClassClosure(edges, { budget: 50 });
+  const hit = derived.find((d) => d.subject === "fennec" && d.object === "carnivore");
+  assert.equal(hit.via, "vulpine", "locale order would cite élevage instead");
+});
+
+test("type propagation under a budget derives the same facts however the type edges arrived", () => {
+  const subClassEdges = [["équidé", "mammal"], ["zebra", "équidé"], ["mammal", "animal"]];
+  const typeEdges = [["marty", "zebra"], ["ouessant", "équidé"], ["stripes", "mammal"]];
+  const [first, ...rest] = arrivalOrders(typeEdges).map((order) =>
+    deriveTypePropagation(order, subClassEdges, { budget: 3 })
+      .map((d) => `${d.subject}|${d.object}|${d.via}`));
+  assert.equal(first.length, 3, "the budget bites, so the cut is what's under test");
+  for (const other of rest) assert.deepEqual(other, first);
+});
+
+// ---- tableau.mjs: the KB the prover reads, and the verdict it returns ------
+
+test("the tableau KB is identical however the OWL rows arrived, and orders its assertions by codepoint", () => {
+  const rows = [
+    { id: "f1", subject: "zebra", predicate: "rdfs:subClassOf", object: "equine" },
+    { id: "f2", subject: "éclair", predicate: "rdfs:subClassOf", object: "pastry" },
+    { id: "f3", subject: "marty", predicate: "rdf:type", object: "zebra" },
+    { id: "f4", subject: "élodie", predicate: "rdf:type", object: "éclair" },
+    { id: "f5", subject: "equine", predicate: "owl:disjointWith", object: "pastry" },
+  ];
+  const shapeOf = (kb) => JSON.stringify({
+    axioms: kb.axioms.map((a) => a.from.join(",")),
+    assertions: kb.assertions.map((a) => a.ind),
+    individuals: kb.individuals,
+  });
+  const [first, ...rest] = arrivalOrders(rows).map((order) => shapeOf(buildTableauKb(order)));
+  for (const other of rest) assert.equal(other, first);
+  assert.deepEqual(buildTableauKb(rows).assertions.map((a) => a.ind), ["marty", "élodie"],
+    "locale collation would file élodie beside e and put it first");
+});
+
+test("a tableau contradiction verdict and its premises survive any arrival order of the rows", () => {
+  // élodie is typed into two disjoint classes, so the prover must find her
+  // unsatisfiable and name the same rows for it every time.
+  const rows = [
+    { id: "f1", subject: "élodie", predicate: "rdf:type", object: "zebra" },
+    { id: "f2", subject: "élodie", predicate: "rdf:type", object: "éclair" },
+    { id: "f3", subject: "zebra", predicate: "owl:disjointWith", object: "éclair" },
+    { id: "f4", subject: "marty", predicate: "rdf:type", object: "zebra" },
+  ];
+  const [first, ...rest] = arrivalOrders(rows).map((order) =>
+    findTableauViolations(buildTableauKb(order))
+      .map((v) => `${v.subject}|${v.kind}|${[...v.premises].join(",")}`));
+  assert.equal(first.length, 1, "exactly one individual contradicts itself");
+  assert.match(first[0], /^élodie\|/);
+  for (const other of rest) assert.deepEqual(other, first);
+});
+
+// ---- domain.mjs: which plan the planner finds -----------------------------
+
+test("the planner walks taught actions in codepoint order, so one taught domain yields one first move", () => {
+  // Two action families whose names separate the two orders. movesFromRules
+  // walks domain.actions in compiled order and the planner takes the first
+  // shortest path it reaches, so the action order IS the plan chosen when two
+  // moves are equally good.
+  const rules = [
+    { id: "r1", name: "zap", kind: "action-signature", slots: { subjectClass: "token", targetClass: "slot" } },
+    { id: "r2", name: "zap", kind: "action-effect", slots: { predicate: "sit-on", subjectRole: "subject", objectRole: "target" } },
+    { id: "r3", name: "élever", kind: "action-signature", slots: { subjectClass: "token", targetClass: "slot" } },
+    { id: "r4", name: "élever", kind: "action-effect", slots: { predicate: "sit-on", subjectRole: "subject", objectRole: "target" } },
+  ];
+  const facts = [
+    { subject: "t1", predicate: "rdfs:subClassOf", object: "token" },
+    { subject: "s1", predicate: "rdfs:subClassOf", object: "slot" },
+    { subject: "s2", predicate: "rdfs:subClassOf", object: "slot" },
+    { subject: "t1", predicate: "mgx:sit-on", object: "s1" },
+  ];
+  const domain = compileDomain(facts, rules);
+  assert.deepEqual(domain.actions.map((a) => a.name), ["zap", "élever"],
+    "locale order would compile élever first and hand the planner a different first move");
+  assert.equal(movesFromRules(stateFromFacts(facts, domain), domain)[0].action.name, "zap");
+});
+
+test("a compiled domain, its state and its legal moves are identical however the taught rows arrived", () => {
+  const facts = [
+    { subject: "t1", predicate: "rdfs:subClassOf", object: "token" },
+    { subject: "t2", predicate: "rdfs:subClassOf", object: "token" },
+    { subject: "épée", predicate: "rdfs:subClassOf", object: "slot" },
+    { subject: "s1", predicate: "rdfs:subClassOf", object: "slot" },
+    { subject: "t1", predicate: "mgx:sit-on", object: "s1" },
+    { subject: "t2", predicate: "mgx:sit-on", object: "épée" },
+  ];
+  const rules = [
+    { id: "r1", name: "put on", kind: "action-signature", slots: { subjectClass: "token", targetClass: "slot" } },
+    { id: "r2", name: "put on", kind: "action-effect", slots: { predicate: "sit-on", subjectRole: "subject", objectRole: "target" } },
+  ];
+  const [first, ...rest] = arrivalOrders(facts).map((order) => {
+    const domain = compileDomain(order, rules);
+    const state = stateFromFacts(order, domain);
+    return `${stateKeyFor(state)}\n--\n${movesFromRules(state, domain).map((m) => m.action.label).join("|")}`;
+  });
+  for (const other of rest) assert.equal(other, first);
+});
+
+// ---- ask.mjs: which commit the answer names -------------------------------
+
+const commitGraph = (individuals, relations) => ({
+  individuals, byId: new Map(individuals.map((i) => [i.id, i])), relations, truncated: [], proseIndex: {},
+});
+
+const datedCommit = (sha, date, author) => ({
+  id: `commit:${sha}`, label: sha.slice(0, 12), class: "Commit",
+  attributes: [{ key: "date", value: date }, { key: "author", value: author }],
+});
+
+test("\"who last touched X\" names one commit however the graph's edges were walked", () => {
+  // Three commits share a date, so the date sort ties outright and the id
+  // tiebreak is the whole answer. Without one the reply names whichever commit
+  // the edge walk reached first — the same arrival-order leak the fold above
+  // closes, routed through the code graph instead of the fact listing.
+  const DATE = "2026-08-01T09:00:00Z";
+  const mod = { id: "module:app.mjs", label: "app.mjs", class: "Module" };
+  const commits = [
+    datedCommit("aaaaaaaaaaaa0000", DATE, "ada"),
+    datedCommit("cccccccccccc0000", DATE, "cyd"),
+    datedCommit("bbbbbbbbbbbb0000", DATE, "bo"),
+  ];
+  const edges = commits.map((c) => ({ subject: c.id, object: mod.id }));
+  const [first, ...rest] = arrivalOrders(edges).map((order) =>
+    askGraph(commitGraph([mod, ...commits], [{ predicate: "seon:touches", edges: order }]),
+      "who last touched app.mjs").content);
+  for (const other of rest) assert.equal(other, first);
+  assert.match(first, /ada/, "the codepoint-smallest commit id breaks the dated tie");
+});
+
+test("\"the latest commit\" resolves to one commit however the graph listed them", () => {
+  const commits = [
+    datedCommit("aaaaaaaaaaaa0000", "2026-08-02T09:00:00Z", "ada"),
+    datedCommit("bbbbbbbbbbbb0000", "2026-08-02T09:00:00Z", "bo"),
+    datedCommit("cccccccccccc0000", "2026-07-01T09:00:00Z", "cyd"),
+  ];
+  const [first, ...rest] = arrivalOrders(commits).map((order) =>
+    askGraph(commitGraph(order, []), "when was the latest commit").content);
+  for (const other of rest) assert.equal(other, first);
+  assert.match(first, /aaaaaaaaaaaa/, "the dated tie falls to the codepoint-smallest commit id");
 });
