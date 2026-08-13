@@ -83,7 +83,10 @@ const rowById = new Map(allRows.map((r) => [r.id, r]));
 const snapshotByTitle = new Map((ctx.state.items || []).map((s) => [s.title, s]));
 const rowLine = (r) => `${r.subject} | ${r.predicate} | ${r.object}`;
 for (const item of feed.items) {
-  console.log(`\n### ${item.hub}${item.newName ? "  [new name]" : ""}`);
+  const substance = item.substance || {};
+  const substanceTag = `  [${substance.thin ? "thin: " : ""}claims ${substance.claims ?? 0},`
+    + ` background ${substance.background ?? 0}]`;
+  console.log(`\n### ${item.hub}${item.newName ? "  [new name]" : ""}${substanceTag}`);
   console.log("OUR PARAGRAPH:", item.paragraph);
   const ids = [...new Set([...(item.factIds || []), ...(item.background || [])])];
   const rows = ids.map((id) => rowById.get(id)).filter(Boolean);
@@ -104,6 +107,31 @@ for (const item of feed.items) {
     console.log(`   — ${s.name || ""} ${s.publishedAt || ""}`);
   }
 }
+console.log("\n== the scores ==");
+console.log(`terms defined by enrichment: ${enrich.enriched.length} of ${enrich.enriched.length + enrich.missed.length} looked up`);
+const withBackground = feed.items.filter((it) => (it.substance?.background ?? 0) > 0);
+const thin = feed.items.filter((it) => it.substance?.thin);
+console.log(`cards: ${feed.items.length} — ${withBackground.length} with real background, ${thin.length} thin`);
+console.log("admission per source:");
+const sourceNameById = new Map(NEWS_SOURCE_RECORDS.map((r) => [r.id, r.name]));
+const cardsBySourceName = new Map();
+for (const item of feed.items) {
+  const name = item.sources?.[0]?.name || "(no source cited)";
+  let cards = cardsBySourceName.get(name);
+  if (!cards) cardsBySourceName.set(name, (cards = []));
+  cards.push(item);
+}
+for (const source of poll.sources || []) {
+  const name = sourceNameById.get(source.sourceId) || source.sourceId;
+  const cards = cardsBySourceName.get(name) || [];
+  const thinCards = cards.filter((it) => it.substance?.thin).length;
+  console.log(`   ${name}: ${source.newItems} items polled, ${source.grounded} grounded, `
+    + `${cards.length} cards — ${cards.length - thinCards} with something to say, ${thinCards} thin`);
+}
+for (const [name, cards] of [...cardsBySourceName].sort()) {
+  if (![...sourceNameById.values()].includes(name)) console.log(`   ${name}: ${cards.length} cards`);
+}
+
 function provSourceLabel(p) {
   const head = String(p || "").split(/\s+/)[0] || "";
   if (head.startsWith("research:")) return head.split(":").slice(0, 2).join(":");

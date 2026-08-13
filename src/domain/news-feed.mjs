@@ -1092,6 +1092,90 @@ export function renderKnownFactsParagraph(hub, subgraphRows, { reportedIds = nul
 }
 
 // ---------------------------------------------------------------------------
+// What a card says beyond its own headline.
+// ---------------------------------------------------------------------------
+
+// Two spellings of one headline — the source's own capitals and punctuation,
+// and the quoted, lower-cased form a fact's object carries — fold to the same
+// key, so the comparison answers to the words alone.
+const HEADLINE_NOISE_RE = /[^a-z0-9]+/g;
+
+const headlineKey = (text) => String(text ?? "").toLowerCase().replace(HEADLINE_NOISE_RE, " ").trim();
+
+/** Every term this card is about: its hub, whatever its own reports name, and
+ *  the entities its article names. Deliberately looser than
+ *  `cardSubjectTerms` — that one picks what a SENTENCE may draw on, and drops
+ *  a term the graph reads across senses; this one asks the plainer question of
+ *  what the card is about at all, which is what a count of held background
+ *  answers to. */
+function cardAboutTerms(hub, reports, articleTerms) {
+  const terms = new Set(hubSeedTerms(normFactTerm(hub)));
+  for (const row of reports) {
+    for (const raw of [row.subject, row.object]) {
+      const term = normFactTerm(raw);
+      if (term) terms.add(term);
+    }
+  }
+  for (const raw of articleTerms) {
+    const term = normFactTerm(raw);
+    if (term) terms.add(term);
+  }
+  return terms;
+}
+
+/** What one card is carrying, and the reason a feed puts one card above
+ *  another.
+ *
+ *  `claims` are the card's own reports (`hubReportRows`) that say something
+ *  about the world. `headlineMentions` are its own reports whose object IS one
+ *  of its headlines — "hackernews discuss <that headline>", a true fact that
+ *  tells a reader nothing the card's own quoted report already prints.
+ *  `background` is what the graph holds about the terms the card is about:
+ *  the rows behind its "what the graph already knew" lines, counted before the
+ *  paragraph's own caps cut them, and never another card's report.
+ *
+ *  A source whose wire format carries no body can only ever mint headline
+ *  mentions, so a card off one lands at zero on both counts unless a lookup
+ *  attached something to a name in its headline. Those cards read last. They
+ *  still build, still cite their source, and `thin` marks them so a reader or
+ *  a bench run can count how many there were.
+ *
+ *  Pure over the rows and the headline strings. A card with no headlines to
+ *  compare against (a caller that wired no sources) counts every report as a
+ *  claim: nothing is demoted without the evidence to demote it. */
+export function cardSubstance(hub, subgraphRows, { reportedIds = null, articleTerms = [], headlines = [] } = {}) {
+  const isReported = idMembership(reportedIds);
+  const ownHeadlines = new Set(headlines.map(headlineKey).filter(Boolean));
+
+  const reports = hubReportRows(hub, subgraphRows, { reportedIds });
+  let claims = 0;
+  let headlineMentions = 0;
+  for (const row of reports) {
+    if (ownHeadlines.has(headlineKey(row.object))) headlineMentions += 1;
+    else claims += 1;
+  }
+
+  const about = cardAboutTerms(hub, reports, articleTerms);
+  let background = 0;
+  for (const row of subgraphRows) {
+    if (isReported(row.id) || isDerivedRow(row)) continue;
+    if (about.has(normFactTerm(row.subject)) || about.has(normFactTerm(row.object))) background += 1;
+  }
+
+  return { claims, background, headlineMentions, thin: claims === 0 && background === 0 };
+}
+
+/** How a feed orders two cards once their build moment is equal: the one that
+ *  reports more about the world first, then the one the graph holds more
+ *  around, then id. Reports outrank background on purpose — a card leads with
+ *  what a source said, and a hub whose common-noun object the seed graph
+ *  happens to know hundreds of edges about does not outrank a card carrying
+ *  more news. */
+function bySubstance(a, b) {
+  return (b.substance.claims - a.substance.claims) || (b.substance.background - a.substance.background);
+}
+
+// ---------------------------------------------------------------------------
 // Which story a card tells, and what it is called.
 // ---------------------------------------------------------------------------
 
@@ -1368,7 +1452,12 @@ function cardArticleTerms(sources, articleEntityNames, { concepts, readsAsEntity
 }
 
 /** newsworthyHubs -> one item per hub (PLAN_NEWS_FEED.md section 6.6),
- *  paragraph included, sorted builtAt desc then id asc. `sourcesByFactId`
+ *  paragraph included, sorted builtAt desc, then by what the card carries
+ *  (`cardSubstance` through `bySubstance`), then id asc — every card of one
+ *  build shares a `builtAt`, so substance is what actually orders a feed, and
+ *  a card whose only fact restates its own headline reads after every card
+ *  with something to say. Nothing is dropped for being thin: each item carries
+ *  its own `substance` count instead. `sourcesByFactId`
  *  maps fact ids to snapshot source links ({ title, url, name, publishedAt?
  *  }); publishedAt is present only when the source snapshot carried one.
  *  The gate (PLAN_NEWS_FEED.md section 17): `reportedRows` replaces `newsWindowRows`
@@ -1446,6 +1535,9 @@ export function buildNewsItems(rows, {
       hub: term,
       factIds,
       changedCount: changed,
+      substance: cardSubstance(term, subgraphRows, {
+        reportedIds, articleTerms, headlines: sources.map((s) => s.title),
+      }),
       builtAt: now,
       paragraph: renderNewsParagraph(term, subgraphRows, { reportedIds, articleTerms }),
       tier: tierOf(subgraphRows),
@@ -1454,7 +1546,7 @@ export function buildNewsItems(rows, {
       backgroundParagraph: renderKnownFactsParagraph(term, subgraphRows, { reportedIds, articleTerms }),
     };
   });
-  return items.sort((a, b) => (toMs(b.builtAt) - toMs(a.builtAt)) || byId(a, b));
+  return items.sort((a, b) => (toMs(b.builtAt) - toMs(a.builtAt)) || bySubstance(a, b) || byId(a, b));
 }
 
 // A `news:` tag, matched wherever it sits in a fact's provenance — bare
