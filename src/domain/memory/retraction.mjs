@@ -23,17 +23,15 @@
 // Max is a join too, so that field merges in either order and agrees.
 //
 // Pure: this module plans, merges and encodes retraction RECORDS. core.mjs owns
-// the store, p2p-room.mjs owns the wire. Its own class, its own id suffix and
-// its own predicate keep it clear of compaction — a compacted record and a
+// the store. Its own class, its own id suffix and its own predicate keep it
+// clear of compaction — a compacted record and a
 // retracted one mean opposite things, and one namespace would let a summary
 // read as a tombstone. The CRDT vocabulary above is pinned in
 // docs/references/papers/crdt.md.
 
 export const RETRACTION_CLASS = "Retraction";
 
-/** The predicate a retraction travels under. The sync filters admit it on its
- *  own, because a retraction has to cross a wire that a chat room gates on
- *  provenance kind and a mud room gates on world predicates. */
+/** The predicate a retraction travels under. */
 export const RETRACTION_PREDICATE = "mgx:retracted";
 
 export const RETRACTED_RECORD_IDS_PROP = "mgx:retractedRecordIds";

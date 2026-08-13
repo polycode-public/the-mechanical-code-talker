@@ -2,7 +2,7 @@
 // sub-graphs, assemble news items, and render the fixed paraphrase paragraph
 // (PLAN_NEWS_FEED.md sections 8.2-8.3). Pure throughout: no clock, no I/O, no
 // reliance on the caller's row order — feeding one fact set in two different
-// orders yields byte-identical items, the same discipline p2p-room.mjs's
+// orders yields byte-identical items, the same discipline rows.mjs's
 // sortFactIndividualsById holds for a CRDT-merged fact set.
 
 import { sha256Bytes, normFactTerm } from "./hash.mjs";

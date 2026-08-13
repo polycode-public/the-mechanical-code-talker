@@ -350,7 +350,7 @@ test("renderChatHtml: a print stylesheet un-pins the message column and drops th
   const printBlock = html.slice(html.indexOf("@media print"), html.indexOf("</style>"));
   assert.ok(printBlock.length > 0, "an @media print block exists");
   assert.match(printBlock, /main\.chatMain \{ overflow: visible; height: auto; \}/);
-  assert.match(printBlock, /form\.composer, \.statusline, \.statsPanel, \.legend \{ display: none; \}/);
+  assert.match(printBlock, /form\.composer, \.statusline, \.statsPanel, \.legend, \.chrome \{ display: none; \}/);
 });
 
 // ---- persistence wiring: the page keeps taught state on the device ---------
@@ -367,7 +367,7 @@ test("renderChatHtml: any store-writing turn schedules a debounced save of a pay
   const html = renderChatHtml();
   // Persist on any store write (teach OR a learn-on-miss load), not just a
   // teach turn; only pure commands, which write nothing, stay out.
-  assert.match(html, /result\.record\.via !== "command"\) \{[\s\S]{0,20}scheduleSave\(\)/);
+  assert.match(html, /result\.record\.via !== "command"\)[\s\S]{0,20}scheduleSave\(\)/);
   assert.match(html, /structuredClone\(session\.memoryDir\.payload\)/);
   assert.match(html, /setTimeout\(\(\) => \{[\s\S]*?persist\.save/, "the save runs on a timer, not inline in the turn");
   assert.match(html, /\}, 500\)/, "the debounce window is present");

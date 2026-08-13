@@ -24,10 +24,6 @@
 // scenario swaps those first two calls for `.bootRiver(...)` once and
 // `.applyRiver(...)` per crossing; the same stage draws the river.
 //
-// Deliberately absent, all P2P (mud.html's #statePill, share/join buttons,
-// the share overlay, the wave button): this is the 1-player page. A later
-// document adds sharing back from the same bundle.
-//
 // The page publishes through the ONE `globalThis.tmct` surface
 // (tmct-surface.mjs), never a page-scoped bag of its own, and
 // `createTicker`/`createSerialQueue` are spliced into the page script from

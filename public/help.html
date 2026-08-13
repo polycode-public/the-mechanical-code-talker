@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- meta:begin -->
 <title>Help — tmct</title>
-<meta name="description" content="How to ask and teach on chat.html, how sharing a world works, and what to do when something goes wrong.">
+<meta name="description" content="How to ask and teach on chat.html, and how news.html polls live sources.">
 <link rel="canonical" href="https://tmct.polycode.co.uk/help.html">
 <meta property="og:title" content="Help">
-<meta property="og:description" content="How to ask and teach on chat.html, how sharing a world works, and what to do when something goes wrong.">
+<meta property="og:description" content="How to ask and teach on chat.html, and how news.html polls live sources.">
 <meta property="og:image" content="https://tmct.polycode.co.uk/og/index.png">
 <meta property="og:url" content="https://tmct.polycode.co.uk/help.html">
 <meta property="og:type" content="website">
@@ -32,9 +32,6 @@
       <li><a href="#what">What this is</a></li>
       <li><a href="#chat">Asking and teaching</a></li>
       <li><a href="#news">Polling news sources</a></li>
-      <li><a href="#sharing">Sharing a world</a></li>
-      <li><a href="#nodes">Nodes and names</a></li>
-      <li><a href="#trouble">When something goes wrong</a></li>
       <li><a href="#more">Where the deeper story lives</a></li>
     </ol>
   </nav>
@@ -42,14 +39,14 @@
   <main class="about-main" id="help-main">
     <header class="about-head">
       <p class="eyebrow">help</p>
-      <h1>Asking, teaching, sharing, and what to do if something goes wrong</h1>
-      <p class="lede">This page explains chat.html and world sharing. It doesn't run anything itself, and it doesn't hold a connection open.</p>
+      <h1>Asking, teaching, and polling news sources</h1>
+      <p class="lede">This page explains chat.html and news.html. It doesn't run anything itself.</p>
     </header>
 
     <section class="about-section" id="what">
       <h2>What this is</h2>
       <p>tmct is a chatbot with no AI model in it anywhere. It answers only from facts it has been given. When it can't find an answer, it says so, instead of guessing. That refusal is the product working, not a gap in it.</p>
-      <p>Everything on these pages runs in your own browser. Nothing you type leaves your machine unless you choose to share it.</p>
+      <p>Everything on these pages runs in your own browser. Nothing you type leaves your machine.</p>
     </section>
 
     <section class="about-section" id="chat">
@@ -68,7 +65,7 @@ I don't know "wug" yet — teach me directly, e.g. "wug is a &lt;thing&gt;" or "
 noted — remembered 1 fact: cat rdfs:subClassOf pet (every cat is a pet)
 <span class="you">what is a cat</span>
 you told me: cat is a kind of pet (source: ace:chat:...@...)</pre>
-      <p>Taught facts are kept on this device, best effort, and are never sent anywhere unless you share them yourself (see <a href="#sharing">Sharing a world</a>).</p>
+      <p>Taught facts are kept on this device, best effort, and are never sent anywhere.</p>
       <p><strong>Commands for questions the ask lane can't reach.</strong> Two commands close questions that need description logic or class saturation. Type <code>/classify <em>term</em></code> to saturate a term through its class restrictions and derived subsumptions. Type <code>/prove is <em>subject</em> a <em>class</em></code> to check a yes/no entailment by DL tableau refutation, even for shapes the ask lane cannot resolve alone (unions, negations, composed restrictions). Examples:</p>
       <pre class="transcript"><span class="you">/classify heart</span>
 derived 1 entailed fact(s) classifying "heart":
@@ -84,31 +81,6 @@ yes — every pet is a cat or a dog (source: ace:chat:...@...) and rex is a pet 
       <p><strong>The ranked list.</strong> Every term the page has met but can't yet ground goes on a list, most common first. A row reads &ldquo;parseable but knowledge-free&rdquo; when the word itself is known but nothing is stored about it yet, and &ldquo;unknown word&rdquo; when the word itself isn't recognized. The page's own knowledge-base loop works through the top of that list on its own.</p>
       <p><strong>A blocked source.</strong> Paste a URL to add your own source and the page fetches it once before adding it. If your browser can't reach it (a CORS rule most sites don't opt out of), it lands in the panel labelled &ldquo;source does not permit browser access&rdquo; and the poll cycle skips it, rather than silently returning nothing.</p>
       <p>Every request the page makes is logged, with its URL, time, size and status, so you can see exactly what left your browser and when.</p>
-    </section>
-
-    <section class="about-section" id="sharing">
-      <h2>Sharing a world</h2>
-      <p>Sharing connects two browsers directly, over WebRTC. There is no account and no server in between. Each side does one paste.</p>
-      <p><strong>Inviting.</strong> Click the &ldquo;invite&rdquo; button. It mints a link, copies it to your clipboard, and opens the sharing panel. The status reads &ldquo;waiting for their reply.&rdquo; Send the link however you already talk to that person, and keep the tab open. When their reply arrives, paste it into the box labeled &ldquo;paste their reply here.&rdquo; Their row appearing in the node list is your confirmation, and the status flips to &ldquo;connected.&rdquo;</p>
-      <p><strong>Joining.</strong> Open the link you were sent. It lands on a join card naming the world you've been invited to, with one button, &ldquo;create my reply.&rdquo; Nothing runs until you click it. The click builds your reply, copies it, and shows it in its own box. Send that back the same way the invite reached you, and keep the tab open. The connection completing is your confirmation. You never paste anything on this side.</p>
-      <p>Three rules keep this from getting confusing. A link invites one person, so mint a fresh one for the next. Both of you need to be at your machines at the same time. A link is a phone call, not a mailbox. Whoever joins can invite the next person, and once they do, everyone already connected joins in automatically, with nothing more to paste.</p>
-    </section>
-
-    <section class="about-section" id="nodes">
-      <h2>Nodes and names</h2>
-      <p>A node is one browser holding a full copy of what's shared. Its name is two words drawn from the graph's own vocabulary, until you change it. Change yours in the &ldquo;your node name&rdquo; field in the sharing panel. Every other node you're connected to shows up in the node list beside it, most recently active first.</p>
-    </section>
-
-    <section class="about-section" id="trouble">
-      <h2>When something goes wrong</h2>
-      <ul class="refs">
-        <li>&ldquo;this invite looks cut short&rdquo;<span class="ref-note">The copy lost part of the link. Ask for it again, and make sure the whole thing travels.</span></li>
-        <li>Pasting a reply did nothing visible<span class="ref-note">Read the message under the box. It says exactly what was wrong: cut short, an invite pasted where a reply belongs, or an invite that's already been used. Your text stays in the box so you can fix it.</span></li>
-        <li>&ldquo;waiting for their reply&rdquo; for a long time<span class="ref-note">Nothing is wrong yet. Nothing happens until the other person sends their reply back and it's pasted. The wait ends when they do.</span></li>
-        <li>&ldquo;that reply matched an invite that's already been used&rdquo;<span class="ref-note">Each link admits one person. Mint a fresh one with the invite button.</span></li>
-        <li>&ldquo;your two machines couldn't find a path to each other&rdquo;<span class="ref-note">A public STUN server helps with most networks, but some firewalls or strict NATs still block it. Try again from a different network if the first attempt fails.</span></li>
-        <li>Someone's row dims<span class="ref-note">They closed their tab or dropped offline. Everything they contributed stays, and a fresh invite reconnects them.</span></li>
-      </ul>
     </section>
 
     <section class="about-section" id="more">

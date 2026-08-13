@@ -86,10 +86,11 @@ against. **Consumer:** `src/adapters/corpus/conceptnet.mjs` (Phase 2).
 ## 4. Papers — [`papers/`](papers/README.md)
 
 Two entries. [`papers/crdt.md`](papers/crdt.md) pins the CRDT literature and settles what tmct's
-P2P layer actually replicates: a grow-only set of `(triple, source)` records merged by union, with
+fact store actually merges: a grow-only set of `(triple, source)` records merged by union, with
 "latest wins" as a read-time query rather than a CRDT primitive, and no OR-Set.
 **Consumer:** `src/adapters/memory/core.mjs`, `src/domain/memory/compaction.mjs`,
-`src/services/p2p-room.mjs`, `src/domain/p2p/`, `src/services/adventure.mjs`.
+`src/domain/memory/causal-stability.mjs`, `src/domain/memory/retraction.mjs`,
+`src/services/adventure.mjs`.
 [`papers/graded-language-measures.md`](papers/graded-language-measures.md) holds the chatbench
 difficulty spectrum and is still unverified.
 

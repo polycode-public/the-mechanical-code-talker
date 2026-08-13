@@ -443,11 +443,7 @@ every class's `rdfs:subClassOf` parent drawn as a connector line rather than
 listed. The chat page and the ledger take the same paste-or-drop text in
 place; every page that holds a fact store exports it as JSONL.
 
-Two browsers can also link directly, no server in between: chat's share
-overlay walks a five-step WebRTC handshake (mint an invite, send it, create
-the reply, send that back, paste it to connect), and the mesh grows past a pair — three peers converge
-on the same fact store through a deterministic merge, real browsers driving
-real WebRTC in CI, not a mock. `help.html` walks asking, teaching, sharing,
+`help.html` walks asking, teaching,
 and what to do when something goes wrong. `receipts.html` and `claims.html`
 carry the site's own numbers and claims, each figure naming the committed
 file it was measured or rendered from, including the ones that don't flatter

@@ -1,9 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  admittedNodes, peersToConvince, stableRecordIds,
+  admittedNodes, peersToConvince, stableRecordIds, invitedByFact,
 } from "../../src/domain/memory/causal-stability.mjs";
-import { invitedByFact } from "../../src/domain/p2p/facts.mjs";
 import {
   createInMemoryStore, appendFacts, removeFacts, loadMemory, readFactRows,
   readRetractions, retirableRetractions, retireRetractions,

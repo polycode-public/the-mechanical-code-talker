@@ -85,14 +85,6 @@ import {
   visibleRoomOf, roomKindForRoom, allRoomIds,
 } from "./adventure-viz.mjs";
 import { renderMudEditorText } from "./mud-editor.mjs";
-import {
-  wireStateLabel, nodeRowsFor, nodeInitials, inviteLinkFor, inviteParamsFrom, tapeRowFor, tapeClock,
-} from "./chat-page-viz.mjs";
-import {
-  SHARE_OVERLAY_CSS, shareOverlayHtml, shareStepStates, activeWaves, offerBlobIn, peerTerm,
-  shareMessageFor, replyMessageFor, whatsAppShareUrl, isProbablyMobile, copyTextToClipboard, flashCopyTip,
-} from "./share-overlay-viz.mjs";
-export { offerBlobIn, peerTerm };
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 import { fnv1a32 } from "../domain/hash.mjs";
 import { predatorSubjects } from "../domain/mud-facts.mjs";
@@ -125,24 +117,7 @@ const DEFAULT_MAX_TURNS = 400;
 const MUD_NOTE_LINES = [
   "Burrowing animals share one world here. The players slider picks how many get a window of their own; the npcs slider adds more animals that dig and forage without one. Each one only knows what it has dug up, asked about, or been told. Nobody sees the whole burrow except you, watching from the survey above.",
   `This is a MUD, short for Multi Underground creature Dig. The name nods to MUD, or in its current form MUDII (mudii.co.uk), one of the first multiplayer text games. The dig-your-own-rooms idea came from a skim of Wikipedia's Colossal Cave Adventure article, the game that started the genre.`,
-  "Share the burrow and a second digger joins from another machine, browser to browser, with no server in the middle. Each animal is claimed by one node, one hand on one lemming, and everything either of you digs, eats or learns lands in the same graph.",
 ];
-
-// The shared sharing overlay, in this page's own words — same markup, same
-// ids, same ladder as chat.html's; only the vocabulary is a burrow's.
-const MUD_SHARE_COPY = {
-  thing: "burrow",
-  lede: "This burrow lives in your browser and nowhere else. Sharing it opens a direct line (WebRTC) to one other browser: you send an invite, they send a reply, you paste it in. No account, no server, no copy anywhere in between.",
-  worldLabel: "the burrow you are sharing",
-  nodeLabel: "your node name",
-  namesNote: "both names are facts in the burrow, not settings.",
-  invitedEyebrow: "you have been invited to dig in",
-  joinBody: "Nothing runs until you press the button. It makes one reply for you to send back the way the invite reached you.",
-  dismiss: "dig on your own instead",
-  rosterTitle: "who digs this burrow",
-  nodeEmpty: "nobody else is digging here yet.",
-  idleNote: "this browser holds the only copy of this burrow.",
-};
 
 /** A character id's species — "mole-1" -> "mole", "groundhog-1" ->
  *  "groundhog" — mirroring spider-fly-viz.mjs's own classOfAgentId. Self-
@@ -243,84 +218,6 @@ export function isCreature(state, subject) {
   return state.placements.get(subject)?.predicate === "mgx:currently-in";
 }
 
-// ---- the shared burrow: reading the P2P layer's own facts back ---------------
-// All four readers below work on plain fact rows and nothing else, so the page
-// draws a claim, a wave and a node name identically whether the world is shared
-// with three machines or with none. Pure and `.toString()`-splice safe.
-
-/** Every assertion time a provenance string carries, in milliseconds. A tag is
- *  `<kind>:<id>@<ISO>`, and a fact asserted more than once holds several joined
- *  by " | " — a peer's relabelled copy of a tag keeps the time the fact was
- *  actually asserted, so reading them all back is what lets a claim be settled
- *  by its oldest and a wave by its newest. Pure, self-contained. */
-export function provenanceStamps(provenance) {
-  const stamps = [];
-  const text = String(provenance || "");
-  const pattern = /@(\d{4}-\d{2}-\d{2}T[0-9:.]+Z)/g;
-  let found = pattern.exec(text);
-  while (found !== null) {
-    const at = Date.parse(found[1]);
-    if (!Number.isNaN(at)) stamps.push(at);
-    found = pattern.exec(text);
-  }
-  return stamps;
-}
-
-/** Which peer plays `character`, or null when nobody has claimed it. Claims are
- *  add-only and never retracted, so two peers claiming the same animal both
- *  write and every page settles it the same way: the OLDEST claim wins, with
- *  the lower peer term breaking a dead heat so two machines reading the same
- *  rows can never disagree. Pure, self-contained (provenanceStamps is spliced
- *  alongside it). */
-export function claimantOf(rows, character) {
-  let owner = null;
-  let ownerAt = Infinity;
-  for (const row of rows || []) {
-    if (row.subject !== character || row.predicate !== "mgx:playedBy") continue;
-    let at = Infinity;
-    for (const stamp of provenanceStamps(row.provenance)) if (stamp < at) at = stamp;
-    if (at < ownerAt || (at === ownerAt && owner !== null && String(row.object) < owner)) {
-      ownerAt = at;
-      owner = String(row.object);
-    }
-  }
-  return owner;
-}
-
-/** Which characters are waving right now — a read-time recency question over
- *  the newest tag on each `mgx:waved` fact, never stored state and never a
- *  retraction. A wave older than the window simply stops being read as one.
- *  Pure, self-contained. */
-export function wavingCharacters(rows, nowMs, windowMs = 8000) {
-  const waving = [];
-  for (const row of rows || []) {
-    if (row.predicate !== "mgx:waved") continue;
-    let newest = null;
-    for (const stamp of provenanceStamps(row.provenance)) if (newest === null || stamp > newest) newest = stamp;
-    if (newest === null) continue;
-    const age = nowMs - newest;
-    if (age < 0 || age > windowMs) continue;
-    if (waving.indexOf(row.subject) === -1) waving.push(row.subject);
-  }
-  return waving;
-}
-
-/** The name a peer chose for its node, from its latest `mgx:nodeName` fact,
- *  falling back to a shortened peer id. A label never waits for a name to
- *  arrive. Pure, self-contained. */
-export function nodeNameFor(rows, peerId) {
-  const want = peerTerm(peerId);
-  let name = null;
-  let nameAt = -Infinity;
-  for (const row of rows || []) {
-    if (row.predicate !== "mgx:nodeName" || peerTerm(row.subject) !== want) continue;
-    let at = -Infinity;
-    for (const stamp of provenanceStamps(row.provenance)) if (stamp > at) at = stamp;
-    if (at >= nameAt) { nameAt = at; name = String(row.object); }
-  }
-  return name || want.slice(0, 8);
-}
-
 /** The self-contained mud.html page. Pure — identical output for identical
  *  input; every other piece of state (the live world, chat, ticks) is
  *  computed in the browser once the sibling bundle loads.
@@ -388,22 +285,14 @@ ${engineBundleJs ? "" : `<link rel="icon" href="./favicon.svg" type="image/svg+x
 <style>
 ${THEME_TOKENS_CSS}
 ${MUD_STYLE}
-${SHARE_OVERLAY_CSS}
-${MUD_SHARE_SKIN}
 </style>
 </head>
 <body>
 <main>
   <header class="mud-topbar">
     <h1 class="eyebrow">${demoEyebrowHtml("mud", "mud")}</h1>
-    <div class="mud-topbar-actions">
-      <button type="button" class="state-pill" id="statePill" aria-expanded="false" aria-controls="netPanel"
-              title="whether this burrow is shared with anyone"><i class="state-dot"></i><span id="statePillWord">not shared</span></button>
-      <button type="button" id="shareBtn">share</button>
-      <button type="button" id="joinOpenBtn">join</button>
-      <a class="mud-topbar-help" href="./help.html#sharing" target="_blank" rel="noopener"
-         title="how sharing works, in a new tab" aria-label="how sharing works, opens in a new tab">?</a>
-    </div>
+    <a class="mud-topbar-help" href="./help.html" target="_blank" rel="noopener"
+       title="how this page works, in a new tab" aria-label="how this page works, opens in a new tab">?</a>
   </header>
   <div class="deck-row">
     <section class="deck" aria-label="simulation controls">
@@ -463,7 +352,6 @@ ${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " select
       <div class="world-map-key" id="worldMapKey"></div>
     </section>
   </div>
-${shareOverlayHtml({ copy: MUD_SHARE_COPY, withTape: true })}
   <div class="mud-stage" id="mudStage" data-panes="${openingCount}">
 ${paneHtml}
   </div>
@@ -515,7 +403,6 @@ export function paneMarkup(slot) {
   return `    <section class="mud-window pane-${escapeHtml(slot)}" id="${w}" data-slot="${escapeHtml(slot)}" data-character="">
       <div class="pane-head">
         <h2 id="${w}-name">waiting</h2>
-        <span class="pane-node" id="${w}-node" hidden></span>
         <span class="mono pane-turn" id="${w}-turn">turn 0</span>
       </div>
       <div class="room-stage">
@@ -559,11 +446,7 @@ export function paneMarkup(slot) {
         </div>
       </div>
       <div class="chat-console">
-        <div class="pill-strip">
-          <button type="button" class="pill wave-btn" id="${w}-wave" title="wave, so everyone in this room sees it"
-                  aria-label="wave">&#128075; wave</button>
-          <div class="chatpills" id="${w}-chatpills" role="group" aria-label="quick commands"></div>
-        </div>
+        <div class="chatpills" id="${w}-chatpills" role="group" aria-label="quick commands"></div>
         <form class="chatask" id="${w}-chatform">
           <span class="prompt mono">tmct&gt;</span>
           <input id="${w}-chatq" type="text" placeholder="look" aria-label="type a command" disabled>
@@ -596,21 +479,14 @@ const MUD_STYLE = `
   .eyebrow { font-family: ${MONO_STACK}; font-weight: 500; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--parchment); opacity: .9; margin: 0 0 .8rem; }
   ${EYEBROW_LINKS_CSS}
 
-  /* ---- the header: brand on the left, the sharing chrome on the right ----
-     The same arrangement chat.html's topbar holds — sharing is page chrome,
-     not a simulation control, so it lives above the deck rather than in it. */
+  /* ---- the header: brand on the left, the way into the help page on the right ---- */
   .mud-topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin: 0 0 .8rem; }
   .mud-topbar .eyebrow { margin: 0; }
-  .mud-topbar-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-  .mud-topbar-actions button:not(.state-pill), .mud-topbar-help {
+  .mud-topbar-help {
     background: var(--lem-face); color: var(--mud-ink); border: 1px solid var(--soil-mid); border-radius: 3px;
-    padding: .32rem .7rem; box-shadow: 0 1px 0 rgba(0, 0, 0, .12); text-decoration: none; font-size: .82rem;
+    padding: .32rem .55rem; box-shadow: 0 1px 0 rgba(0, 0, 0, .12); text-decoration: none; font-size: .82rem; line-height: 1.2;
   }
-  .mud-topbar-actions button:not(.state-pill):hover, .mud-topbar-help:hover { background: var(--lem-face-hi); border-color: var(--burrow-glow); }
-  .mud-topbar-help { padding: .32rem .55rem; line-height: 1.2; }
-  /* the pill wears the deck's lit-readout idiom: this is the one word that
-     says whether the burrow is shared, and it reads like an instrument. */
-  .mud-topbar-actions .state-pill { background: var(--lem-readout-bg); color: var(--lem-readout); border: 1px solid #000; border-radius: 2px; padding: .3rem .6rem; cursor: pointer; }
+  .mud-topbar-help:hover { background: var(--lem-face-hi); border-color: var(--burrow-glow); }
   h2 { font-family: ${DISPLAY_STACK}; font-size: 1rem; margin: 0; text-transform: capitalize; }
   h3 { font-family: ${MONO_STACK}; font-size: .58rem; margin: 0 0 .3rem; text-transform: uppercase; letter-spacing: .12em; color: var(--soil-mid); }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
@@ -1031,8 +907,7 @@ const MUD_STYLE = `
   .deck button:hover:not(:disabled), .pane-controls button:hover:not(:disabled) {
     background: var(--lem-face-hi); border-color: var(--burrow-glow);
   }
-  .deck button:active:not(:disabled), .pane-controls button:active:not(:disabled),
-  .mud-topbar-actions button:active:not(:disabled) {
+  .deck button:active:not(:disabled), .pane-controls button:active:not(:disabled) {
     background: var(--lem-face-lo); box-shadow: inset 0 1px 2px rgba(0,0,0,.25);
   }
   .deck-play { background: var(--lem-go) !important; color: var(--parchment) !important; border-color: var(--lem-go) !important; }
@@ -1043,60 +918,6 @@ const MUD_STYLE = `
   .deck-info-btn { background: var(--lem-face); color: var(--mud-ink); border: 1px solid var(--soil-mid); }
   .deck-info-btn:hover, .deck-info-btn[aria-expanded="true"] { background: var(--lem-face-hi); border-color: var(--burrow-glow); color: var(--mud-ink); }
   #editModeBtn[aria-pressed="true"] { background: var(--burrow-glow); border-color: var(--burrow-glow); color: var(--mud-ink); }
-
-  /* ---- whether the burrow is shared, said in one word on the panel ---- */
-  .state-pill { display: inline-flex; align-items: center; gap: .34rem;
-    font-family: ${MONO_STACK}; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
-  .state-dot { width: .46rem; height: .46rem; border-radius: 50%; background: var(--lem-face-lo); flex: 0 0 auto; }
-  .state-pill[data-tone="waiting"] .state-dot { background: #E0912A; }
-  .state-pill[data-tone="working"] .state-dot { background: #E0912A; }
-  .state-pill[data-tone="live"] .state-dot { background: var(--lem-go); }
-  .state-pill[data-tone="failed"] .state-dot { background: var(--lem-alert); }
-
-  /* ---- a wave, and the node a character is played from ---- */
-  .pill-strip { display: flex; align-items: flex-start; gap: .22rem; min-width: 0; }
-  .pill-strip .chatpills { flex: 1 1 auto; min-width: 0; }
-  .wave-btn { flex: 0 0 auto; }
-  .sprite-card { position: relative; }
-  .wave-hand { position: absolute; top: -0.55rem; right: -0.35rem; font-size: 1.1rem; line-height: 1;
-    transform-origin: 70% 80%; animation: hand-wave .8s ease-in-out infinite; pointer-events: none; }
-  @keyframes hand-wave { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(20deg); } }
-  .sprite-node {
-    margin-top: 1px; max-width: 100%; box-sizing: border-box;
-    font-family: ${MONO_STACK}; font-size: .34rem; line-height: 1.3; letter-spacing: .01em; text-align: center;
-    color: var(--soil-mid); background: rgba(239,230,216,.7); border-radius: 2px; padding: 0 .2rem;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .pane-node { font-family: ${MONO_STACK}; font-size: .56rem; color: var(--soil-mid); opacity: .85; }
-  .mud-window.remote .pane-controls button { display: none; }
-  .mud-window.remote .room-view { box-shadow: inset 0 0 0 2px rgba(60,60,180,.35); }
-
-  @media (prefers-reduced-motion: reduce) {
-    .wave-hand { animation: none; }
-  }
-`;
-
-// The shared overlay, re-pointed at the burrow's own palette: soil-deep card,
-// parchment ink, the burrow-glow as the working accent, moss as the live one.
-// Only variables change — every rule stays the component's.
-const MUD_SHARE_SKIN = `
-  .shareOverlay {
-    --so-scrim: rgba(10, 6, 2, .74);
-    --so-card: var(--soil-deep);
-    --so-ink: var(--parchment);
-    --so-muted: var(--chalk);
-    --so-line: var(--soil-light);
-    --so-accent: var(--burrow-glow);
-    --so-good: #9DB36A;
-    --so-warn: var(--burrow-glow);
-    --so-alert: #FF9C82;
-    --so-good-soft: rgba(157, 179, 106, .18);
-    --so-accent-soft: rgba(232, 163, 61, .14);
-    --so-alert-soft: rgba(255, 156, 130, .14);
-    --so-display: ${DISPLAY_STACK};
-    --so-body: ${SANS_STACK};
-    --so-mono: ${MONO_STACK};
-  }
 `;
 
 /** The inlined page script, as a plain function body handed to
@@ -1142,27 +963,6 @@ function pageScript() {
   const allRoomIds = ${allRoomIds.toString()};
   const renderMudEditorText = ${renderMudEditorText.toString()};
   const wordBeforeCursor = ${wordBeforeCursor.toString()};
-  const provenanceStamps = ${provenanceStamps.toString()};
-  const peerTerm = ${peerTerm.toString()};
-  const claimantOf = ${claimantOf.toString()};
-  const wavingCharacters = ${wavingCharacters.toString()};
-  const nodeNameFor = ${nodeNameFor.toString()};
-  const offerBlobIn = ${offerBlobIn.toString()};
-  const wireStateLabel = ${wireStateLabel.toString()};
-  const tapeRowFor = ${tapeRowFor.toString()};
-  const tapeClock = ${tapeClock.toString()};
-  const nodeRowsFor = ${nodeRowsFor.toString()};
-  const nodeInitials = ${nodeInitials.toString()};
-  const inviteLinkFor = ${inviteLinkFor.toString()};
-  const inviteParamsFrom = ${inviteParamsFrom.toString()};
-  const shareStepStates = ${shareStepStates.toString()};
-  const activeWaves = ${activeWaves.toString()};
-  const shareMessageFor = ${shareMessageFor.toString()};
-  const replyMessageFor = ${replyMessageFor.toString()};
-  const whatsAppShareUrl = ${whatsAppShareUrl.toString()};
-  const isProbablyMobile = ${isProbablyMobile.toString()};
-  const copyText = ${copyTextToClipboard.toString()};
-  const flashTip = ${flashCopyTip.toString()};
 
   const el = (id) => document.getElementById(id);
   // Which of the shipped burrows is loaded. Every read of the world — the
@@ -1214,15 +1014,6 @@ function pageScript() {
   const liveWait = function () { return wait(delayMs); };
 
   let freshlyDugRoom = null;
-  // Which animals another node has claimed, character -> that node's name.
-  // Refreshed from the store on every redraw, which is also every turn, so a
-  // claim that arrives from a peer takes effect on the next tick rather than
-  // being cached until something else happens to look.
-  let claimedElsewhere = {};
-  // Whoever is waving right now, and the timer that lets a wave stop being
-  // current. A wave is never retracted — it just stops being recent.
-  let wavingNow = [];
-  let waveRedrawTimer = null;
   // The last omniscient read, kept so the pounce can draw the predator's own
   // den after the engine has already moved the character out of every room.
   let lastSnapshot = null;
@@ -1258,15 +1049,10 @@ function pageScript() {
     const bootAt = bootSeq;
     return serializeTick(async function () {
       if (bootAt !== bootSeq || finished[character]) return { outOfPlay: true };
-      // An animal another node claimed is played there, not here. Its moves
-      // still arrive as facts and it still draws, talks and can be waved at —
-      // this page just never takes its turn for it.
-      if (claimedElsewhere[character]) return { playedElsewhere: true };
       globalTurn += 1;
       const result = await session.windows[character].autoplayTick(globalTurn);
       if (!result.outOfPlay) turnsTaken[character] = (turnsTaken[character] || 0) + 1;
       afterEngineTurn(character, result);
-      await broadcastLocalChange();
       return result;
     });
   }
@@ -1400,40 +1186,11 @@ function pageScript() {
 
   function sendCommand(character, line) {
     appendChat(character, "u", line);
-    const owner = claimedElsewhere[character];
-    if (owner) {
-      const refusal = character + " is played from " + owner + ". You can watch it and wave at it, but its turns are theirs.";
-      appendChat(character, "a", refusal);
-      return Promise.resolve({ answer: refusal, end: false });
-    }
-    // A wave is a gesture, not a world command — the engine has no verb for it
-    // and would answer with an honest miss. Both ways in (this typed line and
-    // the pane's own hand button) write the same fact.
-    if (/^\\/?wave$/i.test(line.trim())) {
-      return waveAs(character).then(function (here) {
-        appendChat(character, "a", here
-          ? "you wave. Everyone in the " + here + " sees it."
-          : character + " is standing nowhere, so there is nobody to wave at.");
-        return { answer: "", end: false };
-      });
-    }
-    return serializeTick(function () { return tmct.turn(line, { as: character }); }).then(async function (res) {
+    return serializeTick(function () { return tmct.turn(line, { as: character }); }).then(function (res) {
       appendChat(character, "a", res.answer);
-      await broadcastLocalChange();
       renderSoon();
       return res;
     });
-  }
-
-  // A wave is an ordinary add-only fact in the shared world, so it needs no
-  // network to work: one browser renders it exactly the way four do, and the
-  // room broadcast below is the only part sharing adds.
-  async function waveAs(character) {
-    if (!session || finished[character]) return null;
-    const here = await serializeTick(function () { return session.wave(character); });
-    if (here) await broadcastLocalChange();
-    renderSoon();
-    return here;
   }
 
   // Wired as the pane is built. The stage is rebuilt on every boot, so a
@@ -1459,10 +1216,6 @@ function pageScript() {
     el(w + "-step").addEventListener("click", function () {
       const character = characterInSlot(slot);
       if (character) ensureTicker(character).stepOnce();
-    });
-    el(w + "-wave").addEventListener("click", function () {
-      const character = characterInSlot(slot);
-      if (character) sendCommand(character, "wave");
     });
 
     const log = el(w + "-chatlog");
@@ -1602,31 +1355,16 @@ function pageScript() {
 
   // A sprite card: adventure.html's own frame-plus-nameplate, carrying the one
   // command this room currently grants on its subject (none, for a thing the
-  // room offers nothing on) and the subject's own mass under the name. The
-  // last argument holds the two things only a shared burrow has: a hand over a
-  // character waving right now, and the node another peer plays it from — one
-  // more line under the name, in the same font, never a second label system.
-  function spriteCardHtml(subject, label, inner, command, extraClass, mass, extra) {
-    const opts = extra || {};
+  // room offers nothing on) and the subject's own mass under the name.
+  function spriteCardHtml(subject, label, inner, command, extraClass, mass) {
     const action = command
       ? ' actionable" data-command="' + esc(command) + '" role="button" tabindex="0" title="' + esc(command) + '"'
       : '" title="' + esc(label) + '"';
-    return '<div class="sprite-card ' + (extraClass || "") + (opts.waving ? " waving" : "") + action
+    return '<div class="sprite-card ' + (extraClass || "") + action
       + ' data-subject="' + esc(subject) + '">'
-      + (opts.waving ? '<div class="wave-hand" aria-hidden="true">\\u{1F44B}</div>' : "")
       + inner + '<div class="sprite-label">' + esc(label) + "</div>"
-      + (opts.node ? '<div class="sprite-node">via ' + esc(opts.node) + "</div>" : "")
       + (mass === null || mass === undefined ? "" : '<div class="sprite-mass">mass ' + esc(mass) + "</div>")
       + "</div>";
-  }
-
-  // A character another node plays carries that node's name; one this node
-  // plays, or one nobody has claimed, carries nothing extra.
-  function nodeLabelFor(character) {
-    return claimedElsewhere[character] || null;
-  }
-  function isWavingNow(character) {
-    return wavingNow.indexOf(character) !== -1;
   }
 
   function renderRoomView(character, rows, state, here, roomIds, roomMates) {
@@ -1638,14 +1376,12 @@ function pageScript() {
       character, character,
       '<div class="sprite">' + spriteSvgFor(speciesOfCharacter(character), rows, character) + "</div>",
       null, "self", massOf(state, character),
-      { waving: isWavingNow(character), node: nodeLabelFor(character) },
     );
 
     const others = roomMates.map(function (mate) {
       return spriteCardHtml(mate, mate,
         '<div class="sprite">' + spriteSvgFor(speciesOfCharacter(mate), rows, mate) + "</div>",
-        commands[mate], "", massOf(state, mate),
-        { waving: isWavingNow(mate), node: nodeLabelFor(mate) });
+        commands[mate], "", massOf(state, mate));
     });
     const wall = [];
     for (const obj of mudRoomSceneObjects(rows, state, here, character)) {
@@ -1876,23 +1612,6 @@ function pageScript() {
     const snap = await session.snapshot();
     lastSnapshot = snap;
     const roomIds = allRoomIds(snap.rows);
-    const nowMs = Date.now();
-    wavingNow = wavingCharacters(snap.rows, nowMs);
-    // Every claimed animal, not just the ones this page cast: a character
-    // another node plays walks into this room as an ordinary room-mate, and
-    // its label has to name where it is played from just the same.
-    claimedElsewhere = {};
-    if (myPeerId) {
-      const claimed = {};
-      for (const row of snap.rows) if (row.predicate === "mgx:playedBy") claimed[row.subject] = true;
-      for (const character of Object.keys(claimed)) {
-        const owner = claimantOf(snap.rows, character);
-        if (owner === null || peerTerm(owner) === peerTerm(myPeerId)) continue;
-        claimedElsewhere[character] = nodeNameFor(snap.rows, owner);
-        const ticker = tickers[character];
-        if (ticker) ticker.pause();
-      }
-    }
     for (const character of everyone()) {
       const reason = window.tmct.page.outOfPlayReasonOf(snap.state, character);
       if (reason) markOutOfPlay(character, reason, null);
@@ -1901,10 +1620,6 @@ function pageScript() {
     for (const character of cast) {
       const pane = paneIdFor(character);
       el(pane + "-turn").textContent = "turn " + turnsFor(character);
-      const owner = claimedElsewhere[character];
-      el(pane).classList.toggle("remote", Boolean(owner));
-      el(pane + "-node").hidden = !owner;
-      el(pane + "-node").textContent = owner ? "played from " + owner : "";
       if (finished[character]) continue;
       const place = snap.state.placements.get(character);
       const here = place ? place.object : null;
@@ -1917,12 +1632,6 @@ function pageScript() {
       renderMinimap(character, snap.rows, snap.state, here);
     }
     freshlyDugRoom = null;
-    // A wave carries no retraction, so nothing tells the page when one stops
-    // being current — the recency window does, and only a redraw can notice it
-    // has passed. One follow-up per second while any hand is up, and none at
-    // all once they are all down.
-    clearTimeout(waveRedrawTimer);
-    if (wavingNow.length) waveRedrawTimer = setTimeout(renderSoon, 1000);
   }
 
   // ---- edit mode -----------------------------------------------------------
@@ -2067,7 +1776,6 @@ function pageScript() {
     status.className = "edit-status pending";
     status.textContent = "reading the burrow\\u2026";
     const result = await serializeTick(function () { return session.applyEdit(el("editorText").value); });
-    await broadcastLocalChange();
     const snap = await session.snapshot();
     allStoreRows = snap.rows;
     editRows = worldOnlyRows(snap.rows);
@@ -2151,729 +1859,6 @@ function pageScript() {
     el("editModeBtn").setAttribute("aria-pressed", "false");
     setPlayControlsEnabled(true);
     await renderAll();
-  }
-
-  // ---- the shared burrow: nodes, the wire, and the two-paste handshake -----
-  // Every piece of networking arrives from ./vendor/p2p.js, the site's own
-  // shared P2P asset, imported the first time somebody actually asks to share
-  // rather than at boot. The room owns signaling, the mesh and the merge; this
-  // block owns what a person sees and clicks, and nothing else.
-  const P2P_ASSET = "./vendor/p2p.js";
-  const NODE_NAME_KEY = "tmct.mud.nodeName";
-  // Not the IndexedDB store beside it: that record is stamped with the site
-  // version and the seed, and is dropped whenever either moves. A node id has
-  // to outlive a deploy, because peers have already keyed this node's facts
-  // on it.
-  const NODE_ID_KEY = "tmct.mud.nodeId";
-  const invite = inviteParamsFrom(window.location.search);
-
-  let p2p = null;
-  let p2pLoad = null;
-  let room = null;
-  let myPeerId = null;
-  let myNodeId = "";
-  let myDisplayName = "";
-  let worldId = "";
-  let worldName = "";
-  let nodeClockTimer = null;
-  let mintedBlob = "";
-  let nodeWaveTimer = null;
-  let channelCount = 0;
-
-  // Which seat this page occupies in the handshake — "idle" until something
-  // happens, "sponsor" once an invite is minted here, "joiner" once an invite
-  // is opened here. The overlay's CSS reads it to decide which calls to
-  // action stand at each step; entry distinguishes an invite that arrived as
-  // a link (the hero card owns the reply) from one pasted in as text.
-  function setOverlayRole(role, entry) {
-    const overlay = el("netPanel");
-    overlay.dataset.role = role;
-    overlay.dataset.entry = entry || "";
-  }
-
-  function loadP2p() {
-    if (!p2pLoad) {
-      p2pLoad = import(P2P_ASSET).then(function (mod) { p2p = mod; return mod; });
-      p2pLoad.catch(function (err) {
-        noteTape("note", "fault", "networking unavailable", err && err.message ? err.message : String(err));
-      });
-    }
-    return p2pLoad;
-  }
-  window.tmctP2pLoad = loadP2p;
-
-  function readStoredNodeName() {
-    try { return localStorage.getItem(NODE_NAME_KEY) || ""; } catch { return ""; }
-  }
-  function writeStoredNodeName(name) {
-    try { localStorage.setItem(NODE_NAME_KEY, name); } catch { /* private mode — the name still holds for this visit */ }
-  }
-
-  async function ensureIdentity() {
-    const mod = await loadP2p();
-    if (!myPeerId) myPeerId = mod.generatePeerId();
-    if (!myNodeId) {
-      try { myNodeId = localStorage.getItem(NODE_ID_KEY) || ""; } catch { myNodeId = ""; }
-      if (!myNodeId) {
-        myNodeId = mod.generateNodeId();
-        try { localStorage.setItem(NODE_ID_KEY, myNodeId); } catch { /* private mode — this visit still has an id, it just won't outlive the tab */ }
-      }
-    }
-    if (!myDisplayName) {
-      myDisplayName = readStoredNodeName() || mod.generateDisplayName();
-      el("nodeNameInput").value = myDisplayName;
-    }
-    if (!worldId) worldId = invite && invite.world ? invite.world : mod.generateWorldId();
-    if (!worldName) {
-      worldName = invite && invite.worldName ? invite.worldName : mod.generateDisplayName();
-      el("worldNameInput").value = worldName;
-    }
-  }
-
-  // The one place a transport gets made, which makes it the one place every
-  // message crossing one can be seen. The room asks for transports through
-  // this factory and never learns it is being watched.
-  function instrumentedTransport() {
-    const transport = p2p.createTransport();
-    const channel = "ch" + (++channelCount);
-    transport.onMessage(function (message) { noteWire("in", message, channel); });
-    transport.onOpen(function () { noteTape("note", "link", "channel open", channel); });
-    transport.onClose(function () { noteTape("note", "link", "channel closed", channel); });
-    return {
-      createOffer: function () {
-        return transport.createOffer().then(function (sdp) { noteTape("note", "signal", "offer minted", channel); return sdp; });
-      },
-      createAnswerFor: function (offerSdp) {
-        return transport.createAnswerFor(offerSdp).then(function (sdp) { noteTape("note", "signal", "answer minted", channel); return sdp; });
-      },
-      completeWithAnswer: function (answerSdp) {
-        noteTape("note", "signal", "answer accepted", channel);
-        return transport.completeWithAnswer(answerSdp);
-      },
-      send: function (message) { transport.send(message); noteWire("out", message, channel); },
-      onMessage: function (fn) { transport.onMessage(fn); },
-      onOpen: function (fn) { transport.onOpen(fn); },
-      onClose: function (fn) { transport.onClose(fn); },
-      close: function () { transport.close(); },
-      get connectionState() { return transport.connectionState; },
-    };
-  }
-
-  async function ensureRoom() {
-    if (room) return room;
-    const mod = await loadP2p();
-    await ensureIdentity();
-    if (!session && bootRun) await bootRun;
-    if (!session) throw new Error("the burrow hasn't finished opening");
-    // The one place this page decides what is worth replicating: whatever the
-    // engine calls live world state, plus the P2P layer's own four predicates.
-    // The check is handed over rather than imported, so the sync filter never
-    // learns the world engine's private predicate names.
-    const extraPredicates = (window.tmct.page.P2P_PREDICATES || []).slice();
-    const isState = window.tmct.page.isMudStatePredicate;
-    room = mod.createP2pRoom({
-      memoryDir: session.memoryDir,
-      myPeerId: myPeerId,
-      myDisplayName: myDisplayName,
-      myNodeId: myNodeId,
-      worldId: worldId,
-      worldName: worldName,
-      transportFactory: instrumentedTransport,
-      syncableFacts: function (rows) { return mod.mudSyncableFacts(rows, isState, extraPredicates); },
-    });
-    room.onStateChanged(function (state) {
-      noteTape("note", state === "failed" ? "fault" : "state", "state " + state, "");
-      // The overlay exists to make one connection. The moment the channel is
-      // open its work is done — the lights come back up, and the pill in the
-      // header is the way back in.
-      if (state === "connected") {
-        el("joinCard").hidden = true;
-        closeNetPanel();
-        flashTip(el("statePill"), "connected \\u2014 you're digging together");
-      }
-      renderWire();
-    });
-    room.onPeersChanged(function () { renderNodes(); renderWire(); });
-    room.onFactsChanged(function (payload) {
-      noteTape("note", "facts", "merged", payload.merged + (payload.merged === 1 ? " fact" : " facts"));
-      renderNodes();
-      renderSoon();
-    });
-    await room.start();
-    // The burrow's name is written into the graph the moment the room starts,
-    // and this version retracts nothing — so the field stops taking edits.
-    el("worldNameInput").readOnly = true;
-    window.tmctP2pRoom = room;
-    noteTape("note", "link", "world " + worldName, myDisplayName);
-    await claimMyAnimals();
-    renderWire();
-    renderNodes();
-    if (!nodeClockTimer) nodeClockTimer = setInterval(renderNodes, 10000);
-    return room;
-  }
-
-  // Every animal this page drives is claimed the moment the burrow is shared,
-  // panes and npcs alike: two peers each running scripted turns for one mole
-  // would be two hands on one lemming. The claim is add-only and the oldest
-  // wins, so a page that loses one simply stops driving that animal and
-  // watches somebody else play it instead.
-  async function claimMyAnimals() {
-    if (!session || !room) return;
-    await serializeTick(function () { return session.claimCharacters(everyone(), myPeerId); });
-    await broadcastLocalChange();
-    renderSoon();
-  }
-
-  // The room diffs the store against what it last saw and broadcasts whatever
-  // changed. The page calls it after every local turn, wave, claim and edit —
-  // a broadcast that fails is a dead channel, reported by its own close
-  // handler, and must never fail the turn that happened to carry it.
-  function broadcastLocalChange() {
-    if (!room) return Promise.resolve({ broadcast: 0 });
-    return room.afterLocalChange().catch(function () { return { broadcast: 0 }; });
-  }
-
-  function dropRoom(note) {
-    if (!room) return;
-    room.close();
-    room = null;
-    window.tmctP2pRoom = null;
-    clearInterval(nodeClockTimer);
-    nodeClockTimer = null;
-    el("shareLink").value = "";
-    el("replyOut").value = "";
-    el("worldNameInput").readOnly = false;
-    mintedBlob = "";
-    setOverlayRole("idle", "");
-    noteTape("note", "link", "world closed", worldName);
-    renderWire();
-    renderNodes();
-    // Last, not first: renderWire restates the note for the state it has just
-    // read, which for a room that is gone is the idle one ("this browser holds
-    // the only copy"). WHY the room went is the thing worth saying, so it is
-    // written over the top rather than under it.
-    if (note) el("wireStateNote").textContent = note;
-  }
-
-  // ---- the wire tape: every message, as it happens ------------------------
-  const TAPE_CAP = 240;
-  const TAPE_FAMILY_COLOR = {
-    facts: "var(--so-good)",
-    state: "var(--so-accent)",
-    greeting: "var(--so-warn)",
-    signal: "var(--so-warn)",
-    fault: "var(--so-alert)",
-    link: "var(--so-muted)",
-  };
-  const tapeCounts = new Map();
-  let wireMessageCount = 0;
-
-  function pushTape(entry) {
-    // The meter counts real wire messages only; the tape below shows those
-    // plus the local notes (state changes, a channel opening) that explain
-    // them. Folding notes into the counts would make "12 op" mean two things.
-    if (entry.dir !== "note") {
-      wireMessageCount += 1;
-      tapeCounts.set(entry.type, (tapeCounts.get(entry.type) || 0) + 1);
-    }
-    const tapeEl = el("tape");
-    el("tapeEmpty").hidden = true;
-    const row = document.createElement("li");
-    row.className = "tape-row";
-    row.dataset.dir = entry.dir;
-    row.dataset.family = entry.family;
-    row.dataset.type = entry.type;
-    const bar = document.createElement("i");
-    bar.className = "tape-bar";
-    const clock = document.createElement("span");
-    clock.className = "tape-clock";
-    clock.textContent = tapeClock();
-    const type = document.createElement("span");
-    type.className = "tape-type";
-    type.textContent = entry.type;
-    const detail = document.createElement("span");
-    detail.className = "tape-detail";
-    detail.textContent = entry.detail || "";
-    row.appendChild(bar);
-    row.appendChild(clock);
-    row.appendChild(type);
-    row.appendChild(detail);
-    tapeEl.insertBefore(row, tapeEl.firstChild);
-    while (tapeEl.childElementCount > TAPE_CAP) tapeEl.removeChild(tapeEl.lastElementChild);
-    renderTapeMeter();
-  }
-
-  function noteWire(direction, message, channel) {
-    const row = tapeRowFor(direction, message);
-    pushTape({ dir: direction, family: row.family, type: row.type, detail: row.detail || channel });
-  }
-  function noteTape(dir, family, type, detail) {
-    pushTape({ dir: dir, family: family, type: type, detail: detail });
-  }
-
-  function renderTapeMeter() {
-    const tapeMeterEl = el("tapeMeter");
-    el("tapeTotal").textContent = wireMessageCount + (wireMessageCount === 1 ? " message" : " messages");
-    tapeMeterEl.textContent = "";
-    const counted = [...tapeCounts.entries()].sort(function (a, b) { return b[1] - a[1]; });
-    for (const pair of counted) {
-      const item = document.createElement("span");
-      item.className = "meter-item";
-      item.dataset.type = pair[0];
-      const bar = document.createElement("i");
-      bar.className = "meter-bar";
-      bar.style.background = TAPE_FAMILY_COLOR[tapeRowFor("in", { type: pair[0] }).family] || "var(--so-muted)";
-      const label = document.createElement("span");
-      label.textContent = pair[0];
-      const count = document.createElement("span");
-      count.className = "meter-n";
-      count.textContent = String(pair[1]);
-      item.appendChild(bar);
-      item.appendChild(label);
-      item.appendChild(count);
-      tapeMeterEl.appendChild(item);
-    }
-  }
-
-  // The state machine is shared with chat.html and the words mostly are too.
-  // Two of them are not: nothing is taught here and nothing is a node below,
-  // so those two notes are said in this page's own terms rather than forking
-  // the whole table for a burrow.
-  const MUD_WIRE_NOTES = {
-    idle: "this browser holds the only copy of this burrow.",
-    connected: "what you dig from here reaches every node in the burrow, and theirs reaches you.",
-  };
-
-  function renderWire() {
-    const state = room ? room.state : "idle";
-    const label = wireStateLabel(state);
-    const note = MUD_WIRE_NOTES[state] || label.note;
-    const wire = el("wireState");
-    wire.dataset.tone = label.tone;
-    el("wireStateWord").textContent = label.word;
-    el("wireStateNote").textContent = note;
-    const pill = el("statePill");
-    pill.dataset.tone = label.tone;
-    el("statePillWord").textContent = label.pill;
-    pill.title = note;
-    el("netPanel").dataset.tone = label.tone;
-    renderSteps();
-  }
-
-  function renderSteps() {
-    const states = shareStepStates({
-      role: el("netPanel").dataset.role,
-      state: room ? room.state : "idle",
-      hasReply: Boolean(el("replyOut").value),
-    });
-    for (const step of states) {
-      const item = el("step-" + step.key);
-      if (item) item.dataset.status = step.status;
-    }
-  }
-
-  // The scene's two browser cards: this one wears the node's own name, the
-  // far one wears the first peer's the moment there is one to name.
-  function renderScene() {
-    el("sceneYouName").textContent = myDisplayName || "you";
-    const peers = room ? room.peers() : [];
-    const first = peers.find(function (p) { return p.connected; }) || peers[0];
-    el("sceneThemName").textContent = first ? room.displayNameFor(first.peerId) : "your friend";
-  }
-
-  function relativeWhen(at, nowMs) {
-    if (at === null || at === undefined) return "\\u2014";
-    const seconds = Math.max(0, Math.round((nowMs - at) / 1000));
-    if (seconds < 5) return "now";
-    if (seconds < 60) return seconds + "s";
-    if (seconds < 3600) return Math.round(seconds / 60) + "m";
-    if (seconds < 86400) return Math.round(seconds / 3600) + "h";
-    return Math.round(seconds / 86400) + "d";
-  }
-
-  // A node is marked waving whether the wave came from one of its claimed
-  // animals (a pane's own wave button) or from the node itself (the roster's
-  // peer-scoped wave) — one hand, two ways to raise it.
-  function wavingPeerTerms(nowMs) {
-    const rows = room.factRows();
-    const terms = new Set();
-    for (const wave of activeWaves(rows, nowMs)) terms.add(wave.waver);
-    for (const character of wavingCharacters(rows, nowMs)) {
-      const owner = claimantOf(rows, character);
-      if (owner !== null) terms.add(peerTerm(owner));
-    }
-    return terms;
-  }
-
-  function renderNodes() {
-    const listEl = el("nodeList");
-    if (!room || !p2p) {
-      el("nodeCount").textContent = "";
-      listEl.textContent = "";
-      el("nodeEmpty").hidden = false;
-      renderScene();
-      return;
-    }
-    const rows = nodeRowsFor({
-      peers: room.peers(),
-      factRows: room.factRows(),
-      myPeerId: myPeerId,
-      myDisplayName: myDisplayName,
-      nameFor: room.displayNameFor,
-      latestTimestampOf: p2p.latestProvenanceTimestamp,
-    });
-    const nowMs = Date.now();
-    const waving = wavingPeerTerms(nowMs);
-    el("nodeCount").textContent = rows.length + (rows.length === 1 ? " node" : " nodes");
-    listEl.textContent = "";
-    for (const entry of rows) {
-      const item = document.createElement("li");
-      item.className = "node-row";
-      item.dataset.self = String(entry.isSelf);
-      item.dataset.away = String(!entry.connected);
-      item.dataset.peer = entry.peerId;
-      item.dataset.waving = String(waving.has(peerTerm(entry.peerId)));
-      const avatar = document.createElement("span");
-      avatar.className = "node-avatar";
-      avatar.textContent = nodeInitials(entry.name);
-      avatar.title = entry.connected
-        ? "connected"
-        : "away \\u2014 closed the tab or dropped offline; everything it dug stays";
-      const dot = document.createElement("i");
-      dot.className = "node-dot";
-      avatar.appendChild(dot);
-      const hand = document.createElement("span");
-      hand.className = "node-hand";
-      hand.textContent = "\\u{1F44B}";
-      avatar.appendChild(hand);
-      const name = document.createElement("span");
-      name.className = "node-name";
-      name.textContent = entry.name;
-      const when = document.createElement("span");
-      when.className = "node-when";
-      when.textContent = relativeWhen(entry.lastActiveAt, nowMs);
-      const fact = document.createElement("span");
-      fact.className = "node-fact";
-      if (entry.lastFact) {
-        const line = entry.lastFact.subject + " " + String(entry.lastFact.predicate || "").replace(/^[a-z0-9_-]+:/i, "") + " " + entry.lastFact.object;
-        fact.textContent = line;
-        fact.title = "last shared: " + line;
-      } else {
-        fact.textContent = "nothing shared yet";
-      }
-      const waveOne = document.createElement("button");
-      waveOne.type = "button";
-      waveOne.className = "node-wave-btn";
-      waveOne.textContent = "\\u{1F44B}";
-      waveOne.title = entry.isSelf ? "wave at everyone" : "wave at " + entry.name + " \\u2014 they see it as a fact arriving";
-      waveOne.setAttribute("aria-label", waveOne.title);
-      waveOne.addEventListener("click", function () { waveAtNode(entry.isSelf ? null : entry.peerId, waveOne); });
-      item.appendChild(avatar);
-      item.appendChild(name);
-      item.appendChild(when);
-      item.appendChild(waveOne);
-      item.appendChild(fact);
-      listEl.appendChild(item);
-    }
-    el("nodeEmpty").hidden = rows.length > 1;
-    renderScene();
-    clearTimeout(nodeWaveTimer);
-    if (waving.size) nodeWaveTimer = setTimeout(renderNodes, 1000);
-  }
-
-  // A node's own wave, distinct from an animal's: the fact's subject is the
-  // peer, and its object names the audience — everyone, or one node.
-  async function waveAtNode(targetPeerId, anchor) {
-    try {
-      const active = await ensureRoom();
-      await active.wave("peer:" + myPeerId, targetPeerId ? "peer:" + targetPeerId : null);
-      const audience = targetPeerId ? (active.displayNameFor(targetPeerId) || "one node") : "everyone";
-      renderNodes();
-      if (anchor) flashTip(anchor, "you waved at " + audience);
-    } catch (err) {
-      el("wireStateNote").textContent = "couldn't wave (" + (err && err.message ? err.message : err) + ").";
-    }
-  }
-
-  const openNetPanel = function () {
-    const overlay = el("netPanel");
-    overlay.hidden = false;
-    el("statePill").setAttribute("aria-expanded", "true");
-    const card = overlay.querySelector(".so-card");
-    if (card) card.focus({ preventScroll: true });
-  };
-  const closeNetPanel = function () {
-    el("netPanel").hidden = true;
-    el("statePill").setAttribute("aria-expanded", "false");
-  };
-
-  function renderInviteShare() {
-    const facts = room ? room.factRows().length : 0;
-    const factsPart = facts ? " \\u00b7 " + facts + (facts === 1 ? " fact travels" : " facts travel") + " when they join" : "";
-    el("inviteSummary").textContent = "invites one person into \\u201c" + worldName + "\\u201d" + factsPart;
-    const message = shareMessageFor({ worldName: worldName, link: el("shareLink").value, thing: "burrow" });
-    el("waShareBtn").href = whatsAppShareUrl(message);
-    el("webShareBtn").hidden = !navigator.share;
-  }
-
-  function renderReplyShare() {
-    const message = replyMessageFor({ worldName: worldName, blob: el("replyOut").value });
-    el("replyWaBtn").href = whatsAppShareUrl(message);
-    el("joinWaBtn").href = whatsAppShareUrl(message);
-    el("replyShareBtn").hidden = !navigator.share;
-    el("joinShareBtn").hidden = !navigator.share;
-  }
-
-  async function mintInvite(anchor) {
-    try {
-      const active = await ensureRoom();
-      const minted = await active.startSharing();
-      mintedBlob = minted.blob;
-      el("shareLink").value = inviteLinkFor(window.location.href, {
-        blob: minted.blob, world: worldId, worldName: worldName,
-      });
-      setOverlayRole("sponsor", "");
-      renderInviteShare();
-      el("replyProblem").hidden = true;
-      openNetPanel();
-      renderWire();
-      await copyText(el("shareLink").value);
-      flashTip(anchor, "link copied \\u2014 send it to one person");
-    } catch (err) {
-      el("replyProblem").textContent = "couldn't create an invite (" + (err && err.message ? err.message : err) + ").";
-      el("replyProblem").hidden = false;
-      openNetPanel();
-    }
-  }
-
-  function wireNetPanel() {
-    el("netPanelClose").addEventListener("click", closeNetPanel);
-    el("netPanel").addEventListener("click", function (e) {
-      if (e.target === el("netPanel")) closeNetPanel();
-    });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !el("netPanel").hidden) closeNetPanel();
-    });
-    el("statePill").addEventListener("click", function () {
-      if (el("netPanel").hidden) openNetPanel(); else closeNetPanel();
-    });
-    if (isProbablyMobile()) el("netPanel").classList.add("so-mobile");
-    // The blobs are made to be copied whole — a click selects everything, so
-    // a manual copy can never take half a code.
-    for (const boxId of ["shareLink", "replyOut", "joinReply"]) {
-      el(boxId).addEventListener("focus", function (e) { e.target.select(); });
-    }
-
-    el("shareBtn").addEventListener("click", async function () {
-      const shareBtn = el("shareBtn");
-      shareBtn.disabled = true;
-      try {
-        await mintInvite(shareBtn);
-      } finally {
-        shareBtn.disabled = false;
-      }
-    });
-    for (const mintId of ["mintInviteBtn", "remintBtn"]) {
-      el(mintId).addEventListener("click", async function () {
-        const btn = el(mintId);
-        btn.disabled = true;
-        try {
-          await mintInvite(btn);
-        } finally {
-          btn.disabled = false;
-        }
-      });
-    }
-
-    el("copyLinkBtn").addEventListener("click", async function () {
-      await copyText(el("shareLink").value);
-      flashTip(el("copyLinkBtn"), "link copied \\u2014 send it to one person");
-    });
-    el("copyCodeBtn").addEventListener("click", async function () {
-      await copyText(mintedBlob);
-      flashTip(el("copyCodeBtn"), "code copied \\u2014 they paste it under step 3 on their page");
-    });
-    el("webShareBtn").addEventListener("click", function () {
-      navigator.share({
-        title: "join \\u201c" + worldName + "\\u201d",
-        text: shareMessageFor({ worldName: worldName, link: el("shareLink").value, thing: "burrow" }),
-      }).catch(function () { /* the sheet was closed — the copy buttons still stand */ });
-    });
-    const shareReplyViaSheet = function () {
-      navigator.share({
-        title: "my reply to \\u201c" + worldName + "\\u201d",
-        text: replyMessageFor({ worldName: worldName, blob: el("replyOut").value }),
-      }).catch(function () { /* the sheet was closed — the copy buttons still stand */ });
-    };
-    el("replyShareBtn").addEventListener("click", shareReplyViaSheet);
-    el("joinShareBtn").addEventListener("click", shareReplyViaSheet);
-    el("waveAllBtn").addEventListener("click", function () { waveAtNode(null, el("waveAllBtn")); });
-
-    // The inviter's page has exactly one paste target, so there is no wrong box
-    // to choose. A rejected paste keeps its text so the copy can be fixed.
-    el("replyBtn").addEventListener("click", async function () {
-      let active = room;
-      if (!active) {
-        try { active = await ensureRoom(); } catch { return; }
-      }
-      const outcome = await active.completeInvite(el("replyBox").value);
-      if (outcome && outcome.error) {
-        el("replyProblem").textContent = outcome.message;
-        el("replyProblem").hidden = false;
-        return;
-      }
-      el("replyProblem").hidden = true;
-      el("replyBox").value = "";
-      renderWire();
-    });
-
-    el("copyReplyBtn").addEventListener("click", async function () {
-      await copyText(el("replyOut").value);
-      flashTip(el("copyReplyBtn"), "reply copied \\u2014 send it back the same way");
-    });
-
-    // The link flow lands somebody on the join card before they have dug
-    // anything. This is the other case: a burrow already open, an invite that
-    // arrived in a message, and no reason to throw the burrow away to take it.
-    el("joinOpenBtn").addEventListener("click", function () {
-      openNetPanel();
-      const box = el("inviteBox");
-      if (box.offsetParent !== null) box.focus();
-    });
-
-    el("inviteBtn").addEventListener("click", async function () {
-      const problem = el("inviteProblem");
-      const pasted = el("inviteBox").value.trim();
-      if (!pasted) {
-        problem.textContent = "paste the invite you were sent, then try again";
-        problem.hidden = false;
-        return;
-      }
-      if (room) {
-        problem.textContent = "this burrow is already shared. Reset it first, then take the invite.";
-        problem.hidden = false;
-        return;
-      }
-      // A whole link and a bare blob are both what people actually paste, so
-      // both are read. The blob's own envelope decides either way.
-      const blob = offerBlobIn(pasted);
-      const mod = await loadP2p();
-      const decoded = mod.decodeInviteBlob(blob);
-      if (decoded.error || decoded.value.kind !== "offer") {
-        problem.textContent = decoded.error
-          ? "this invite looks cut short \\u2014 ask for it to be sent again"
-          : "that's a reply, not an invite \\u2014 it belongs on the page that sent the invite";
-        problem.hidden = false;
-        return;
-      }
-      // The world id has to be the invite's before the room is opened: a room
-      // that minted its own would refuse the invite as belonging elsewhere.
-      await ensureIdentity();
-      worldId = decoded.value.world || worldId;
-      if (decoded.value.worldName) {
-        worldName = decoded.value.worldName;
-        el("worldNameInput").value = worldName;
-      }
-      try {
-        const active = await ensureRoom();
-        const outcome = await active.acceptInvite(blob);
-        if (outcome && outcome.error) {
-          problem.textContent = outcome.message;
-          problem.hidden = false;
-          return;
-        }
-        problem.hidden = true;
-        el("inviteBox").value = "";
-        el("replyOut").value = outcome.blob;
-        setOverlayRole("joiner", "paste");
-        renderReplyShare();
-        renderWire();
-        await copyText(outcome.blob);
-        flashTip(el("copyReplyBtn"), "reply copied \\u2014 send it back the same way");
-      } catch (err) {
-        problem.textContent = "couldn't make a reply (" + (err && err.message ? err.message : err) + ").";
-        problem.hidden = false;
-      }
-    });
-
-    el("nodeNameInput").addEventListener("change", function () {
-      const name = el("nodeNameInput").value.trim();
-      if (!name || name === myDisplayName) { el("nodeNameInput").value = myDisplayName; return; }
-      myDisplayName = name;
-      writeStoredNodeName(name);
-      if (!room) { renderNodes(); return; }
-      room.setMyDisplayName(name).then(renderNodes).catch(function () { /* the next broadcast carries it */ });
-    });
-    el("worldNameInput").addEventListener("change", function () {
-      const input = el("worldNameInput");
-      if (input.readOnly) { input.value = worldName; return; }
-      const name = input.value.trim();
-      if (name) worldName = name;
-      input.value = worldName;
-    });
-
-    el("joinBtn").addEventListener("click", async function () {
-      const joinBtn = el("joinBtn");
-      joinBtn.disabled = true;
-      try {
-        const active = await ensureRoom();
-        const outcome = await active.acceptInvite(invite.offer);
-        if (outcome && outcome.error) {
-          el("joinProblem").textContent = outcome.message;
-          el("joinProblem").hidden = false;
-          joinBtn.disabled = false;
-          joinBtn.textContent = "try again";
-          return;
-        }
-        el("joinProblem").hidden = true;
-        el("joinReply").value = outcome.blob;
-        el("replyOut").value = outcome.blob;
-        el("joinReplyWrap").hidden = false;
-        joinBtn.textContent = "reply created";
-        el("joinDismiss").textContent = "close this and start digging";
-        renderReplyShare();
-        renderWire();
-        await copyText(outcome.blob);
-        flashTip(el("joinCopyBtn"), "reply copied \\u2014 send it back the same way");
-      } catch (err) {
-        el("joinProblem").textContent = "couldn't make a reply (" + (err && err.message ? err.message : err) + ").";
-        el("joinProblem").hidden = false;
-        joinBtn.disabled = false;
-      }
-    });
-    el("joinCopyBtn").addEventListener("click", async function () {
-      await copyText(el("joinReply").value);
-      flashTip(el("joinCopyBtn"), "reply copied \\u2014 send it back the same way");
-    });
-    el("joinDismiss").addEventListener("click", closeNetPanel);
-  }
-
-  // A link that lost part of itself on the way reads as a mangled link, never
-  // as no invite at all.
-  async function prepareJoinCard() {
-    setOverlayRole("joiner", "link");
-    el("joinCard").hidden = false;
-    el("joinWorld").textContent = invite.worldName || "a shared burrow";
-    renderSteps();
-    openNetPanel();
-    el("joinBtn").focus();
-    const mod = await loadP2p();
-    const decoded = mod.decodeInviteBlob(invite.offer);
-    if (decoded.error || decoded.value.kind !== "offer") {
-      el("joinBtn").hidden = true;
-      el("joinEyebrow").textContent = "this link didn't arrive in one piece";
-      el("joinWorld").textContent = invite.worldName || "an invitation";
-      el("joinBody").textContent = decoded.error
-        ? "Part of the link was lost on the way here. Ask for it to be sent again, and check the whole thing travels."
-        : "That link carries a reply rather than an invite. It belongs in the box on the page that sent the invite.";
-      el("joinDismiss").textContent = "dig on your own instead";
-      return;
-    }
-    if (decoded.value.world) invite.world = decoded.value.world;
-    if (decoded.value.worldName) {
-      invite.worldName = decoded.value.worldName;
-      el("joinWorld").textContent = decoded.value.worldName;
-    }
   }
 
   // ---- the control deck ----------------------------------------------------
@@ -2962,7 +1947,7 @@ function pageScript() {
         const wasEditing = editing;
         if (wasEditing) await exitEditMode();
         scenarioIndex = picked;
-        await boot("a different burrow opened \\u2014 still linked.");
+        await boot();
         if (wasEditing) await enterEditMode();
       });
     }
@@ -3020,31 +2005,13 @@ function pageScript() {
   // session on the floor rather than binding it to the stage the newer boot
   // has already drawn.
   let bootSeq = 0;
-  let bootRun = null;
-  function boot(note) {
-    bootRun = openWorld(note);
-    return bootRun;
+  function boot() {
+    return openWorld();
   }
 
-  async function openWorld(note) {
+  async function openWorld() {
     const seq = bootSeq += 1;
     autoOn = false;
-    // A live link survives a recast: once the new burrow's store is open the
-    // room re-binds to it (below), pushing the fresh world to every connected
-    // node instead of quietly abandoning them. The recast moves the world one
-    // epoch forward, read from the store the peers have all converged on, so
-    // nobody's leftover snapshots from the old run can outrank the new one.
-    const liveRoom = room;
-    let nextEpoch = 0;
-    if (liveRoom && session) {
-      try {
-        nextEpoch = (await session.snapshot()).state.epoch + 1;
-      } catch (err) {
-        nextEpoch = 1;
-      }
-    }
-    claimedElsewhere = {};
-    wavingNow = [];
     const playBtn = el("autoToggle");
     playBtn.setAttribute("aria-pressed", "false");
     playBtn.textContent = "\\u25B6 play";
@@ -3083,30 +2050,16 @@ function pageScript() {
     renderStage();
     // slotOf has to match cast from the same synchronous stretch that just
     // rebuilt the DOM for it \\u2014 a render triggered anywhere in the awaits
-    // below (rebind's own re-sync can trigger one) must never see this
-    // scenario's cast paired with the LAST scenario's pane ids, which is what
-    // a null pane-element lookup in renderAll means when it happens.
+    // below must never see this scenario's cast paired with the LAST
+    // scenario's pane ids, which is what a null pane-element lookup in
+    // renderAll means when it happens.
     for (let i = 0; i < cast.length; i += 1) slotOf[cast[i]] = slots[i];
     const opened = await window.tmct.open(scenario().worldPayload, {
-      characters: everyone(), epoch: nextEpoch,
+      characters: everyone(),
       getTeachEnabled: function () { return el("teachToggle").checked; },
     });
     if (seq !== bootSeq) return;
     session = opened;
-    if (liveRoom) {
-      try {
-        await liveRoom.rebind({ memoryDir: opened.memoryDir, worldName: worldName, myDisplayName: myDisplayName });
-        renderWire();
-        renderNodes();
-        // After renderWire, the same way dropRoom writes its own reason: the
-        // render restates the state's stock note, and WHY this recast kept
-        // the link is the thing worth saying over it.
-        el("wireStateNote").textContent = note || "the burrow recast \\u2014 still linked.";
-        await claimMyAnimals();
-      } catch (err) {
-        dropRoom("the link didn't survive the recast \\u2014 share again to link up.");
-      }
-    }
     bindPanes();
     for (const character of cast) {
       const w = paneIdFor(character);
@@ -3122,20 +2075,6 @@ function pageScript() {
   }
 
   wireDeck();
-  wireNetPanel();
-  renderWire();
-  renderNodes();
   boot();
-  // Off the boot path on purpose: this fetches the shared P2P asset so the
-  // panel can show a real node name and burrow name before anyone clicks
-  // anything. A failure here costs sharing, never the digging.
-  ensureIdentity().then(renderNodes).catch(function () { /* sharing stays unavailable; the burrow does not */ });
-  if (invite) {
-    prepareJoinCard().catch(function (err) {
-      el("joinProblem").textContent = "the networking asset didn't load (" + (err && err.message ? err.message : err) + ").";
-      el("joinProblem").hidden = false;
-      el("joinBtn").hidden = true;
-    });
-  }
 })();`;
 }

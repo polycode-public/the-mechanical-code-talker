@@ -18,8 +18,6 @@ import { foldWorldState, worldActionRows } from "../../src/services/adventure.mj
 import { parseEditorLine, planTaughtTriple } from "../../src/services/adventure-editor.mjs";
 import { parseMudEditorLine, planTaughtMudTriple } from "../../src/services/mud-editor.mjs";
 import { worldTeachTurn } from "../../src/services/world-teach.mjs";
-import { mudSyncableFacts } from "../../src/domain/p2p/sync-filter.mjs";
-import { isMudStatePredicate } from "../../src/services/adventure.mjs";
 
 const WORLD = "ashcombe-hall";
 
@@ -199,20 +197,6 @@ test("a world teach carries its own provenance, folds into the playable state, a
       worldActionRows(rows).some((r) => r.subject === "candle@turn1"),
       true,
       "the world: prefix is what lets the fold see it, where a teach:chat: row is filtered out",
-    );
-  });
-});
-
-test("a taught row replicates through the p2p sync filter, the same as a played turn's", async () => {
-  await withWorld("sync", async (dir) => {
-    await teach(dir, "Candle is in the study.");
-    const { rows } = await rowsAndState(dir);
-    const written = taughtRows(rows);
-    const syncable = mudSyncableFacts(written, isMudStatePredicate);
-    assert.deepEqual(
-      syncable.map((r) => [r.subject, r.predicate]).sort(),
-      [["candle", "mgx:display-name"], ["candle", "rdf:type"], ["candle", "rdf:type"], ["candle@turn1", "mgx:located-in"]],
-      "a shared sandbox shows everyone what somebody wrote into the world — deliberate, not incidental",
     );
   });
 });

@@ -335,18 +335,16 @@ e2e-web-index:
       test-e2e/cli-render-views.test.mjs
 
 # The browser files that need a LOCAL origin, so they cannot move to
-# `e2e:deployed:pages` with the rest of the matrix. Four of them build the page they
+# `e2e:deployed:pages` with the rest of the matrix. Three of them build the page they
 # open, and a deployed site has no equivalent to serve:
 #   pages-sprites            rewrites sprites.html with the chat dock enabled
 #   sprites-large-visual     writes its own single-page harness
 #   ledger-viz-query-only-dock  renders what `tmct viz` writes (dock-less
 #                            ledger.html), which is deliberately NOT the site's
-#   p2p-webrtc-handshake     serves a transport fixture page, and skips itself
-#                            outright when TMCT_E2E_BASE_URL is set
-# The fifth is different: pages-chat-boot-budget runs fine against a deployed
+# The fourth is different: pages-chat-boot-budget runs fine against a deployed
 # origin, but what it measures stops being the page's own boot cost and starts
 # being the CDN's — its own header says so. A budget wants a fixed origin.
-# The sixth, pages-service-worker-cache-bust, rebuilds its own served
+# The fifth, pages-service-worker-cache-bust, rebuilds its own served
 # directory in place under a second version partway through — a deployed
 # site is one live snapshot, with no second historical build to redeploy
 # over it, so this one is structurally local-only too.
@@ -365,7 +363,7 @@ e2e-web-local-origin:
     - >-
       node --disable-warning=ExperimentalWarning --test
       test-e2e/pages-sprites.test.mjs test-e2e/sprites-large-visual.test.mjs
-      test-e2e/ledger-viz-query-only-dock.test.mjs test-e2e/p2p-webrtc-handshake.test.mjs
+      test-e2e/ledger-viz-query-only-dock.test.mjs
       test-e2e/pages-chat-boot-budget.test.mjs test-e2e/pages-service-worker-cache-bust.test.mjs
       test-e2e/pages-news.test.mjs test-e2e/pages-news-feed.test.mjs
 
@@ -943,29 +941,6 @@ e2e:deployed:news-live:
   extends: .e2e-deployed-base
   script:
     - node --disable-warning=ExperimentalWarning --test test-e2e/pages-news-live-ingest.test.mjs
-
-# Sharing between browsers: every file here drives two or three real browser
-# contexts at once, so the heaviest per-file Chromium load in the matrix and
-# the tightest cap — at most 2 of these files run their own contexts at once.
-# Nothing they do reaches another visitor — the transport has no signalling
-# server and no room registry, and two contexts only find each other because
-# the test carries the SDP blob from one to the other by hand.
-e2e:deployed:mesh:
-  extends: .e2e-deployed-base
-  # --test-concurrency dropped from 2 to 1: this job's own two heaviest files
-  # (three real browser contexts each) pushed p2p-disconnect-rejoin (a
-  # genuine 300s scenario) and pages-chat-p2p over their own timeouts under
-  # concurrency-2 scheduling — both passed standalone, both failed only here,
-  # under real contention from several live Chromium instances at once. Same
-  # contention shape the pages/pages-timing split already documents for a
-  # different job.
-  script:
-    - >-
-      node --disable-warning=ExperimentalWarning --test --test-concurrency=1
-      test-e2e/pages-chat-p2p.test.mjs
-      test-e2e/p2p-mesh-three-peers.test.mjs
-      test-e2e/p2p-disconnect-rejoin.test.mjs
-      test-e2e/pages-chat-p2p-distributed-inference.test.mjs
 
 # The hero clip: about 75 seconds of the live mudiii square playing itself,
 # recorded off the deployed site and uploaded as a build artifact for a human
