@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/news-bench/iterate.mjs — the loop's mechanical front half
-// (PLAN_NEWS_FEED_QUALITY.md section 4, step 1) in one command: capture
+// in one command: capture
 // today's fixtures, run the bench over the loop's standing measurement (the
 // 5 most recent hacker-news articles plus the 5 most recent nyt-world
 // articles, single pass, xl seed — the same shape as a news.html press),

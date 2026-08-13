@@ -1,5 +1,5 @@
-// The news-bench provenance comparison rule (PLAN_NEWS_FEED_QUALITY.md
-// section 4's "digests, not re-runs"): two reports are directly comparable
+// The news-bench provenance comparison rule — digests, not re-runs: two
+// reports are directly comparable
 // exactly when their seed digest, fixture dates, sources and take all
 // match — the code that produced them is free to differ, that's the point
 // of a lever's before/after pair.

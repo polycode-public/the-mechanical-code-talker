@@ -1,4 +1,4 @@
-// The quality loop's run step (PLAN_NEWS_FEED_QUALITY.md section 4): one
+// The quality loop's run step: one
 // full product cycle, locally — poll the cached news fixtures, synthesise
 // facts, enrich ungrounded terms through the real live reference works, and
 // build the feed — then print every card in the four-part form the loop

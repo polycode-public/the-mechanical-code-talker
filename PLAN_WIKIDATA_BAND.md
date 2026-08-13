@@ -5,7 +5,7 @@ is an evidence question, stated in §2, and it is the operator's to answer. Unti
 then this plan holds the procedure and the numbers, and no load runs.
 
 Sibling: `PLAN_WIKIPEDIA_BAND.md` (the `corpus:simplewiki-derived` band, still a
-stub scope). The load mechanics here moved out of `PLAN_MEMORY_ROLLOUT.md` §4,
+stub scope). The load mechanics here moved out of `archive/PLAN_MEMORY_ROLLOUT.md` §4,
 which now points at this file.
 
 ## 1. What is on disk
@@ -20,7 +20,7 @@ completed 2026-08-13 05:02 BST, ~4.2 MB/s sustained
 count; it resumes from any interruption, so a broken transfer costs only the
 remainder.
 
-Note this is the PINNED DATED dump, not `latest-all`. `PLAN_MEMORY_ROLLOUT.md` §4
+Note this is the PINNED DATED dump, not `latest-all`. `archive/PLAN_MEMORY_ROLLOUT.md` §4
 described the target as `wikidata-latest-all.json.gz` at 155,314,703,515 bytes;
 the dated file differs in both name and size. A dated dump is the right choice —
 a band built from `latest` cannot be rebuilt identically once the dump rolls, and
@@ -29,7 +29,7 @@ meaningless.
 
 ## 2. The gate, and why it has not opened
 
-`PLAN_NEWS_FEED_QUALITY.md` §5.5 states the condition: build the bulk band **if
+The `news-feed-quality` skill states the condition: build the bulk band **if
 live lookups prove too thin or slow per term**, with the row count and DynamoDB
 write cost printed before any spend.
 
@@ -50,7 +50,7 @@ waiting on:
 
 1. **Load it for coverage breadth.** The argument is not today's misses but
    tomorrow's terms — a feed that runs beyond two English news sources meets
-   entities the live lookups will miss. If this is the answer, §5.5's wording
+   entities the live lookups will miss. If this is the answer, the skill's wording
    should change too, because it currently gates on a condition that will not
    occur.
 2. **Do not load it.** Live lookups are carrying the feed. The dump stays on disk
@@ -59,14 +59,14 @@ waiting on:
    run `hacker-news` and `nyt-world`. `usgs-quakes` and `wikimedia-featured` are
    captured, committed, and untouched by all thirteen iterations — and quake and
    place terms are exactly what a dump defines. One iteration against those two
-   sources either produces the thin-lookup evidence §5.5 asks for, or settles that
+   sources either produces the thin-lookup evidence the skill asks for, or settles that
    live lookups are enough.
 
 Option 3 costs one loop iteration against fixtures already on disk.
 
 ## 3. The load procedure, when the gate opens
 
-Moved verbatim in substance from `PLAN_MEMORY_ROLLOUT.md` §4, which carried it
+Moved verbatim in substance from `archive/PLAN_MEMORY_ROLLOUT.md` §4, which carried it
 while the download ran.
 
 - **Pass A** streams `gzip -dc` over the dump and extracts the 12 committed
@@ -93,7 +93,7 @@ aws cloudformation describe-stacks --region eu-west-2 \
 awscli v1 ignores `AWS_REGION`, so always pass `--region`.
 
 **Print the row count and the DynamoDB write cost before any load.** That is
-§5.5's requirement and it is not optional — the number is what makes the spend a
+the skill's requirement and it is not optional — the number is what makes the spend a
 decision rather than a side effect.
 
 ## 4. What the 12-QID slice is and is not

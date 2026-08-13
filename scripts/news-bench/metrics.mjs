@@ -1,5 +1,5 @@
-// scripts/news-bench/metrics.mjs — PLAN_NEWS_FEED_QUALITY.md section 3's
-// eight metrics, computed purely from what one bench run already produced:
+// scripts/news-bench/metrics.mjs — the bench's eight metrics, computed purely
+// from what one bench run already produced:
 // the news state, the fact rows, the built feed and the materialized feed
 // document. No I/O, no clock — every timestamp the caller needs is already
 // baked into what it hands in here.
@@ -21,10 +21,9 @@ import { STOP_SET as ABSTRACT_ROOT_TERMS } from "../../src/domain/hub-terms.mjs"
 // exact membership is what DEFINITIONS quotes back into the report.
 // ---------------------------------------------------------------------------
 
-/** Metric 5: the abstract WordNet-hypernym classes PLAN_NEWS_FEED_QUALITY.md
- *  names as noise (section 5's own list, plus "disapproval" from section 1's
- *  own worked example of the problem — nothing added beyond what the plan
- *  text itself names). */
+/** Metric 5: the abstract WordNet-hypernym classes this bench treats as noise —
+ *  the curated list, plus "disapproval" from the worked example that first
+ *  exposed the problem. Nothing is added beyond what a real run named. */
 export const NOISY_HUB_CLASS_TERMS = new Set([
   "cognition", "abstraction", "feeling", "relation", "act", "happening",
   "group", "line", "tune", "arrangement", "disapproval",

@@ -29,7 +29,8 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-The method is `PLAN_NEWS_FEED_QUALITY.md`: run
+The method is the `news-feed-quality` skill
+(`.claude/skills/news-feed-quality/SKILL.md`): run
 (`node scripts/news-bench/capture-fixtures.mjs`, then
 `node scripts/news-bench/run-live-cycle.mjs`), show every card whole in the
 four-part form, fix the top item below, merge, repeat — never waiting on

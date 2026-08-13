@@ -31,7 +31,7 @@ function buildFixture() {
     row("eq-tremor", "tremor", "rdfs:subClassOf", "earthquake"),
     row("eq-geo", "earthquake", "rdfs:subClassOf", "geological phenomenon"),
 
-    // the three disjoint WordNet senses PLAN_NEWS_FEED_QUALITY.md names —
+    // the three disjoint WordNet senses the noise list names —
     // none of these three rows' objects share a one-hop neighbour with
     // "earthquake" itself or with each other.
     row("eq-elec", "earthquake", "rdfs:subClassOf", "electrical device"),

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/news-bench/run.mjs — the offline news-feed-quality bench
-// (PLAN_NEWS_FEED_QUALITY.md section 2): drives the real worker-shaped path
+// drives the real worker-shaped path
 // (a source's own fetcher parsing -> pollNewsSources -> ingest -> buildFeed)
 // over the committed, dated fixtures from capture-fixtures.mjs and a chosen
 // seed, then reports every section 3 metric. Fully offline: every fetch

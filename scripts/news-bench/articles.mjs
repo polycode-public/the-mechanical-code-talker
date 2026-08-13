@@ -1,11 +1,10 @@
-// scripts/news-bench/articles.mjs — the bench's per-run articles log
-// (PLAN_NEWS_FEED_QUALITY.md section 2): every card's rendered text, its
-// backing source item(s), and the offered items that never became one.
+// scripts/news-bench/articles.mjs — the bench's per-run articles log: every
+// card's rendered text, its backing source item(s), and the offered items that
+// never became one.
 // Pure: takes a run's own already-computed feed/state/rows, no I/O and no
 // clock of its own, so the same run produces the same articles report byte
 // for byte. Card date/backing-item data the feed document itself does not
-// expose (PLAN_NEWS_FEED_QUALITY.md section 1's own named gap) is computed
-// here from the poll state rather than touching src.
+// expose is computed here from the poll state rather than touching src.
 import { ledgerFromPayload } from "../../src/domain/term-ledger.mjs";
 import { groundedTermPerItem, noisyHubIndex, cardIdentityLineClassifications } from "./metrics.mjs";
 
