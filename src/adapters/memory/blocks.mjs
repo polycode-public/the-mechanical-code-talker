@@ -27,6 +27,12 @@ const MAX_TOKENS_PER_BLOCK = 800; // beyond tokenizeProse's per-doc cap: union o
 
 const blocksDir = (dir) => join(dir, BLOCKS_DIR_REL);
 
+// Codepoint order, never localeCompare — the block ids this settles ties on
+// decide WHICH blocks retrieveBlocks hands back, so a locale-dependent
+// comparison would let two readers retrieve different text from one store.
+// src/domain/memory/fact-order.mjs states the rule for the fact rows.
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** Only safe, filesystem-friendly block file names (ids are session uuids or
  *  corpus slugs; anything else is normalized, never trusted into a path). */
 const safeName = (id) => String(id).replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 120) || "_";
@@ -216,7 +222,7 @@ export async function retrieveBlocks(dir, query, k = 3) {
       id, score: (idfSum * (1 + rank) * trustFactor) / Math.sqrt(1 + degree), rank, trust, file: b.file,
     });
   }
-  scored.sort((a, b) => b.score - a.score || b.rank - a.rank || a.id.localeCompare(b.id));
+  scored.sort((a, b) => b.score - a.score || b.rank - a.rank || byCodepoint(a.id, b.id));
   const top = scored.slice(0, Math.max(1, k));
   for (const hit of top) {
     try { hit.text = await readFile(join(blocksDir(dir), hit.file), "utf8"); }
