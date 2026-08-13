@@ -200,16 +200,22 @@ const NEWSWIRE_RELATION_VERBS = new Set([
   "discover", "uncover", "rescue", "evacuate",
   "spark", "trigger", "cause", "force", "deploy", "restore", "expand",
 ]);
-// Two verbs the band already holds can report ONE event: a headline frees a
-// prisoner the description says was released, and the card then states the
+// Two verbs the band already holds can report ONE event: a report wounds the
+// people its next sentence says were injured, and the card then states the
 // same act twice. Each pair below is one act under two words, so the left
 // lemma reads as the right one and both sentences land on a single edge —
 // the vocabulary-level form of the rule that already puts "releases" and
-// "released" on one edge. Only true interchangeables belong here: a pair that
-// merely overlaps ("detain"/"jail", "oust"/"overthrow") states two different
-// things about the same people and keeps its own edge.
+// "released" on one edge.
+//
+// The bar for a pair is that the two words mean one thing wherever the band
+// reads them. A pair that merely overlaps keeps its own edge, and it fails the
+// bar in either of two ways. It can name two different acts on the same people
+// ("detain"/"jail", "oust"/"overthrow"). Or one word can carry a second sense
+// the other does not: "free" is "release from custody" for a prisoner and
+// "pull out of the rubble" for a rescue, so folding it onto "release" turns
+// "rescuers free quake victim" into a jail delivery. Nothing in the sentence
+// tells those two senses apart, so the pair stays out.
 const NEWSWIRE_VERB_SYNONYMS = new Map([
-  ["free", "release"],
   ["wound", "injure"],
   ["uncover", "discover"],
   ["bar", "ban"],
