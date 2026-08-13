@@ -9,6 +9,11 @@ import { requireInjected } from "./injected.mjs";
 
 const LABEL_TOKEN_COUNT = 5;
 
+// Codepoint order, never localeCompare — hit ids and content tokens trace
+// back to the memory store, and two readers must land on the same order
+// regardless of locale.
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** Plain union-find (path halving, union-by-index) — small N here (a single broad search's
  *  hit count). */
 function unionFind(n) {
@@ -83,7 +88,7 @@ export function groupHits(hits, { overlapMin, store } = {}) {
   for (const memberIdx of componentIdx.values()) {
     const members = memberIdx
       .map((i) => byId.get(ids[i]))
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .sort((a, b) => byCodepoint(a.id, b.id));
     const memberIds = members.map((m) => m.id);
 
     // label tokens: rank by member coverage, then IDF, then token text (deterministic).
@@ -92,7 +97,7 @@ export function groupHits(hits, { overlapMin, store } = {}) {
       for (const t of new Set(tokensById[ids[i]])) coverage.set(t, (coverage.get(t) || 0) + 1);
     }
     const tokens = [...coverage.keys()]
-      .sort((a, b) => (coverage.get(b) - coverage.get(a)) || (idf(b) - idf(a)) || a.localeCompare(b))
+      .sort((a, b) => (coverage.get(b) - coverage.get(a)) || (idf(b) - idf(a)) || byCodepoint(a, b))
       .slice(0, LABEL_TOKEN_COUNT);
 
     groups.push({
@@ -104,6 +109,6 @@ export function groupHits(hits, { overlapMin, store } = {}) {
     });
   }
 
-  groups.sort((a, b) => a.memberIds[0].localeCompare(b.memberIds[0]));
+  groups.sort((a, b) => byCodepoint(a.memberIds[0], b.memberIds[0]));
   return groups;
 }

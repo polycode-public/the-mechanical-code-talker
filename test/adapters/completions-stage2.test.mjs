@@ -129,6 +129,25 @@ test("rankSentences(): query-focused mode only IDF-sums tokens overlapping the q
   assert.ok(ranked[0].score > 0);
 });
 
+test("rankSentences(): a zero-score tie breaks by codepoint sourceBlockId order, not locale order, whichever way the members arrived", () => {
+  // "zebra" sorts BEFORE "élan" in codepoint order (z=0x7A < é=0xE9) but AFTER
+  // it under locale-aware collation, so this only holds under codepoint order.
+  // The query shares no token with either sentence, so both score 0 and the
+  // tiebreak alone decides the order.
+  const group = {
+    members: [
+      { id: "zebra", text: "Widgets exist in this system." },
+      { id: "élan", text: "Gadgets exist in this system." },
+    ],
+  };
+  const forward = rankSentences(group, { query: "nomatchtoken", store: COMPLETIONS_STORE });
+  const reversed = rankSentences({ members: [...group.members].reverse() }, { query: "nomatchtoken", store: COMPLETIONS_STORE });
+  assert.deepEqual(forward.map((r) => r.sourceBlockId), reversed.map((r) => r.sourceBlockId),
+    "member array arrival order never changes the ranked order");
+  assert.ok(forward.every((r) => r.score === 0), "both sentences share no token with the query, so both honestly score 0");
+  assert.deepEqual(forward.map((r) => r.sourceBlockId), ["zebra", "élan"]);
+});
+
 test("rankSentences(): [] / no members -> [] (no crash on empty input)", () => {
   assert.deepEqual(rankSentences({ members: [] }, { store: COMPLETIONS_STORE }), []);
   assert.deepEqual(rankSentences({}, { store: COMPLETIONS_STORE }), []);
