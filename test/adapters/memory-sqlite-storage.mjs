@@ -13,7 +13,7 @@
 
 import {
   appendFact, appendFacts, appendRule, appendUtterances, removeFacts,
-  loadMemory, readFactRows, saveNodeId, saveSyllogiseState,
+  loadMemory, readFactRows, saveSyllogiseState,
   RULE_KIND_COMPOSE2, RULE_KIND_FILTER,
 } from "../../src/adapters/memory/core.mjs";
 
@@ -80,8 +80,7 @@ export async function populateSqliteStore(handle) {
   const tail = readFactRows(await loadMemory(handle)).find((row) => row.object === "tail");
   await removeFacts(handle, [tail.id], { provenance: `teach:chat:s1@${at(9)}`, retractedAt: at(9) });
 
-  // The two sidecars land in `meta` beside the payload's own scalars.
-  await saveNodeId(handle, "0123456789abcdef");
+  // The sidecar lands in `meta` beside the payload's own scalars.
   await saveSyllogiseState(handle, { version: 1, factIds: ["fact:0000000000000001"], completedAt: at(9) });
 }
 

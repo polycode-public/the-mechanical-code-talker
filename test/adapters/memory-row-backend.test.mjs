@@ -24,7 +24,7 @@ import {
   createSqliteMemoryStore, closeSqliteMemoryStore, openSqliteSeedStore, sqliteSeedFactTermValues,
   loadMemory, appendFact, appendFacts, appendUtterances, removeFacts, readFactRows,
   appendCanonicalisedFromEdges,
-  loadSyllogiseState, saveSyllogiseState, loadNodeId, saveNodeId,
+  loadSyllogiseState, saveSyllogiseState,
   BackendRejected, FACT_CLASS,
 } from "../../src/adapters/memory/core.mjs";
 import { createRowMemoryBackend } from "../../src/adapters/memory/row-backend-memory.mjs";
@@ -220,18 +220,15 @@ test("readOnlyMemorySnapshot over a row handle answers from the real rows and wr
 
 // ---- the sidecars -----------------------------------------------------------
 
-test("the syllogise watermark and the node id round-trip through the store's meta", async () => {
+test("the syllogise watermark round-trips through the store's meta", async () => {
   const spy = spyBackend();
   const dir = wrapRowBackend(spy.backend);
   assert.equal(await loadSyllogiseState(dir), null);
-  assert.equal(await loadNodeId(dir), null);
 
   const state = { version: 2, factIds: ["fact:aaaa", "fact:bbbb"], completedAt: T1 };
   await saveSyllogiseState(dir, state);
-  await saveNodeId(dir, "0123456789abcdef");
 
   assert.deepEqual(await loadSyllogiseState(dir), state);
-  assert.equal(await loadNodeId(dir), "0123456789abcdef");
   assert.deepEqual(await loadSyllogiseState(wrapRowBackend(spy.backend)), state, "a second handle reads the same watermark");
   assert.equal(spy.calls.putRows.length, 0, "a scalar sidecar never becomes a row");
 });
