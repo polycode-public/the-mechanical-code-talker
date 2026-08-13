@@ -4,11 +4,16 @@
 // that reads a raw surface before it folds to a stored term.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   ingestText, optimisticReading, optimisticTriples, reportedClauseOf,
   readsAsEntityTerm, readsAsIdentifierToken, identifierTermsIn, splitsPhrasalVerb,
 } from "../../src/services/extract-facts.mjs";
+import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { factIdForTriple } from "../../src/domain/hash.mjs";
 
 const LATENCY_SENTENCE =
   "In engineering, latency is the name for the time period that needs to be waited to see a result.";
@@ -256,7 +261,67 @@ test("an attribution verb that changes what the sentence says about the claim is
     "Campaigners alleged the quake killed more than 100 people.",
     "Experts claimed the region has a complicated history.",
   ]) {
-    assert.equal(reportedClauseOf(sentence), sentence, `left whole: ${sentence}`);
+    assert.deepEqual(reportedClauseOf(sentence), { claim: sentence, speaker: "" }, `left whole: ${sentence}`);
+  }
+});
+
+test("an attribution frame hands back the claim and the speaker it named", () => {
+  assert.deepEqual(
+    reportedClauseOf('Russia released Robert Gilman on "a humanitarian basis," President Trump said.'),
+    { claim: 'Russia released Robert Gilman on "a humanitarian basis.', speaker: "President Trump" },
+  );
+  assert.deepEqual(
+    reportedClauseOf("Officials said the quake killed more than 100 people."),
+    { claim: "the quake killed more than 100 people.", speaker: "Officials" },
+  );
+  assert.deepEqual(
+    reportedClauseOf("The kraken is a legend."),
+    { claim: "The kraken is a legend.", speaker: "" },
+    "an unattributed sentence comes back whole with no speaker",
+  );
+});
+
+const GILMAN_SENTENCE = 'Russia released Robert Gilman on "a humanitarian basis," President Trump said.';
+
+test("a reported claim is stored with its finding and a reified row naming the speaker", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-attributed-"));
+  try {
+    const result = await ingestText(GILMAN_SENTENCE, { memoryDir: dir, optimistic: true, findings: true });
+    const claim = [...result.extracted, ...result.optimistic]
+      .find((f) => f.subject === "russia" && f.object === "robert gilman");
+    assert.ok(claim, "the claim itself still grounds");
+    assert.deepEqual(claim.extraction, ["reported-speech"], "the claim says out loud how it was read");
+
+    assert.equal(result.attributions.length, 1);
+    const [attribution] = result.attributions;
+    assert.equal(attribution.subject, factIdForTriple(claim.subject, claim.predicate, claim.object));
+    assert.equal(attribution.predicate, "mgx:attributedTo");
+    assert.equal(attribution.object, "President Trump");
+
+    const rows = readFactRows(await loadMemory(dir));
+    const stored = rows.find((r) => r.predicate === "mgx:attributedTo");
+    assert.ok(stored, "the attribution reached the store");
+    assert.equal(stored.subject, attribution.subject, "the claim's group id survives the write");
+    assert.equal(stored.object, "president trump");
+    assert.ok(rows.some((r) => r.id === stored.subject), "the subject dereferences to the claim it attributes");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an attribution is never counted as a fact the article stated", async () => {
+  const result = await ingestText(GILMAN_SENTENCE, { optimistic: true, findings: true });
+  for (const row of [...result.extracted, ...result.optimistic]) {
+    assert.notEqual(row.predicate, "mgx:attributedTo", "an attribution stays out of the grounded arrays");
+  }
+  assert.equal(result.attributions.length, 1, "and is reported on its own");
+});
+
+test("the finding and the attribution are written together or not at all", async () => {
+  const result = await ingestText(GILMAN_SENTENCE, { optimistic: true });
+  assert.deepEqual(result.attributions, [], "no attribution without the finding that outlives it");
+  for (const row of [...result.extracted, ...result.optimistic]) {
+    assert.equal(row.extraction, undefined);
   }
 });
 
