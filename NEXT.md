@@ -70,7 +70,13 @@ The work list, ranked by value against the plan's target card.
    off. One measured non-answer already: anchoring on the hub's seeds plus the
    far side of its reported rows reshuffles noise rather than cutting it.
 3. [ ] **The lexicon arm's object scan doesn't read through a count of-chain** —
-   in flight on `worktree-agent-ae96b58e71cd6d7ea`.
+   in flight on `worktree-agent-ae96b58e71cd6d7ea`, carrying a second defect
+   found in iteration 12: the free/release synonym fold is lexical, so
+   "Rescuers Free Quake Victim" became "rescuers releases quake victim" — wrong
+   sense (rescuers free from rubble, they do not release from custody) and wrong
+   agreement (plural subject, singular verb surface). The agreement half is not
+   news-only: any fold or mint whose canonical surface is third-person singular
+   does it under a plural subject.
    "The blast triggers hundreds of evacuations." mints
    `blast | tmct:triggers | hundred`. The newswire frame reads through the count
    (`skipCountPhrase`); Pass 2a/2b's `nearestEntity(i, +1)` does not. Fixing it
