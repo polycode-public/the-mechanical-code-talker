@@ -1759,11 +1759,17 @@ const ARITHMETIC_RE = /\d+\s*[+*/]\s*\d+/;
  *  ("update the readme") is never caught here — "table"/"from"/"into"/"set"
  *  are the words that make this unambiguously SQL rather than English. */
 const SQL_STATEMENT_RE = /^(?:(?:drop|truncate|alter)\s+table|delete\s+from|insert\s+into|update\s+[a-z0-9_.]+\s+set)\s+[a-z0-9_.]+\b/i;
-/** Structural verbs and relation nouns the teach lanes must never mint a
- *  general predicate from. "a commit touches b" and "a class contains a
- *  method" describe the graph's own edge vocabulary, so reading them as a
- *  user-taught relation would shadow the built-in one. Every entry is
- *  lowercase; the lanes lowercase the candidate verb before the lookup. */
+/** Structural verbs and relation nouns the teach lanes must not mint a general
+ *  predicate from while the code-graph switch is on. "a commit touches b" and
+ *  "a class contains a method" describe the graph's own edge vocabulary, so a
+ *  session declared as asking about code would shadow the built-in relation
+ *  with a user-taught one of the same name.
+ *
+ *  With the switch off these are ordinary English and mint like any other
+ *  verb: "ada uses a spoon", "the box contains apples", "a tester tests".
+ *  Every reader takes `codeGraphMode` and consults this set only when it is
+ *  true, so the declared switch decides and the wording never does. Every
+ *  entry is lowercase; the lanes lowercase the candidate verb first. */
 const STRUCT_WORDS = new Set([
   "import", "imports", "call", "calls", "use", "uses", "define", "defines", "defined",
   "class", "classes", "function", "functions", "module", "modules", "method", "methods",
@@ -5122,7 +5128,8 @@ async function subjectIsNounOrPropn(word) {
  *  guards that keep non-relational pasts out:
  *    - neither side may lead with a determiner ("the build failed yesterday")
  *      or a closed-class word;
- *    - the verb may not be a closed-class or structural word;
+ *    - the verb may not be a closed-class word, nor a structural one while the
+ *      code-graph switch is on;
  *    - both name heads must POS-tag NOUN/PROPN (the same wink adapter
  *      subjectIsNounOrPropn uses — "john failed spectacularly" tags its tail
  *      ADV and declines). No wink → no signal, never a store;
@@ -5133,7 +5140,7 @@ async function subjectIsNounOrPropn(word) {
  *      path (generalVerbTeach) would mint.
  *  Returns { subject, verb, base, object }; `base` is what the caller mints
  *  through generalVerbPredicate. */
-async function matchRelationalVerbTeach(text) {
+async function matchRelationalVerbTeach(text, { codeGraphMode = false } = {}) {
   const line = String(text || "").trim();
   const m = line.match(RELATION_VERB_TEACH_RE);
   if (!m) return null;
@@ -5141,7 +5148,8 @@ async function matchRelationalVerbTeach(text) {
   const verb = verbRaw.toLowerCase();
   const strip = pastVerbBase(verb);
   if (!strip) return null;
-  if (GENERAL_VERB_NOT_A_VERB_RE.test(verb) || STRUCT_WORDS.has(verb)) return null;
+  if (GENERAL_VERB_NOT_A_VERB_RE.test(verb)) return null;
+  if (codeGraphMode && STRUCT_WORDS.has(verb)) return null;
   const subjWords = subjectRaw.split(/\s+/);
   const objWords = objectRaw.split(/\s+/);
   for (const head of [subjWords[0], objWords[0]]) {
@@ -5177,17 +5185,19 @@ async function matchRelationalVerbTeach(text) {
  *  orientation card. This recognizes the shape ONLY well enough to point at
  *  the wrapped form that does store; it never stores anything itself. Closed
  *  the same way matchRelationalVerbTeach is: no determiner/closed-class
- *  heads, no structural/discourse verb, subject POS-tags NOUN/PROPN, object
- *  tags NOUN/PROPN/ADJ (wink tags bare lowercase names like "mary" ADJ;
+ *  heads, no discourse verb, no structural verb while the code-graph switch is
+ *  on, subject POS-tags NOUN/PROPN, object tags NOUN/PROPN/ADJ (wink tags bare
+ *  lowercase names like "mary" ADJ;
  *  a genuine adverb tail — "dog barks loudly" — still declines). */
-async function bareTeachWrapperNudgeText(text) {
+async function bareTeachWrapperNudgeText(text, { codeGraphMode = false } = {}) {
   const line = String(text || "").trim().replace(/[.!?]+\s*$/, "");
   const m = line.match(/^([\w'-]+)\s+([a-z][\w-]*s)\s+([\w'-]+)$/i);
   if (!m) return null;
   const [, subj, verbRaw, obj] = m;
   const verb = verbRaw.toLowerCase();
   if (/^(?:is|was|does)$/.test(verb)) return null;
-  if (GENERAL_VERB_NOT_A_VERB_RE.test(verb) || STRUCT_WORDS.has(verb) || HABITUAL_VERB_EXCLUDE.has(verb)) return null;
+  if (GENERAL_VERB_NOT_A_VERB_RE.test(verb) || HABITUAL_VERB_EXCLUDE.has(verb)) return null;
+  if (codeGraphMode && STRUCT_WORDS.has(verb)) return null;
   for (const head of [subj, obj]) {
     if (GENERAL_VERB_DETERMINER_RE.test(head) || GENERAL_VERB_NOT_A_VERB_RE.test(head)) return null;
   }
@@ -5248,7 +5258,7 @@ function foldPrepositionIntoPredicate(predicate, objectRaw) {
 /** Sentence forms to try asserting for a teach payload: the payload as-is, and
  *  (if it carries no determiner) its "every …" universal — the ACE-OWL shape the
  *  grammar actually lands. */
-function assertCandidates(payload) {
+function assertCandidates(payload, { codeGraphMode = false } = {}) {
   const p = String(payload).trim();
   const out = [p];
   if (!/^(?:every|each|all|a|an)\b/i.test(p)) out.push(`every ${p}`);
@@ -5274,7 +5284,7 @@ function assertCandidates(payload) {
   // still has to ground through the teach path (this rewrite, or teachLane's
   // grounded-subject direct write), so a subject grounded nowhere
   // ("penguins swim" with no prior grounding) stays an honest decline.
-  const habitual = matchBareHabitualTeach(p);
+  const habitual = matchBareHabitualTeach(p, { codeGraphMode });
   if (habitual) {
     const articleRule = grammarRules().find((r) => r.kind === "article");
     const article = articleRule && beginsWithVowelSound(habitual.subject, articleRule) ? "an" : "a";
@@ -5287,9 +5297,9 @@ function assertCandidates(payload) {
  *  "dogs bark" (plural subject + base verb) and "a dog barks" (articled
  *  singular + 3sg verb), both meaning the capability fact "a dog can
  *  bark". Returns {subject, verb} folded to the singular/base forms, or
- *  null. Deliberately closed: structural verbs (imports/calls/tests …)
- *  are excluded so a truncated code query never reads as a capability
- *  claim, and the plural surface's verb must be a BASE form (no
+ *  null. Deliberately closed: with the code-graph switch on, structural verbs
+ *  (imports/calls/tests …) are excluded so a truncated code query never reads
+ *  as a capability claim, and the plural surface's verb must be a BASE form (no
  *  plural-looking "s" tail — "dogs animals" is not a habitual sentence;
  *  "pass"/"miss"-style "ss" verbs stay eligible). */
 /** Words that sit in the habitual shapes' verb slot without being verbs —
@@ -5318,15 +5328,16 @@ const LEADING_DISCOURSE_ADVERB_RE = new RegExp(
 export function stripLeadingDiscourseAdverb(text) {
   return String(text || "").trim().replace(LEADING_DISCOURSE_ADVERB_RE, "");
 }
-function matchBareHabitualTeach(text) {
+function matchBareHabitualTeach(text, { codeGraphMode = false } = {}) {
   const t = stripLeadingDiscourseAdverb(String(text || "").trim());
+  const structural = (word) => codeGraphMode && STRUCT_WORDS.has(word);
   const plural = t.match(/^(?:all\s+|every\s+)?([\w-]+s)\s+([a-z][\w-]*)[.!?]*$/i);
-  if (plural && !STRUCT_WORDS.has(plural[2].toLowerCase()) && !HABITUAL_VERB_EXCLUDE.has(plural[2].toLowerCase()) && !/[^s]s$/i.test(plural[2])) {
+  if (plural && !structural(plural[2].toLowerCase()) && !HABITUAL_VERB_EXCLUDE.has(plural[2].toLowerCase()) && !/[^s]s$/i.test(plural[2])) {
     const subject = singularizeSurface(plural[1].toLowerCase());
     if (subject !== plural[1].toLowerCase()) return { subject, verb: plural[2].toLowerCase() };
   }
   const singular = t.match(/^an?\s+([\w-]+)\s+([a-z][\w-]*s)[.!?]*$/i);
-  if (singular && !STRUCT_WORDS.has(singular[2].toLowerCase()) && !HABITUAL_VERB_EXCLUDE.has(singular[2].toLowerCase())) {
+  if (singular && !structural(singular[2].toLowerCase()) && !HABITUAL_VERB_EXCLUDE.has(singular[2].toLowerCase())) {
     const verb = singularizeSurface(singular[2].toLowerCase());
     if (verb !== singular[2].toLowerCase()) return { subject: singular[1].toLowerCase(), verb };
   }
@@ -5348,12 +5359,13 @@ function matchBareHabitualTeach(text) {
  *  capability frame, and "penguins never fly" is a habitual surface that lands
  *  on generalVerbTeach's own split instead. */
 const BARE_CAN_TEACH_RE = /^(?:an?\s+|every\s+|all\s+)?([\w-]+)\s+(can|cannot|can't|can not)\s+([a-z][\w-]*)[.!?]*$/i;
-function matchBareCanTeach(text) {
+function matchBareCanTeach(text, { codeGraphMode = false } = {}) {
   const m = String(text || "").trim().match(BARE_CAN_TEACH_RE);
   if (!m) return null;
   const subject = m[1].toLowerCase();
   const verb = m[3].toLowerCase();
-  if (STRUCT_WORDS.has(verb) || HABITUAL_VERB_EXCLUDE.has(verb) || GENERAL_VERB_NOT_A_VERB_RE.test(verb)) return null;
+  if (HABITUAL_VERB_EXCLUDE.has(verb) || GENERAL_VERB_NOT_A_VERB_RE.test(verb)) return null;
+  if (codeGraphMode && STRUCT_WORDS.has(verb)) return null;
   if (GENERAL_VERB_DETERMINER_RE.test(subject) || GENERAL_VERB_NOT_A_VERB_RE.test(subject)) return null;
   return { subject, verb, negated: m[2].toLowerCase() !== "can" };
 }
@@ -5777,7 +5789,7 @@ async function teachExclusionReason(sentence) {
 }
 export { teachExclusionReason };
 
-async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null, graph = null, gameConfig = DEFAULT_GAME_CONFIG, observedAt = "", dateText = "" }) {
+async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null, graph = null, gameConfig = DEFAULT_GAME_CONFIG, observedAt = "", dateText = "", codeGraphMode = false }) {
   // THE DATED TEACH FRAME — "<sentence> as of <date>" carries an explicit
   // mgx:observedAt past the same shapes this lane already teaches. Tried
   // ONCE, recursively, on the suffix-stripped text, the same
@@ -5791,7 +5803,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     const suffix = datedTeachSuffix(String(query));
     if (suffix) {
       const dated = await teachLane(suffix.stripped, {
-        memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig,
+        memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig, codeGraphMode,
         observedAt: suffix.observedAt, dateText: suffix.dateText,
       });
       if (dated && !dated.miss) return dated;
@@ -5912,7 +5924,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (memoryDir && !QUESTION_LEAD_RE.test(conjSrc) && /\s+and\s+/i.test(conjSrc)
     && !(await hasMidSentenceInterrogative(conjSrc))) {
     const rewrap = (half) => (wrapped != null ? `remember that ${half}` : half);
-    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig, observedAt, dateText });
+    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig, observedAt, dateText, codeGraphMode });
     const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
     const shared = conjSrc.match(/^(.+?)\s+and\s+((?:is|are|has|have|can)\b.+)$/i);
     const sharedSubject = shared ? shared[1].match(/^(.+?)\s+(?:is|are|has|have|can)\b/i)?.[1]?.trim() : null;
@@ -6506,7 +6518,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // (name-shaped sides, POS-confirmed nouns, a lemma-confirmed inflected
   // past) that keep "the build failed" an honest non-match.
   const relVerb = memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
-    ? await matchRelationalVerbTeach(ownSrc) : null;
+    ? await matchRelationalVerbTeach(ownSrc, { codeGraphMode }) : null;
   if (relVerb) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: relVerb.subject, predicate: await generalVerbPredicate(relVerb.base), object: relVerb.object, observedAt, dateText,
@@ -6923,7 +6935,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       // instead of letting the general-verb mint below reify the plural
       // verbatim (a fact "can a wren hum" could never read back). An
       // ungrounded singular falls through unchanged.
-      const canShape = matchBareCanTeach(raw);
+      const canShape = matchBareCanTeach(raw, { codeGraphMode });
       const canSingular = canShape ? singularizeSurface(canShape.subject) : null;
       if (canShape && canSingular !== canShape.subject) {
         let canLex = lexicon;
@@ -6947,7 +6959,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (wrapped && /\b(?:is|are)\b/i.test(wrapped)) payload = wrapped;
   else if ((BARE_DECLARATIVE_RE.test(raw) || COMPARATIVE_TEACH_RE.test(raw)
       || (matchesRelationalTeachFrame(raw) && !(await relationalFrameNamesGraphEntity(raw, graph)))
-      || matchBareHabitualTeach(raw) || matchBareCanTeach(raw))
+      || matchBareHabitualTeach(raw, { codeGraphMode }) || matchBareCanTeach(raw, { codeGraphMode }))
       && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
   if (!payload) {
     // "remember margo eats ribs", re-escaping here through a combination
@@ -7045,7 +7057,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         if (stored) return stored;
       }
     }
-    for (const cand of assertCandidates(payload)) {
+    for (const cand of assertCandidates(payload, { codeGraphMode })) {
       // assertTurn ITSELF records the "every" quantifier (point 3) on a plain
       // universal success, so every caller (this loop AND the top-level
       // declarative-sentence dispatch in runTurn) gets it uniformly.
@@ -7060,7 +7072,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // path itself stores. The subject's naive singular is tried too, so the
     // explicit plural surface ("penguins can swim") reaches the same stored
     // spelling the grounding fact used.
-    const habitualTeach = matchBareHabitualTeach(payload) || matchBareCanTeach(payload);
+    const habitualTeach = matchBareHabitualTeach(payload, { codeGraphMode }) || matchBareCanTeach(payload, { codeGraphMode });
     if (habitualTeach) {
       let habLex = lexicon;
       if (!habLex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); habLex = loadLexicon(); }
@@ -7144,7 +7156,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const { parseAce } = await import("../domain/grammar/ace.mjs");
       let lex = lexicon;
       if (!lex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); lex = loadLexicon(); }
-      for (const cand of assertCandidates(payload)) {
+      for (const cand of assertCandidates(payload, { codeGraphMode })) {
         const parse = parseAce(cand, lex);
         if (parse?.residue?.length) { unknown = [...new Set(parse.residue.map((w) => String(w).toLowerCase()))]; break; }
       }
@@ -15977,7 +15989,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const bareLine = String(query).trim();
     const pm = bareLine.match(/^([\w-]+)\s+are\s+([\w-]+)[.!?]*$/i);
     const habitual = pm || QUESTION_LEAD_RE.test(bareLine)
-      ? null : (matchBareHabitualTeach(bareLine) || matchBareCanTeach(bareLine));
+      ? null : (matchBareHabitualTeach(bareLine, { codeGraphMode }) || matchBareCanTeach(bareLine, { codeGraphMode }));
     if (pm || habitual) {
       try {
         const { loadLexicon, lookupNoun, lookupAdjective } = await import("../domain/grammar/lexicon.mjs");
@@ -16019,8 +16031,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* lexicon unavailable — leave false, the ordinary path decides */ }
     } else if (memoryDir && !QUESTION_LEAD_RE.test(bareLine)
       && bareLine.replace(/[.!?]+\s*$/, "").split(/\s+/).filter(Boolean).length <= 3) {
-      if (await matchRelationalVerbTeach(bareLine)) isBareRelationalVerbTeach = true;
-      else bareTeachWrapperNudge = await bareTeachWrapperNudgeText(bareLine);
+      if (await matchRelationalVerbTeach(bareLine, { codeGraphMode })) isBareRelationalVerbTeach = true;
+      else bareTeachWrapperNudge = await bareTeachWrapperNudgeText(bareLine, { codeGraphMode });
     }
   }
   // A vague relation touch ("what about cochange", "tell me about cochange",
@@ -16524,7 +16536,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // the vocabulary for something the vocabulary had nothing to do with.
     let taught = null;
     try {
-      taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig });
+      taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig, codeGraphMode });
     } catch (error) {
       if (!isPersistUnavailable(error)) throw error;
       taught = persistUnavailableAnswer();

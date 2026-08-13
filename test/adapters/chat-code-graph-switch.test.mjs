@@ -167,6 +167,52 @@ test("a host can declare the mode at session creation without typing a command",
   }
 });
 
+// Everyday sentences whose verb also names an edge the code graph draws
+// (contains, uses, defines, calls, tests), with the relation each one stores.
+const ORDINARY_VERB_TEACHES = [
+  ["the box contains apples", /box tmct:contains apple/],
+  ["ada uses a spoon", /ada uses spoon/],
+  ["ahab defined john", /ahab defines john/],
+  ["birds call", /bird mgx:capableOf call/],
+  ["a tester tests", /tester mgx:capableOf test/],
+];
+
+test("with the switch off, a verb that also names a code-graph edge mints its relation like any other verb", async () => {
+  for (const [line, relation] of ORDINARY_VERB_TEACHES) {
+    const { dir, config } = await freshRepo(REAL_PAYLOAD);
+    try {
+      const { answer } = await runTurn(line, { config, graph: REAL_GRAPH, memoryDir: dir });
+      assert.match(answer, /^noted — remembered/, `"${line}" is a teach, not a miss`);
+      assert.match(answer, relation);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("with the switch on, the same wording goes to the code graph instead of minting a relation over its own edge names", async () => {
+  const { dir, config } = await freshRepo(REAL_PAYLOAD);
+  try {
+    const { answer, factsTouched } = await runTurn("birds call", {
+      config, graph: REAL_GRAPH, memoryDir: dir, codeGraphMode: true,
+    });
+    assert.match(answer, /found in the index/);
+    assert.deepEqual(factsTouched, [], "a declared code-graph turn writes no capability fact");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("with the switch off, a three-word everyday relation gets the wrapper nudge, not the orientation card", async () => {
+  const { dir, config } = await freshRepo(EMPTY_PAYLOAD);
+  try {
+    const { answer } = await runTurn("kim uses redis", { config, graph: EMPTY_GRAPH, memoryDir: dir });
+    assert.match(answer, /remember that kim uses redis/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("the exported isConversational reads the same declared switch, and nothing else", () => {
   assert.equal(isConversational("what calls walk"), true, "short and undeclared — ordinary prose");
   assert.equal(isConversational("what calls walk", { codeGraphMode: true }), false);
