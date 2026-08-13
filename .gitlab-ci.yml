@@ -996,9 +996,13 @@ capture:hero:
 # It needs publish:npm, not deploy:website, and gates on NPM_TOKEN, because
 # there is nothing to install without a publish. No browser, so no Chromium.
 #
-# It runs on every consumer-impacting push to main, not only on a version bump.
-# On a push that publishes nothing, the version already on the registry is this
-# commit's version, so the install still proves the package a consumer gets today.
+# It runs on every consumer-impacting push to main, not only on a version bump,
+# so a push that changes what the package SHIPS has to roll the version in the
+# same push. Skip the roll and the registry still serves this commit's version
+# NUMBER built from an earlier commit: the job then runs today's test pins
+# against yesterday's package and fails on the skew, not on a defect. That is
+# what a band-set change did once — the purged tier-2 corpuses were gone from
+# the checkout's manifest and still present in the installed one.
 #
 # Two e2e-cli/e2e-tui files are deliberately absent. cli-render-views expects
 # `--render spider-fly`/`--render adventure` to exit 0, and those two archetypes
