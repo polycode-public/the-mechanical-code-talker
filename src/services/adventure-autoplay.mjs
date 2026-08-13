@@ -33,6 +33,11 @@ import { foldWorldState, adventureTurn, worldActionRows } from "./adventure.mjs"
 const isTypedRow = (rows, subject, type) =>
   (rows || []).some((r) => r.subject === subject && r.predicate === "rdf:type" && r.object === type);
 
+// Codepoint order, never localeCompare — an exit direction traces back to a
+// world fact, and two readers must land on the same explore order regardless
+// of locale.
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** The room a subject's CURRENT placement resolves into — a room resolves to
  *  itself; an object placed directly in a room resolves to that room; an
  *  object one containment hop inside an OPEN container resolves to the
@@ -294,7 +299,7 @@ export async function runAdventureAutoplayTick(memoryDir, opts = {}) {
   // isn't known yet. Prefer an immediate unexposed exit from here (the
   // lowest-sorted direction); otherwise path toward the nearest exposed room
   // that still has one.
-  const unexposedHere = unexposedExitsOf(here, exposedState, exposed).sort(([a], [b]) => a.localeCompare(b));
+  const unexposedHere = unexposedExitsOf(here, exposedState, exposed).sort(([a], [b]) => byCodepoint(a, b));
   if (unexposedHere.length) {
     const [direction, target] = unexposedHere[0];
     await runCommand(`go ${direction}`);

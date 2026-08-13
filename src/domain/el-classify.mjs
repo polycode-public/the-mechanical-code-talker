@@ -21,8 +21,17 @@ import {
   SUBCLASS_PREDICATE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE, TYPE_PREDICATE,
   DEFAULT_MAX_ENVIRONMENTS, buildCardinalityRestrictions,
 } from "./syllogise.mjs";
+import { compareFactsByContent } from "./memory/fact-order.mjs";
 
 const SEP = "␟"; // an in-key separator no fact term can contain — same convention as syllogise.mjs's own SEP
+
+// Codepoint order, never localeCompare — a stored row's id is read on whatever
+// machine holds the graph, and two locales have to land on the same order.
+const byId = (a, b) => {
+  const ka = String(a.id);
+  const kb = String(b.id);
+  return ka < kb ? -1 : ka > kb ? 1 : 0;
+};
 
 /** The two reserved concept names every EL derivation is built from. Neither
  *  can collide with a stored term: normFactTerm never produces them from a
@@ -78,7 +87,7 @@ const isCardinalityPredicate = (p) => CARDINALITY_PREDICATES.has(lower(p));
  */
 export function normalizeElTBox(rows, { budget = 500 } = {}) {
   const input = (Array.isArray(rows) ? rows : []).filter((r) => r && r.id && r.subject && r.predicate && r.object !== undefined && r.object !== null);
-  const sorted = [...input].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  const sorted = [...input].sort(byId);
   const truncated = sorted.length > budget;
   const used = truncated ? sorted.slice(0, budget) : sorted;
 
@@ -216,7 +225,7 @@ export function normalizeElTBox(rows, { budget = 500 } = {}) {
   for (const role of [...transitiveRoleRow.keys()].sort()) {
     roleAxioms.push({ kind: "transitive", role, from: [transitiveRoleRow.get(role).id] });
   }
-  for (const r of [...subPropertyRows].sort((a, b) => `${a.subject}${SEP}${a.object}`.localeCompare(`${b.subject}${SEP}${b.object}`))) {
+  for (const r of [...subPropertyRows].sort(compareFactsByContent)) {
     roleAxioms.push({ kind: "sub", sub: r.subject, sup: r.object, from: [r.id] });
   }
 

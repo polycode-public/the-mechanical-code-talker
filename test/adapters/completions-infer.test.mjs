@@ -203,6 +203,30 @@ test("determinism: two runs over the identical groups + fixed memory produce byt
   }
 });
 
+test("inferRelations(): the pairwise scan and the output order are codepoint order, not locale order, whichever way the groups arrived", async () => {
+  // "g:zebra" sorts BEFORE "g:élan" in codepoint order (z=0x7A < é=0xE9) but
+  // AFTER it under locale-aware collation, so the "from" side asserted below
+  // only holds if the pairwise scan never fell back to localeCompare.
+  const dir = await tmpRepo();
+  try {
+    await seedFacts(dir);
+    const memory = await loadMemory(dir);
+    const groups = [
+      { id: "g:zebra", members: [{ id: "b1", text: "Ahab is the father of john. Ahab raised john from childhood." }] },
+      { id: "g:élan", members: [{ id: "b2", text: "The family tree lists ahab and john among its earliest members. Ahab and john are central to the record." }] },
+    ];
+    const forward = await inferRelations(groups, memory, { store: COMPLETIONS_STORE });
+    const reversed = await inferRelations([...groups].reverse(), memory, { store: COMPLETIONS_STORE });
+    assert.deepEqual(forward, reversed, "group array arrival order never changes the inferred relations");
+    const supports = forward.find((r) => r.relation === "supports");
+    assert.ok(supports, "the shared ahab/john entities plus the taught mgx:father fact license a supports relation");
+    assert.equal(supports.from, "g:zebra", "codepoint order scans g:zebra before g:élan");
+    assert.equal(supports.to, "g:élan");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("inferRelations(): fewer than two groups, or no groups, never throws and returns []", async () => {
   const dir = await tmpRepo();
   try {

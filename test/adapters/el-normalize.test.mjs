@@ -144,6 +144,37 @@ test("a taught ACE pattern-19 row ('containing implies touching') normalizes to 
   assert.deepEqual([...roles].sort(), ["tmct:contains", "tmct:touches"]);
 });
 
+test("two roles' subproperty axioms come out in codepoint order, not locale order, whichever way the rows arrived", () => {
+  // "zebra-verb" sorts BEFORE "élan-verb" in codepoint order (z=0x7A < é=0xE9)
+  // but AFTER it under locale-aware collation, so the axiom order this test
+  // demands only holds if the fold never fell back to localeCompare.
+  const rows = [
+    row("1", "zebra-verb", "rdfs:subPropertyOf", "cares-about"),
+    row("2", "élan-verb", "rdfs:subPropertyOf", "cares-about"),
+  ];
+  const forward = normalizeElTBox(rows).roleAxioms;
+  const reversed = normalizeElTBox([...rows].reverse()).roleAxioms;
+  assert.deepEqual(forward, reversed, "row arrival order never changes the axiom order");
+  assert.deepEqual(forward.map((a) => a.sub), ["zebra-verb", "élan-verb"]);
+});
+
+test("normalizeElTBox folds rows in codepoint id order, not locale order, whichever way they arrived", () => {
+  // Two chained subClassOf rows whose ids sort oppositely under codepoint vs
+  // locale collation — first-wins dedup logic (intersectionTargetRow) depends
+  // on which of two same-subject rows the id sort visits first.
+  const rows = [
+    { id: "zebra", subject: "and-node", predicate: "rdfs:subClassOf", object: "first-target", trust: 1 },
+    { id: "élan", subject: "and-node", predicate: "rdfs:subClassOf", object: "second-target", trust: 1 },
+    { id: "1", subject: "and-node", predicate: "owl:intersectionOf", object: "a", trust: 1 },
+    { id: "2", subject: "and-node", predicate: "owl:intersectionOf", object: "b", trust: 1 },
+  ];
+  const forward = normalizeElTBox(rows).axioms;
+  const reversed = normalizeElTBox([...rows].reverse()).axioms;
+  assert.deepEqual(forward, reversed, "row arrival order never changes the derived axioms");
+  const and = forward.find((a) => a.form === "and");
+  assert.equal(and.sup, "first-target", "codepoint order visits the 'zebra' id row first, so it wins first-wins dedup");
+});
+
 test("truncated is false when the row count is within budget", () => {
   const rows = [row("1", "cat", "rdfs:subClassOf", "mammal")];
   assert.equal(normalizeElTBox(rows, { budget: 500 }).truncated, false);

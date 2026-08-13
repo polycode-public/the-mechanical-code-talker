@@ -17,7 +17,7 @@ import {
   GROUP_PERSON, GROUP_OBJECT, GROUP_EMOJI, PERSON_ROLE_CLASSES, CYCLE_FRAME_DELAY_MS, FACING_TURN_ORDER,
   moodFrameSequence, turnFrameSequence, movingFrameSequence, swatchDisplayParts,
   CATALOG_GROUPS, groupIsClustered,
-  catalogSections, LANDING_EXAMPLE_CLASSES, landingExampleFor, classAnchorId, sceneComposerClassIndex,
+  catalogSections, clusterEntriesByAncestor, LANDING_EXAMPLE_CLASSES, landingExampleFor, classAnchorId, sceneComposerClassIndex,
   loadSpriteOntologyFactRows, subClassIndex, buildOntologyTree, sectionSlugFor, ontologyTreeNodeId,
   ontologyNodeDescription, MAX_TREE_SIBLINGS_PER_PARENT, treeEdgePath,
 } from "../../src/services/sprite-catalog-viz.mjs";
@@ -532,6 +532,48 @@ test("buildOntologyTree is a pure function of the fact set — the same facts in
     index: subClassIndex(shuffled), spritedClasses: realSpritedClasses, entriesByClass: realEntriesByClass,
   });
   assert.deepEqual(backward, forward);
+});
+
+test("buildOntologyTree's node/branch/apart lists sort by codepoint, not locale order", () => {
+  // "zebra" sorts BEFORE "élan" in codepoint order (z=0x7A < é=0xE9) but AFTER
+  // it under locale-aware collation, so this only holds under codepoint order.
+  const rows = [isA("zebra", "root"), isA("élan", "root")]; // one shared parent -> one branch, level 1
+  const section = {
+    group: CATALOG_GROUPS[2], label: "test",
+    entries: [{ className: "zebra", chain: ["zebra", "root"] }, { className: "élan", chain: ["élan", "root"] }],
+  };
+  const tree = buildOntologyTree(section, {
+    index: subClassIndex(rows), spritedClasses: new Set(), entriesByClass: new Map(),
+  });
+  const level1 = tree.branches[0].levels[1].map((n) => n.term);
+  assert.deepEqual(level1, ["zebra", "élan"]);
+});
+
+test("clusterEntriesByAncestor sorts clusters and the leftover bucket by codepoint, not locale order", () => {
+  // "zebra-anc"/"zebra-solo" sort BEFORE "élan-anc"/"élan-solo" in codepoint
+  // order (z=0x7A < é=0xE9) but AFTER them under locale-aware collation.
+  const spritedClasses = new Set(["zebra-anc", "élan-anc"]);
+  const entries = [
+    { className: "a1", chain: ["a1", "zebra-anc"] },
+    { className: "a2", chain: ["a2", "zebra-anc"] },
+    { className: "b1", chain: ["b1", "élan-anc"] },
+    { className: "b2", chain: ["b2", "élan-anc"] },
+    { className: "zebra-solo", chain: ["zebra-solo", "solo-anc-1"] },
+    { className: "élan-solo", chain: ["élan-solo", "solo-anc-2"] },
+  ];
+  const forward = clusterEntriesByAncestor(entries, spritedClasses);
+  const reversed = clusterEntriesByAncestor([...entries].reverse(), spritedClasses);
+  // Cluster ORDER is what's under test here — member order within a cluster
+  // was never sorted (arrival order), so only the cluster-level shape is
+  // compared for arrival-order independence.
+  const shape = (clusters) => clusters.map((c) => [c.ancestor, c.entries.map((e) => e.className).sort()]);
+  assert.deepEqual(shape(forward), shape(reversed), "entry arrival order never changes the cluster order");
+
+  assert.deepEqual(forward.filter((c) => c.ancestor).map((c) => c.ancestor), ["zebra-anc", "élan-anc"],
+    "tied-size clusters break by codepoint ancestor order");
+  const rest = forward.find((c) => c.ancestor === null);
+  assert.deepEqual(rest.entries.map((e) => e.className), ["zebra-solo", "élan-solo"],
+    "the leftover bucket sorts by codepoint className order");
 });
 
 test("a subClassOf loop in the fact set lays out without spinning, and both recorded edges still show", () => {

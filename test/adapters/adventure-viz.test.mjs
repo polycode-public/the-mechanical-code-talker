@@ -208,6 +208,21 @@ test("carriedItems: actingSubject is a real parameter, not a name baked into the
   assert.deepEqual(carriedItems(carried, state, "player"), [], "the default identity carries nothing here — the item belongs to mole-1");
 });
 
+test("carriedItems: items sort by codepoint id, not locale order, whichever way the rows arrived", () => {
+  // "zebra-item" sorts BEFORE "élan-item" in codepoint order (z=0x7A < é=0xE9)
+  // but AFTER it under locale-aware collation.
+  const carried = [
+    ...ROWS,
+    { subject: "zebra-item", predicate: "mgx:located-in", object: "player" },
+    { subject: "élan-item", predicate: "mgx:located-in", object: "player" },
+  ];
+  const forward = carriedItems(carried, foldWorldState(carried)).map((i) => i.subject);
+  const reversedRows = [...ROWS, ...[...carried.slice(ROWS.length)].reverse()];
+  const reversed = carriedItems(reversedRows, foldWorldState(reversedRows)).map((i) => i.subject);
+  assert.deepEqual(reversed, forward, "row arrival order never changes the carried-item order");
+  assert.deepEqual(forward, ["zebra-item", "élan-item"]);
+});
+
 test("roomSceneObjects/visibleRoomOf: actingSubject excludes and resolves against the real viewer, not the literal string \"player\"", () => {
   const rows = [
     { subject: "burrow", predicate: "rdf:type", object: "room" },
@@ -280,6 +295,27 @@ test("scenePlacement: a fresher on-top-of snapshot than the current placement st
   ];
   const state = foldWorldState(rows);
   assert.deepEqual(scenePlacement(rows, state, "lamp"), { plane: "surface", stackedOn: "desk" }, "the turn-1 position is at least as new as the turn-0 placement");
+});
+
+test("roomSceneLayout: floor bases sort by codepoint id, not locale order, whichever way the rows arrived", () => {
+  // "zebra-thing" sorts BEFORE "élan-thing" in codepoint order (z=0x7A <
+  // é=0xE9) but AFTER it under locale-aware collation. Neither carries any
+  // on-top-of/plane fact, so both land as independent floor bases alongside
+  // the study's own existing "lamp".
+  const rows = [
+    ...ROWS,
+    { subject: "zebra-thing", predicate: "rdf:type", object: "portable" },
+    { subject: "zebra-thing", predicate: "mgx:located-in", object: "study" },
+    { subject: "élan-thing", predicate: "rdf:type", object: "portable" },
+    { subject: "élan-thing", predicate: "mgx:located-in", object: "study" },
+  ];
+  const layoutOf = (input) => roomSceneLayout(input, foldWorldState(input), "study").floor.map((f) => f.items[0].subject);
+  const forward = layoutOf(rows);
+  const reversedRows = [...ROWS, ...[...rows.slice(ROWS.length)].reverse()];
+  const reversed = layoutOf(reversedRows);
+  assert.deepEqual(reversed, forward, "row arrival order never changes the floor-base order");
+  assert.ok(forward.indexOf("zebra-thing") < forward.indexOf("élan-thing"),
+    "codepoint order ranks 'zebra-thing' ahead of 'élan-thing'");
 });
 
 // ---- roomSceneLayout ----------------------------------------------------------

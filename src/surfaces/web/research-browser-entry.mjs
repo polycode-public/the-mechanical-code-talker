@@ -158,7 +158,10 @@ export async function researchSnapshot(memoryDir, sessionIds = {}, { recentCap =
     }
   }
 
-  const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  // Codepoint order, never localeCompare — two readers holding the same fact
+  // store must render its rows in the same order regardless of OS locale.
+  const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const byCreatedDesc = (a, b) => byCodepoint(String(b.createdAt || ""), String(a.createdAt || ""));
   recent.sort(byCreatedDesc);
 
   const seedKeys = [...counts.keys()].filter((k) => k.startsWith("seed:")).sort();
@@ -175,7 +178,7 @@ export async function researchSnapshot(memoryDir, sessionIds = {}, { recentCap =
 
   const hubs = [...degree.entries()]
     .map(([term, deg]) => ({ term, degree: deg }))
-    .sort((a, b) => b.degree - a.degree || a.term.localeCompare(b.term))
+    .sort((a, b) => b.degree - a.degree || byCodepoint(a.term, b.term))
     .slice(0, hubCap);
 
   return {

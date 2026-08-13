@@ -8,6 +8,10 @@
 
 const DEFAULT_MAX_SENTENCES_PER_GROUP = 3;
 
+// Codepoint order, never localeCompare — group ids trace back to memory-store
+// block ids, and two readers must land on the same order regardless of locale.
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /** Every group id referenced as either side of an asserted relation. */
 function relatedGroupIdsOf(relations) {
   const set = new Set();
@@ -56,7 +60,7 @@ export function pruneCompletion(state = {}, { maxSentencesPerGroup = DEFAULT_MAX
 
   const relatedGroupIds = relatedGroupIdsOf(relations);
 
-  const sortedGroups = groups.slice().sort((a, b) => a.id.localeCompare(b.id));
+  const sortedGroups = groups.slice().sort((a, b) => byCodepoint(a.id, b.id));
   for (const g of sortedGroups) {
     const ranked = Array.isArray(rankedByGroup[g.id]) ? rankedByGroup[g.id] : [];
     const groupFeedsInference = relatedGroupIds.has(g.id);

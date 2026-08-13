@@ -196,3 +196,24 @@ test("groupHits(): [] in -> [] out (no crash on an empty hit list)", () => {
   assert.deepEqual(groupHits([], { store: COMPLETIONS_STORE }), []);
   assert.deepEqual(groupHits(null, { store: COMPLETIONS_STORE }), []);
 });
+
+test("groupHits(): members and groups come out in codepoint id order, not locale order, whichever way the hits arrived", () => {
+  // "zebra-1"/"zebra-solo" sort BEFORE "élan-1"/"élan-solo" in codepoint order
+  // (z=0x7A < é=0xE9) but AFTER them under locale-aware collation, so the
+  // orders asserted below only hold if grouping never fell back to
+  // localeCompare.
+  const hits = [
+    { id: "zebra-1", text: "widget gadget device" },
+    { id: "élan-1", text: "widget gadget lever" }, // shares 2 tokens with zebra-1 -> one group
+    { id: "middle-solo", text: "guitar piano violin" }, // isolated -> its own group
+    { id: "élan-solo", text: "planet comet asteroid" }, // isolated -> its own group
+  ];
+  const forward = groupHits(hits, { store: COMPLETIONS_STORE });
+  const reversed = groupHits([...hits].reverse(), { store: COMPLETIONS_STORE });
+  assert.deepEqual(forward, reversed, "hit arrival order never changes the grouping or its order");
+
+  const shared = forward.find((g) => g.memberIds.length === 2);
+  assert.deepEqual(shared.memberIds, ["zebra-1", "élan-1"], "codepoint order sorts members within a group");
+  assert.deepEqual(forward.map((g) => g.id), ["g:middle-solo", "g:zebra-1", "g:élan-solo"],
+    "codepoint order sorts groups by their lowest member id");
+});

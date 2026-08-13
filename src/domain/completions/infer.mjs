@@ -16,6 +16,11 @@ import { requireInjected } from "./injected.mjs";
 // supply their own copy in the `helpers` bag resolveRelationChase expects.
 const HAS_PROPERTY_PREDICATE = "mgx:hasProperty";
 
+// Codepoint order, never localeCompare — group ids trace back to memory-store
+// block ids, and two readers must land on the same relation order regardless
+// of locale.
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 // The taught ISA-family predicates (stored edges only, not their transitive closure).
 const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
 
@@ -281,7 +286,7 @@ export async function inferRelations(groups, memory, { store } = {}) {
     relationNames: relationNameCandidates(rows),
   };
 
-  const sorted = list.slice().sort((x, y) => x.id.localeCompare(y.id));
+  const sorted = list.slice().sort((x, y) => byCodepoint(x.id, y.id));
   const out = [];
 
   for (let i = 0; i < sorted.length; i += 1) {
@@ -311,6 +316,6 @@ export async function inferRelations(groups, memory, { store } = {}) {
     }
   }
 
-  out.sort((x, y) => x.from.localeCompare(y.from) || x.to.localeCompare(y.to) || x.relation.localeCompare(y.relation));
+  out.sort((x, y) => byCodepoint(x.from, y.from) || byCodepoint(x.to, y.to) || byCodepoint(x.relation, y.relation));
   return out;
 }

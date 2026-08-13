@@ -149,3 +149,18 @@ test("pruneCompletion(): determinism — two runs over identical input produce b
   // group order in the OUTPUT is id-sorted regardless of input group array order
   assert.deepEqual(run1.kept.map((k) => k.groupId), ["g:a", "g:b"]);
 });
+
+test("pruneCompletion(): group order is codepoint order, not locale order, whichever way the groups arrived", () => {
+  // "g:zebra" sorts BEFORE "g:élan" in codepoint order (z=0x7A < é=0xE9) but
+  // AFTER it under locale-aware collation, so this only passes under codepoint
+  // order.
+  const groups = [group("g:élan", ["b1"]), group("g:zebra", ["b2"])];
+  const rankedByGroup = {
+    "g:élan": [{ sentence: "Elan one.", score: 1, sourceBlockId: "b1" }],
+    "g:zebra": [{ sentence: "Zebra one.", score: 1, sourceBlockId: "b2" }],
+  };
+  const forward = pruneCompletion({ hits: [], groups, relations: [], rankedByGroup });
+  const reversed = pruneCompletion({ hits: [], groups: [...groups].reverse(), relations: [], rankedByGroup });
+  assert.deepEqual(forward, reversed, "input group array order never changes the prune output");
+  assert.deepEqual(forward.kept.map((k) => k.groupId), ["g:zebra", "g:élan"]);
+});

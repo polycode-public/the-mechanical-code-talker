@@ -361,9 +361,13 @@ export function roomSceneLayout(rows, state, here) {
     bases.push(o.subject);
   }
 
-  wall.sort((a, b) => a.subject.localeCompare(b.subject));
-  bases.sort((a, b) => a.localeCompare(b));
-  for (const list of stackedOnBy.values()) list.sort((a, b) => a.localeCompare(b));
+  // Codepoint order, never localeCompare — inlined, not a module-level
+  // helper, because this function is spliced verbatim into the page's own
+  // inline script and can carry no outer-scope reference with it.
+  const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  wall.sort((a, b) => byCodepoint(a.subject, b.subject));
+  bases.sort(byCodepoint);
+  for (const list of stackedOnBy.values()) list.sort(byCodepoint);
 
   const visitedForStack = new Set();
   function stackFrom(base) {
@@ -400,7 +404,10 @@ export function carriedItems(rows, state, holder = "player") {
   return [...state.placements]
     .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === holder)
     .map(([subject]) => ({ subject, spriteClass: spriteClassForObject(rows, subject) }))
-    .sort((a, b) => a.subject.localeCompare(b.subject));
+    // Codepoint order, never localeCompare — inlined, not a module-level
+    // helper, because this function is spliced verbatim into the page's own
+    // inline script and can carry no outer-scope reference with it.
+    .sort((a, b) => (a.subject < b.subject ? -1 : a.subject > b.subject ? 1 : 0));
 }
 
 /** A visited-rooms-only map: one node per room `visitedRoomIds` actually

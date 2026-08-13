@@ -230,7 +230,10 @@ export function propPlacementsFrom(rows, assetManifest) {
       asset: byKey.get(entry.model) || null,
     });
   }
-  placements.sort((a, b) => a.id.localeCompare(b.id));
+  // Codepoint order, never localeCompare — inlined, not a module-level
+  // helper, because this function is spliced verbatim into the page's own
+  // inline script and can carry no outer-scope reference with it.
+  placements.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return placements;
 }
 
@@ -286,7 +289,10 @@ export function currentPlacementsFrom(rows) {
   for (const [subject, entry] of latest) {
     if (!gone.has(subject)) placements.push({ subject, cell: entry.cell });
   }
-  placements.sort((a, b) => a.subject.localeCompare(b.subject));
+  // Codepoint order, never localeCompare — inlined, not a module-level
+  // helper, because this function is spliced verbatim into the page's own
+  // inline script and can carry no outer-scope reference with it.
+  placements.sort((a, b) => (a.subject < b.subject ? -1 : a.subject > b.subject ? 1 : 0));
   return placements;
 }
 

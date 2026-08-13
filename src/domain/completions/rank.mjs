@@ -12,6 +12,11 @@ import { requireInjected } from "./injected.mjs";
 // (no abbreviation dictionary).
 const SENTENCE_SPLIT_RE = /(?<=[.!?])\s+(?=[A-Z0-9])/;
 
+// Codepoint order, never localeCompare — sourceBlockId traces back to the
+// memory store's block ids, and two readers must land on the same rank order
+// regardless of locale.
+const byCodepoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 /**
  * Split raw block text into trimmed, non-empty sentences (order-preserving, no dedup).
  *
@@ -89,7 +94,7 @@ export function rankSentences(group, { overlapMin, query = null, store } = {}) {
   });
 
   scored.sort((a, b) => b.score - a.score
-    || a.sourceBlockId.localeCompare(b.sourceBlockId)
-    || a.sentence.localeCompare(b.sentence));
+    || byCodepoint(a.sourceBlockId, b.sourceBlockId)
+    || byCodepoint(a.sentence, b.sentence));
   return scored;
 }

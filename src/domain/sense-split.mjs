@@ -260,7 +260,7 @@ export function clusterSenses(objects, {
     let best = depth(label);
     for (const m of sorted) { const d = depth(m); if (d > best) { best = d; label = m; } }
     return { objects: sorted, label };
-  }).sort((x, y) => x.label.localeCompare(y.label));
+  }).sort((x, y) => compareStrings(x.label, y.label));
 
   return { split: clusters.length > 1, clusters, pairs };
 }

@@ -170,7 +170,10 @@ export function carriedItemsFor(rows, state, character) {
   return [...state.placements]
     .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === character)
     .map(([subject]) => ({ subject, spriteClass: spriteClassForObject(rows, subject) }))
-    .sort((a, b) => a.subject.localeCompare(b.subject));
+    // Codepoint order, never localeCompare — inlined, not a module-level
+    // helper, because this function is spliced verbatim into the page's own
+    // inline script and can carry no outer-scope reference with it.
+    .sort((a, b) => (a.subject < b.subject ? -1 : a.subject > b.subject ? 1 : 0));
 }
 
 /** Every room's depth level, `Map<roomId, number>`, BFS from `root` at level
@@ -1994,7 +1997,10 @@ function pageScript() {
         svg: creature ? spriteSvgFor(speciesOfCharacter(subject), editRows, subject) : objectSvgFor(subject, editRows),
       });
     }
-    here.sort(function (a, b) { return a.subject.localeCompare(b.subject); });
+    // Codepoint order, never localeCompare — a placed subject traces back to
+    // a world fact, and two readers must render the same room-detail cast
+    // order regardless of the browser's own locale.
+    here.sort(function (a, b) { return a.subject < b.subject ? -1 : a.subject > b.subject ? 1 : 0; });
     castEl.innerHTML = here.map(function (t) { return editCardHtml(t.subject, t.label, t.svg); }).join("");
     const kind = roomKindForRoom(editRows, selectedRoomId);
     const ways = [...(editState.exits.get(selectedRoomId) || new Map()).keys()].sort();
