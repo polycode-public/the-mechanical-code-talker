@@ -23,6 +23,7 @@ import {
   createInMemoryStore, readOnlyMemorySnapshot, resolveMemoryGraphFile,
   createSqliteMemoryStore, closeSqliteMemoryStore, openSqliteSeedStore, sqliteSeedFactTermValues,
   loadMemory, appendFact, appendFacts, appendUtterances, removeFacts, readFactRows,
+  appendCanonicalisedFromEdges,
   loadSyllogiseState, saveSyllogiseState, loadNodeId, saveNodeId,
   BackendRejected, FACT_CLASS,
 } from "../../src/adapters/memory/core.mjs";
@@ -733,6 +734,187 @@ test("deleting a session row that shadows a seed row rebuilds, so the seed's own
     assert.ok(
       patched.individuals.some((ind) => ind.id === shadowed.rowKey),
       "and the seed still asserts the fact the session row was hiding",
+    );
+  } finally {
+    await seed.cleanup();
+  }
+});
+
+// ---- the index the handle keeps across writes -------------------------------
+// Two of the write path's lookup maps survive a mutation instead of being built
+// again per write, so what the handle carries has to stay exactly what a build
+// over the payload it describes would produce. This is a cache over a store the
+// next write mutates, so a stale entry would not fail loudly: it would quietly
+// mint a second record for a triple already asserted, or plan a supersession
+// against a record that is no longer there. Both checks below therefore compare
+// against a REBUILD rather than against an expected shape.
+
+/** factRecordsByGroup, derived here rather than read from the handle — an
+ *  independent derivation is the only thing a cache can be checked against. */
+function factRecordsByGroupOf(payload) {
+  const byGroup = new Map();
+  for (const ind of payload.individuals || []) {
+    if (!ind?.id || ind.class !== FACT_CLASS) continue;
+    const groupId = String(ind.id).includes("@") ? String(ind.id).split("@")[0] : String(ind.id);
+    const held = byGroup.get(groupId);
+    if (held) held.push(ind.id);
+    else byGroup.set(groupId, [ind.id]);
+  }
+  return byGroup;
+}
+
+const statedByExamplesOf = (payload) => (payload.objectProperties || [])
+  .find((g) => g?.prop === "mgx:statedBy")?.examples || null;
+
+function statedByBySubjectOf(payload) {
+  const bySubject = new Map();
+  for (const e of statedByExamplesOf(payload) || []) {
+    if (!e?.subject) continue;
+    const held = bySubject.get(e.subject);
+    if (held) held.push(e.object);
+    else bySubject.set(e.subject, [e.object]);
+  }
+  return bySubject;
+}
+
+/** Each half the handle will hand the NEXT write, against a rebuild over the
+ *  payload it describes. By value and with each list's own order on top: deep
+ *  equality alone passes a list whose order has drifted, and the write path
+ *  reads these lists in order.
+ *
+ *  A half whose container the write just replaced is skipped, because the
+ *  handle rebuilds that half before anything reads it again and what it holds
+ *  in between is never consulted. The fact half is never skipped — its whole
+ *  job is to survive a write that keeps the array. */
+function sameIndex(handle, why) {
+  const carried = handle.cachedIndex;
+  const payload = handle.cachedPayload;
+  assert.ok(carried, `${why}: the handle carries no index`);
+  const printable = (map) => JSON.stringify([...map.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)));
+  const halves = [
+    ["factRecordsByGroup", factRecordsByGroupOf, carried.individuals === payload.individuals],
+    ["statedByBySubject", statedByBySubjectOf, carried.statedByExamples === statedByExamplesOf(payload)],
+  ];
+  for (const [half, rebuild, describesThisPayload] of halves) {
+    if (!describesThisPayload) continue;
+    const held = carried[half];
+    const rebuilt = rebuild(payload);
+    assert.ok(held, `${why}: the handle carries no ${half}`);
+    assert.deepEqual(held, rebuilt, `${why}: ${half} drifted from a rebuild`);
+    assert.equal(printable(held), printable(rebuilt), `${why}: ${half}'s lists landed in a different order`);
+  }
+}
+
+/** Every shape that changes which records a triple has: a first assertion, a
+ *  second source on the same triple, a supersession, a batch, a removal, and
+ *  the re-assert a retraction refuses. `handleFor()` hands back the handle each
+ *  call runs on, so one walk can be driven by a handle kept for the whole
+ *  sequence and another by a fresh handle every time. */
+async function walkTheWritePath(handleFor, step = async () => {}) {
+  await appendFact(handleFor(), { subject: "kim", predicate: "isIn", object: "hall", provenance: teach(T1), createdAt: T1 });
+  await step("a first assertion");
+
+  await appendFact(handleFor(), { subject: "kim", predicate: "isIn", object: "hall", provenance: ace(T1), createdAt: T1 });
+  await step("a second source on the same triple");
+
+  await appendFact(handleFor(), { subject: "kim", predicate: "isIn", object: "kitchen", provenance: teach(T2), createdAt: T2 });
+  await step("a supersession");
+
+  await appendFacts(handleFor(), [
+    { subject: "hall", predicate: "IsA", object: "room", provenance: teach(T3), createdAt: T3 },
+    { subject: "rex", predicate: "isIn", object: "yard", provenance: teach(T3), createdAt: T3 },
+  ]);
+  await step("a batch");
+
+  const utterances = await appendUtterances(handleFor(), [
+    { role: "visitor", text: "where is kim", ts: T3, sessionId: SESSION, sessionStarted: T1 },
+  ]);
+  await step("an utterance, which touches no fact group");
+
+  // Two writes that reach real nodes only THROUGH the group list, so a group
+  // the index has lost is a graph a rebuild would not have written: the first
+  // names no source and so must land on the records already there instead of
+  // minting the unattributable placeholder, and the second draws one edge per
+  // record asserting the triple.
+  await appendFact(handleFor(), { subject: "hall", predicate: "IsA", object: "room", quantifier: "every" });
+  await step("a write naming no source, onto a triple already asserted");
+
+  await appendCanonicalisedFromEdges(handleFor(), [{
+    factId: readFactRows(await loadMemory(handleFor())).find((r) => r.subject === "hall")?.id,
+    uttId: utterances.ids[0],
+    factLabel: "hall IsA room",
+    uttLabel: "where is kim",
+  }]);
+  await step("a canonicalised-from edge, drawn per record asserting the triple");
+
+  const doomed = readFactRows(await loadMemory(handleFor())).filter((r) => r.subject === "rex").map((r) => r.id);
+  await removeFacts(handleFor(), doomed, { retractedAt: T4 });
+  await step("a removal");
+
+  await appendFact(handleFor(), { subject: "rex", predicate: "isIn", object: "yard", provenance: teach(T3), createdAt: T3 });
+  await step("the retracted assertion re-sent");
+}
+
+// The three handle shapes put the statedBy half under different pressure, and
+// the difference is which layer owns the edge group. A seeded handle's statedBy
+// group is a seed row no session write may touch, so the assembled payload
+// keeps the seed's examples array and the carried map with it. A handle with no
+// seed owns that group itself, rewrites its row on every fact write, and takes
+// a fresh examples array back each time — which is the identity the guard
+// watches. Both routes have to end up saying what a rebuild says.
+const HANDLE_SHAPES = [
+  ["a sqlite seed", (seed) => wrapRowBackendOverSqliteSeed(createRowMemoryBackend(), seed.store)],
+  ["a parsed-payload seed", (seed) => wrapRowBackend(createRowMemoryBackend(), { basePayload: seed.payload })],
+  ["no seed at all", () => wrapRowBackend(createRowMemoryBackend())],
+];
+
+for (const [shape, handleOver] of HANDLE_SHAPES) {
+  test(`the lookup index a handle carries across writes stays what a rebuild would give, write after write, over ${shape}`, async () => {
+    const seed = await buildSeedSqlite();
+    try {
+      const dir = handleOver(seed);
+      await walkTheWritePath(() => dir, (why) => sameIndex(dir, `after ${why}`));
+    } finally {
+      await seed.cleanup();
+    }
+  });
+}
+
+/** The graph two separately-driven stores must agree on, minus the fields that
+ *  record WHEN a write happened rather than what it said. Two walks run at two
+ *  moments, so the audit stamp, the trust cache it feeds and an edge's own
+ *  creation time all differ by construction; everything the index could change
+ *  is in what is left. */
+function graphContent(payload) {
+  const volatile = new Set(["mgx:updatedAt", "mgx:trustScore", "mgx:trustInputs"]);
+  return JSON.stringify({
+    individuals: (payload.individuals || []).map((ind) => ({
+      ...ind, attributes: (ind.attributes || []).filter((a) => !volatile.has(a?.prop)),
+    })),
+    objectProperties: (payload.objectProperties || []).map((group) => ({
+      ...group,
+      examples: (group.examples || []).map(({ createdAt, ...edge }) => edge),
+    })),
+  });
+}
+
+test("a handle that carries its index answers every write exactly as one that rebuilds it does", async () => {
+  const seed = await buildSeedSqlite();
+  const carried = createRowMemoryBackend();
+  const rebuilt = createRowMemoryBackend();
+  try {
+    // Two stores, one sequence, and the only difference between them is which
+    // index the write path read. A handle kept for the whole walk carries both
+    // halves across every write; a fresh handle per call has none to carry and
+    // builds them from the store every time.
+    const long = wrapRowBackendOverSqliteSeed(carried, seed.store);
+    await walkTheWritePath(() => long);
+    await walkTheWritePath(() => wrapRowBackendOverSqliteSeed(rebuilt, seed.store));
+
+    assert.equal(
+      graphContent(await loadMemory(wrapRowBackendOverSqliteSeed(carried, seed.store))),
+      graphContent(await loadMemory(wrapRowBackendOverSqliteSeed(rebuilt, seed.store))),
+      "the carried index landed a different graph from the one a rebuild every call landed",
     );
   } finally {
     await seed.cleanup();
