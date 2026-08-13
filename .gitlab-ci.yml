@@ -715,6 +715,13 @@ corpus:load:
     # region-less describe-stacks fails into an empty variable.
     - export TMCT_DYNAMO_TABLE=$(aws cloudformation describe-stacks --region eu-west-2 --stack-name tmct-prod-prod-website --query "Stacks[0].Outputs[?OutputKey=='RowTableName'].OutputValue" --output text)
     - test -n "$TMCT_DYNAMO_TABLE"
+    # One build + load per first-class band. Each load is a no-op when the
+    # source digest already matches the band's manifest, so a deploy that
+    # changed no corpus file costs three digest reads.
+    - node scripts/corpus-bands/build-child.mjs --out child.band.jsonl
+    - node bin/tmct.mjs corpus load child --source child.band.jsonl
+    - node scripts/corpus-bands/build-conceptnet.mjs --out conceptnet.band.jsonl
+    - node bin/tmct.mjs corpus load conceptnet --source conceptnet.band.jsonl
     - node scripts/corpus-bands/build-wordnet-complete.mjs --out wordnet-complete.band.jsonl
     - node bin/tmct.mjs corpus load wordnet-complete --source wordnet-complete.band.jsonl
 

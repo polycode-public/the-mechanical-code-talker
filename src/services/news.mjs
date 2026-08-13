@@ -953,45 +953,65 @@ async function ingestResearchArticle(ctx, term, provider, article) {
   return { facts: distinct.size, derived };
 }
 
-// The one band this fallback reads. WordNet is dictionary content — real
-// words, not news entities — so it grounds the everyday nouns a headline
-// mentions in passing ("harbor", "senator") without ever costing a KB round
-// trip on those.
-const BAND_TERM_LOOKUP_BAND = "wordnet-complete";
+// The bands this fallback reads. All three are reference content — dictionary
+// senses and everyday commonsense edges, not news entities — so they ground
+// the ordinary nouns a headline mentions in passing ("harbor", "senator",
+// "penguin") without ever costing a KB round trip on those.
+const BAND_TERM_LOOKUP_BANDS = Object.freeze(["child", "conceptnet", "wordnet-complete"]);
 const BAND_TERM_LOOKUP_LIMIT = 50;
 // A local DynamoDB Query has no courtesy throttle and nothing external to
 // protect, but it still has to return: the enrich cycle shares the same wall
 // budget every other phase does, and this runs once per candidate term. A
 // slow or hung Query loses the race and reads as a miss — a timeout is a
 // miss, never a guess — rather than stalling the whole cycle behind it.
+// The bands are read in parallel against one deadline, so the budget buys
+// every band at once: each is a single-partition begins_with read of its own,
+// and the worst case stays one timeout however many bands there are.
 const BAND_TERM_LOOKUP_TIMEOUT_MS = 750;
 
-/** `term`'s rows from the wordnet-complete band, as `{subject, predicate,
- *  object, provenance}` triples ready for `appendFacts` — or `[]` when the
- *  band carries nothing for it, the query errors, or it doesn't return in
- *  time. `ctx.providers.queryBandTerm` is absent on the browser surface and
- *  in most tests, so this is a no-op there by construction, not a special
- *  case here. */
-async function groundTermFromBand(ctx, term) {
-  const queryBandTerm = ctx.providers?.queryBandTerm;
-  if (typeof queryBandTerm !== "function") return [];
-  const timeout = new Promise((resolve) => { setTimeout(() => resolve(null), BAND_TERM_LOOKUP_TIMEOUT_MS); });
+/** `term`'s rows from one band, as `{subject, predicate, object, provenance}`
+ *  triples — or `[]` when the band carries nothing for it or the Query
+ *  throws. A band that fails is a band with nothing to say, so the others'
+ *  rows survive it. */
+async function bandTermFacts(queryBandTerm, band, term) {
   let response;
   try {
-    response = await Promise.race([
-      queryBandTerm({ band: BAND_TERM_LOOKUP_BAND, term, limit: BAND_TERM_LOOKUP_LIMIT }),
-      timeout,
-    ]);
+    response = await queryBandTerm({ band, term, limit: BAND_TERM_LOOKUP_LIMIT });
   } catch {
     return [];
   }
-  if (!response) return [];
   const facts = [];
-  for (const row of response.rows || []) {
+  for (const row of response?.rows || []) {
     const fact = factFromBandRow(row);
     if (fact) facts.push(fact);
   }
   return facts;
+}
+
+/** `term`'s rows from every band, as `{subject, predicate, object,
+ *  provenance}` triples ready for `appendFacts` — or `[]` when no band
+ *  carries it. Each band's Query races the SAME deadline, so a band that
+ *  hangs costs the cycle one timeout rather than one per band, and the bands
+ *  that answered inside it keep their rows. A fact both a band and the seed
+ *  already hold arrives with the band's own provenance, so it corroborates
+ *  rather than duplicating. `ctx.providers.queryBandTerm` is absent on the
+ *  browser surface and in most tests, so this is a no-op there by
+ *  construction, not a special case here. */
+async function groundTermFromBand(ctx, term) {
+  const queryBandTerm = ctx.providers?.queryBandTerm;
+  if (typeof queryBandTerm !== "function") return [];
+  let deadlineTimer;
+  const deadline = new Promise((resolve) => {
+    deadlineTimer = setTimeout(() => resolve(null), BAND_TERM_LOOKUP_TIMEOUT_MS);
+  });
+  try {
+    const perBand = await Promise.all(BAND_TERM_LOOKUP_BANDS.map(
+      (band) => Promise.race([bandTermFacts(queryBandTerm, band, term), deadline]),
+    ));
+    return perBand.flatMap((facts) => facts || []);
+  } finally {
+    clearTimeout(deadlineTimer);
+  }
 }
 
 /** Grounds `term` from `facts` — a band's own rows, already resolved
@@ -1084,10 +1104,10 @@ export async function enrichTopTerms(ctx, { limit } = {}) {
     if (aborted) { markTerm(ledger, entry.term, "pending", nowVal); break; }
     if (!hit) {
       // Every configured KB source came back empty (or none is configured) —
-      // try the wordnet-complete band before giving up. It's another source
-      // the resolver can reach, not a replacement for the KB walk above: a
+      // try the corpus bands before giving up. They're another source the
+      // resolver can reach, not a replacement for the KB walk above: a
       // headline's proper nouns still need a KB lookup, but its everyday
-      // vocabulary is often already sitting in the band.
+      // vocabulary is often already sitting in a band.
       const bandFacts = await groundTermFromBand(ctx, entry.term);
       if (bandFacts.length) {
         const res = await ingestBandFacts(ctx, bandFacts);
