@@ -59,6 +59,32 @@ test("factSentence agrees a minted verb with its own row.subject", () => {
   );
 });
 
+test("a lexicon-minted predicate comes pre-inflected, so a plural subject reads it back through the bare form", () => {
+  assert.equal(predicatePhrase("tmct:releases", "rescuers"), "release");
+  assert.equal(predicatePhrase("tmct:releases", "russia"), "releases");
+  assert.equal(predicatePhrase("tmct:uses", "people"), "use");
+  assert.equal(predicatePhrase("tmct:carries", "the ships"), "carry");
+  assert.equal(predicatePhrase("tmct:touches", "the wires"), "touch");
+  // The camel-cased preposition is its own word, and the verb in front of it
+  // agrees the same way.
+  assert.equal(predicatePhrase("tmct:reliesOn", "systems"), "rely on");
+  assert.equal(predicatePhrase("tmct:reliesOn", "the system"), "relies on");
+  assert.equal(predicatePhrase("tmct:dependsOn", "the modules"), "depend on");
+  // No subject given at all: today's pre-existing singular default, unchanged.
+  assert.equal(predicatePhrase("tmct:releases"), "releases");
+});
+
+test("factSentence agrees a lexicon-minted verb with its own row.subject", () => {
+  assert.equal(
+    factSentence({ subject: "rescuers", predicate: "tmct:releases", object: "a quake victim" }),
+    "rescuers release a quake victim",
+  );
+  assert.equal(
+    factSentence({ subject: "russia", predicate: "tmct:releases", object: "robert gilman" }),
+    "russia releases robert gilman",
+  );
+});
+
 test("predicatePhrase's do-support negation agrees with the subject too: 'do not' for a plural subject, 'does not' for a singular one", () => {
   assert.equal(predicatePhrase("mgxneg:eat", "scientists"), "do not eat");
   assert.equal(predicatePhrase("mgxneg:eat", "a fox"), "does not eat");
@@ -193,4 +219,9 @@ test("phraseRendererSource carries everything the reader stands on", () => {
     browserSentence({ subject: "scientists", predicate: "mgx:report", object: "a finding" }),
     "scientists report a finding",
   );
+  assert.equal(
+    browserSentence({ subject: "rescuers", predicate: "tmct:releases", object: "a quake victim" }),
+    "rescuers release a quake victim",
+  );
+  assert.equal(browserPhrase("tmct:reliesOn", "systems"), "rely on");
 });
