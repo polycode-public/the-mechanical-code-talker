@@ -108,9 +108,9 @@ The work list, ranked by value against the plan's target card.
    as plural — needs the lexicon's declared plurals, and `fact-phrase.mjs` is
    deliberately import-free so it can be stringified into the browser. That
    cost is the real one, and it is bigger than the typing.
-4. [ ] **The rest of a 300 ms write** — in flight on
-   `worktree-agent-a53f47beb71dc2734`, briefed to profile first rather than take
-   the previous agent's three names as a work list. The index was 18% of it and is now
+4. [ ] **The rest of a 300 ms write** — profile before picking targets; the names
+   below are one agent's reading and the tree has moved since.
+   The index was 18% of it and is now
    carried across writes (appendFact −15.6%, appendUtterance −16.1%,
    removeFacts −11.7% at 60k facts). The profile puts the remaining ~85% in
    `cacheUpsertEdge`'s per-edge filter, `sqlitePayloadStoreRows`, and
