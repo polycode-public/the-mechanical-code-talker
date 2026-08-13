@@ -286,3 +286,22 @@ test("isaOf: an opening with no is-a statement at all stays null", async () => {
   const lex = loadLexicon();
   assert.equal(isaOf("Paris has many famous museums.", lex), null);
 });
+
+test("isaOf: an approximation or topic phrase ends the noun phrase instead of donating its own noun", async () => {
+  const { isaOf } = await import("../../src/domain/reference-pack.mjs");
+  const { loadLexicon } = await import("../../src/domain/grammar/lexicon.mjs");
+  const lex = loadLexicon();
+  assert.equal(isaOf("A dictionary is a book about words.", lex), "book");
+  assert.equal(isaOf("A fence is a barrier around a field.", lex), "barrier");
+  assert.equal(isaOf("An hour is a period approximately equal to 60 minutes.", lex), "period");
+  assert.equal(
+    isaOf("The lips are a body part around the mouth.", lex),
+    null,
+    "the corrected head is the generic 'part', which stores no isa",
+  );
+  assert.equal(
+    isaOf("The quokka is a small marsupial about the size of a large cat.", lex),
+    null,
+    "no isa beats the size the over-running window used to pick",
+  );
+});
