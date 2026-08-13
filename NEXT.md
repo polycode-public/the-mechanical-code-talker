@@ -73,6 +73,7 @@ The work list, ranked by value against the plan's target card.
    `findContradictions` and its store-row listing, `digest/select.mjs`,
    `digest/compose.mjs` and `ledger-viz.mjs` — left deliberately rather than
    half-sweeping five files mid-task.
+
 ## Discipline
 
 `CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split (including
