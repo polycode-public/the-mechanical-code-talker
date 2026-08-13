@@ -13,7 +13,7 @@ open items `NEXT.md` carries after the 2.0.3 benchmark cycle. Work it top to bot
 is by evidence strength and blast radius, not by area.
 
 Refreshed against the tree at **2.3.1** (`6dc4787`), after `PLAN_PURGE.md` executed. Sources:
-`BENCHMARK_{AGENT,CEFR_ENGLISH,CONVERSATION,INFERENCE}_2.0.3.md`, `CAPABILITIES_2.0.3.md`,
+`BENCHMARK_{AGENT,CONVERSATION,INFERENCE}_2.0.3.md`, `CAPABILITIES_2.0.3.md`,
 `playtests/PLAYTEST_LOG_002.md`, `NEXT.md`.
 
 **Every reproducer in Phases 1-3 was re-run at 2.3.1 and still reproduces.** The purge changed the
@@ -66,7 +66,7 @@ Worked out and not yet executed. File ownership is the boundary; the coordinator
 | Agent | Owns | Phase |
 |---|---|---|
 | **honest-miss** | `chat.mjs`, `domain/memory/*`, `normalize.mjs`, lanes `inference`/`grammar`/`planning`/`games/drilldowns` | 3 |
-| **public-surface** | `README.md`, `public/*`, `docs/`, `corpus/*/README.md`, `examples/`, `chatbench/README.md`, `test/readme/`, `e2e/`, `test/tools/` | 7 |
+| **public-surface** | `README.md`, `public/*`, `docs/`, `corpus/*/README.md`, `examples/`, `test/readme/`, `e2e/`, `test/tools/` | 7 |
 | **normative** | `ontology/`, a new `PLAN_NORMATIVE.md`, the coined-term inventory | 10 |
 | **capability-page** | the generated page + its generator | 8 — after 10's research |
 | **prose** | `README.md`, `public/index.html` | 9 — last, and conflicts with public-surface, so serialize |
@@ -501,8 +501,8 @@ Canonical: what "app/lib/b.mjs" itself imports — forward(imports, entityType=M
 expected: app/functions/d/handler.mjs
 ```
 
-**Evidence.** Tier-1 (deterministic, not judge noise) went 109/109 → 107/109 vs
-`archive/BENCHMARK_CEFR_ENGLISH_1.8.0.md`, on `g-b2-passive-8` and `g-b2-passive-10`. Bisected to
+**Evidence.** Tier-1 (deterministic, not judge noise) went 109/109 → 107/109 on
+`g-b2-passive-8` and `g-b2-passive-10`. Bisected to
 **`98df45a` fix(ask): the passive keeps its agent, and a negated polar answers**.
 
 **Diagnosis.** That commit replaced a "first meaningful token after `by` is a wh-word → the agent is
@@ -842,51 +842,7 @@ Independent of any fix above, because each of these drifted silently:
   `test/estate/generated-artifacts.test.mjs`, which already guards three siblings and pointedly not
   this one.
 
-### 4.2 CHATBENCH is blind to 14 of 23 construction shapes
-
-The default `graded-pool.jsonl` covers 9 shapes / 12 of 36 cells. Never tested: conditional,
-coordination-compositional, discourse-deixis, ellipsis, garden-path, presupposition,
-quantifier-counting, relative-embedded, subordination, and five combination cells.
-`graded-pool-max.jsonl` holds all 36. The per-cell floor (`MIN_PER_CELL = 5`,
-`chatbench/graded.mjs:136`) makes the lightest full-coverage run 315 cases.
-
-**A blind spot is where the next `98df45a` lands unnoticed — and this one already did.**
-
-**Also add the cell table to the next report.** The 2.0.3 report published per-grade and
-per-construction marginals and never crossed them. The cross table is the view that locates the
-problem, and it says something the marginals hide:
-
-```
-grade | construction          |  n | mean  | tier-1
-  A1  | naming-vocabulary     | 10 | 1.475 |  10/10   <- the real floor
-  A1  | svo-query             | 17 | 1.794 |  17/17
-  A2  | assert-recall         |  9 | 1.944 |    9/9
-  A2  | naming-vocabulary     | 10 | 1.875 |  10/10
-  B1  | discourse-reference   |  5 | 1.900 |    5/5
-  B1  | negation              |  5 | 2.000 |    5/5
-  B1  | noise+svo-query       |  5 | 1.933 |    5/5
-  B1  | pronoun-binding       | 10 | 1.850 |  10/10
-  B1  | svo-query             |  8 | 1.813 |    8/8
-  B2  | reversible-passive    | 10 | 1.600 |   8/10   <- the only tier-1 failure
-  C1  | temporal              | 10 | 1.917 |  10/10
-  C2  | pronoun-binding       | 10 | 1.750 |  10/10
-```
-
-**`A1 naming-vocabulary` at 1.475 is the true floor, not B2's 1.600.** The marginal (1.675) splits
-the A1 and A2 cells and hides both. Four A1 naming cases score 1/2, un-diagnosed — that is the
-`naming-vocabulary` recommendation, and it should point at **A1 specifically**.
-
-The table also shows the "ladder" is barely one: four grades rest on a single construction each, so
-"B2 regressed" and "reversible-passive regressed" are the same sentence. `pronoun-binding` appears
-at B1 (1.850) and C2 (1.750) — the same construction, two grades, 0.1 apart.
-
-### 4.3 CEFR sampling
-
-2.0.3 ran N=1 by operator choice, so **no per-case judge score in it is noise-averaged**. Return to
-the go-to N=2. `ambiguity` at 1.625 is the worst tag but n=4 at N=1 — the least trustworthy number
-in the report. **Re-measure before spending a cycle on it.**
-
-### 4.4 INFBENCH has stopped discriminating
+### 4.2 INFBENCH has stopped discriminating
 
 219/219 chat, 80/80 kernel, 0 verdict changes across 299 rows vs `archive/BENCHMARK_INFERENCE_1.7.0.md`.
 The ladder now measures the generator's reach, not the prover's. Three things follow:
@@ -906,7 +862,7 @@ The ladder now measures the generator's reach, not the prover's. Three things fo
   Then either guard it in `test/estate/generated-artifacts.test.mjs` or freeze it and stop
   regenerating.
 
-### 4.5 AGENTBENCH's case set no longer tests the ladder
+### 4.3 AGENTBENCH's case set no longer tests the ladder
 
 All 11 C2 cases are green on the goal driver; every rung gates PASS. There is no rung to build past,
 so the next AGENT cycle's work is deepening the corpus, not the engine.
@@ -916,7 +872,7 @@ One item stays open: **the resolver floor stopped planning `ab-c2-what-to-test`*
 reasoner, which the floor arm lacks — but unconfirmed. Decide whether the floor's expectation moves
 or the resolver lost a plan it should still build.
 
-### 4.6 Re-sweep CONVERSATION, and add a sixth persona
+### 4.4 Re-sweep CONVERSATION, and add a sixth persona
 
 Once Phase 1 lands, re-run the persona sweep with the same five frames and **add a sixth: the
 returning user with a stale mental model** ("the old X", "didn't you say Y"). That frame is where
@@ -1112,7 +1068,7 @@ everything, and generated artifacts are still wider than the diff.
 ## Phase 7 — the public surface: every example traces to a test
 
 **Landed.** The table is `docs/public-examples.md`, one row per example across the README, the
-home page, the two contract docs, the corpus READMEs, chatbench, `examples/`, and the generated
+home page, the two contract docs, the corpus READMEs, `examples/`, and the generated
 tool catalog. `e2e/pages-examples.test.mjs` replays the home page's transcripts against the live
 CLI through the README's own harness, so a page transcript is held at the same tier a README
 fence is. What is still open is listed in `NEXT.md`.
@@ -1163,7 +1119,6 @@ example or write the test.
 | `public/demo-templates.mjs`, `public/demo-ui.mjs`, `public/tmct-browser.mjs` | Anything they hardcode as an example answer |
 | `docs/repository-interface.md`, `docs/adapter-contract.md` | The two contract docs. Every declared service and edge kind against `SERVICES` (16), `EDGE_KINDS` (11), `MISS_REASONS` (4), `INTERFACE_VERSION` (1.1.0) |
 | `docs/references/**` | Citations and status claims. `PLAN_PURGE.md` §9.4 already has the four planning refs |
-| `chatbench/GRADED.md` | The graded-pool design doc. `PLAN_PURGE.md` §9.4 flags five dangling refs; this phase checks its *figures* against the pool |
 | `corpus/*/README.md` | Three corpus READMEs. Counts and licence claims |
 | `examples/teach-and-infer.mjs` | Runs in CI via the README harness. Confirm it still asserts |
 | `.tmct/TOOLS.md` (generated at `init`) | The cold-tool catalog a user actually reads. `test/estate/tool-docs.test.mjs` guards the README's tool section; confirm it guards this too |
@@ -1197,8 +1152,8 @@ example. **Prefer deleting.** A surface with three examples that all work beats 
 ## Phase 8 — say what tmct can do, when it was measured, and how
 
 There is no single artifact a reader can point at to answer "what can this do, and how do you know".
-The evidence exists and is scattered: four `BENCHMARK_*_2.0.3.md` reports, a 151-row
-`CAPABILITIES_2.0.3.md`, four `SKILL_BENCHMARK_*.md` method docs. None of it is on a public surface,
+The evidence exists and is scattered: three `BENCHMARK_*_2.0.3.md` reports, a 151-row
+`CAPABILITIES_2.0.3.md`, three `SKILL_BENCHMARK_*.md` method docs. None of it is on a public surface,
 and the capability table is written in this project's own vocabulary.
 
 ### 8.1 What to build
@@ -1220,35 +1175,16 @@ and the capability table is written in this project's own vocabulary.
 
 ### 8.2 The caveats are load-bearing, not footnotes
 
-Three of the four axes carry a caveat that changes what the number means. Any page that prints the
+Two of the three axes carry a caveat that changes what the number means. Any page that prints the
 number without it is worse than printing nothing:
 
 - **INFBENCH 219/219 includes 50 greens (23%) graded against a declared ceiling.** Their expected
   answer is the honest floor. **INF-C2's 20/20 measures no consistency checking at all.** A reader
   seeing "100% at C2" concludes the opposite of the truth.
-- **CEFR 2.0.3 ran at N=1** on a pool covering **9 of 23 construction shapes**. No per-case score is
-  noise-averaged, and 14 shapes are untested.
 - **AGENTBENCH's 56/56** is measured on a case set where all 11 C2 cases now pass — the ladder has
   more headroom than the corpus tests.
 
-### 8.3 Language scoring in particular
-
-The CEFR axis is the one a reader will most want and most easily misread. Publish the **cell table**,
-not the marginals (§4.2 has it). The marginals hide the floor: `A1 naming-vocabulary` scores **1.475**
-while the `naming-vocabulary` marginal reads 1.675, because the marginal averages the A1 and A2 cells.
-
-Say plainly what the CEFR bands are and are not. They are borrowed as a **difficulty vocabulary for
-construction types**, not a claim that tmct has a language level. The 2.0.3 data shows the ladder is
-not monotonic — A1 (1.676) scores below C1 (1.917) — and four of six grades rest on a single
-construction each, so "B2" and "reversible-passive" are the same sentence. **A page that implies
-"tmct reads at C1" would be inventing a claim the harness does not make.** State the construction,
-the cell, the n, and the date.
-
-Also name the judge: `claude-haiku-4-5-20251001`, prompt `judge-prompt-v1`, pinned. And name where it
-sits — the eval harness, never the product path. That is a design decision a reader should not have
-to infer.
-
-### 8.4 Where it lives
+### 8.3 Where it lives
 
 Candidates, and this plan does not choose: a section of the home page; a `CAPABILITIES.md` at root
 that the home page renders; a generated page like the tool catalog (`src/tools/catalog.mjs` renders
@@ -1383,9 +1319,6 @@ its own live question:
   A mirrored term should cite its origin.
 - **Truth maintenance** — Doyle's JTMS and de Kleer's ATMS are already named in `PLAN_SYLLOGIST.md`.
   The justification field is a JTMS shape. Use its vocabulary.
-- **Language scoring** — CEFR is the Council of Europe's, and Phase 8 already constrains what tmct
-  may claim with it. The TROG/CELF construction taxonomy `chatbench/GRADED.md` adapts has its own
-  literature and a licence question the file already raises.
 - **Dialogue acts** — **ISO 24617-2 (SemAF)** is the published standard for the thing the
   conversational lanes classify. tmct has no intent vocabulary at all (`CAPABILITIES_2.0.3.md` row
   139, `absent`), so this is a naming decision that can be made right before anything is built.
@@ -1463,7 +1396,7 @@ written once.
 9. **Phase 9** — the prose pass, including the README's standards section. Last, so it describes
    what is true after everything above.
 10. **Phase 5** — document corrections; fold into whichever commit touches the doc.
-11. **Phase 4.2-4.6** — the instrument work, then re-measure all four axes and re-sweep.
+11. **Phase 4.2-4.4** — the instrument work, then re-measure all three axes and re-sweep.
 
 Phases 7-10 have one ordering constraint: **audit, then reconcile, then measure, then describe.**
 Writing the prose first is how a README ends up claiming a headline example that never parsed.
@@ -1474,9 +1407,8 @@ Writing the prose first is how a README ends up claiming a headline example that
   lesson Phase 2 exists to teach.
 - Name each test for the behaviour it checks, never for this plan, an item number, or a benchmark.
   `CLAUDE.md`'s comment and test-name hygiene rule applies to everything here.
-- Re-run the axis a fix targets, not the whole cycle: CEFR for Phases 1-2, CONVERSATION's sweep
+- Re-run the axis a fix targets, not the whole cycle: CONVERSATION's sweep
   after Phase 1 lands, INFBENCH only if `syllogise.mjs` or the generator moved.
-- The CEFR re-run returns to **N=2** and reports the **cell table**, not the marginals.
 - `npm test` green before any commit that reaches `main` or a remote; `test:fast` before a
   checkpoint; `test:smoke` after every edit.
 - Phase 7's deliverable is a committed table. An example whose "test" column is empty is not done —

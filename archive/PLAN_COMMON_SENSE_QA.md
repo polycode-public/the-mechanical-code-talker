@@ -11,9 +11,7 @@ corpus rows and its acceptance commands. Where a phase is mechanical enough for 
 
 No LLM runs anywhere in this stack. Not in the product path, which is the project constitution, and
 not in the scoring path either. Scoring is a gold-key comparison against a committed answer key.
-That is the difference between this axis and the CEFR axis: `npm run chatbench:judge` sends
-transcripts to a judge model, and every CEFR number carries that judge as a condition. A
-CommonsenseQA number carries no judge, so it is reproducible by anyone with the repo.
+A CommonsenseQA number carries no judge, so it is reproducible by anyone with the repo.
 
 ---
 
@@ -1332,8 +1330,8 @@ is fixed, so each lever lands as a clean delta on the same 100 questions.
 **The claim JSON gains** `detail.matchedBy`, counting how each accepted option matched: `"exact"`,
 `"lemma"`, `"head-noun"`, `"wordnet"`. That column is what makes a lever's delta attributable.
 
-**Discipline.** One lever per measured run, the same contract the chatbench cycle uses. A round that
-bundles two levers cannot say which one paid.
+**Discipline.** One lever per measured run. A round that bundles two levers cannot say which one
+paid.
 
 **Tests.** `test/domain/choice-question.test.mjs` gains one test per lever over the pure matcher.
 `test/adapters/chat-choice-lane.test.mjs` gains: a plural option matches a singular edge; a
@@ -1440,8 +1438,7 @@ with.
 
 **No LLM, restated because it is a contract and not a preference.** Nothing in `scripts/claims/claim-commonsenseqa.mjs`,
 `src/domain/choice-question.mjs` or the lane calls a model. The scorer is a string equality on a
-label. Compare with `npm run chatbench:judge`, which the CEFR axis depends on and which makes every
-CEFR number carry a judge as a condition. A CommonsenseQA number carries none.
+label. A CommonsenseQA number carries no judge.
 
 ---
 

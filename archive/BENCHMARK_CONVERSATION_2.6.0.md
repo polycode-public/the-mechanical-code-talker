@@ -189,8 +189,7 @@ needs-a-test inversion's core). New, worst first:
    `undefined` leak rendered as a confident, garbled none.
 4. **The needs-a-test ranking includes test modules**: `what most needs a test` names
    `b.test.mjs` among the answer while `/untested` correctly excludes it — two surfaces disagree
-   about the same survey (the CEFR judge independently docked the same behaviour on the bench
-   fixture).
+   about the same survey.
 
 Honest: `give me a detailed summary of how this app works` collapses to a bare module name (the
 completions pipeline never fires); `where do I start` / `what is the entry point` miss honestly;
@@ -291,7 +290,7 @@ intended destination and the mirroring happens at merge (the coordinator holds t
 | 7 | `what functions does router.mjs export` | "never produces functions — only undefined." | CONFIDENT-WRONG (garbled none) | an `undefined` leaks into the none-renderer for the export/produce phrasing | NEXT (via coordinator) |
 | 8 | `wat is a hrose` | teach-intent reply + "Did you mean: 'every wat is a hrose'?" | CONFIDENT-WRONG (intent; nothing stored) | a typo'd interrogative falls into the teach suggester; run the typo repair before the teach classifier | NEXT (via coordinator) |
 | 9 | contradictory board, disk-3 never placed, goal `disk-2 rests on peg-b` | "2 moves (shortest): 1. move disk-1 onto disk-3 …" — a move onto an unplaced piece, no flag | SOFT (silent gap-fill) | the item-28 assumed-position note fires only for goal-mentioned pieces; extend it to any piece a plan step touches, and flag contradictory placements before planning | NEXT (via coordinator) |
-| 10 | `what most needs a test` | includes `b.test.mjs` in the needs-a-test set; `/untested` excludes it | SOFT (surfaces disagree) | the fewest-tests superlative lacks the test-source filter `/untested` applies (the CEFR judge docked the same row) | NEXT (via coordinator) |
+| 10 | `what most needs a test` | includes `b.test.mjs` in the needs-a-test set; `/untested` excludes it | SOFT (surfaces disagree) | the fewest-tests superlative lacks the test-source filter `/untested` applies | NEXT (via coordinator) |
 | 11 | `is model.mjs not imported by store.mjs` | "Yes — …imports edge from store.mjs to model.mjs" | SOFT (dropped negation) | adverbial negation inside a passive yes/no is stripped; the receipt names the true edge, but the "Yes" answers the un-negated question. Detect and answer the negative form, or decline it | NEXT (via coordinator) |
 | 12 | `describe the old Task class` | full Task card, "old" silently swallowed | SOFT | the stale-modifier residue guard covers imports/calls/orient but not the describe lane — the last unguarded lane of the 1.4 family | NEXT (via coordinator) |
 | 13 | `remind me what we decided about the store` | read-as rewrite → "what defined store", answers the definition site | SOFT (announced category swap) | decision-recall phrasing should reach the session-recall surface (which exists and works for "what did i ask before"), not the definition locator | NEXT (via coordinator) |
@@ -302,7 +301,7 @@ intended destination and the mirroring happens at merge (the coordinator holds t
 | 18 | `let's play guess the number` / `wanna play a guessing game?`; non-numeric mid-game turns | code wall; identity card | honest miss (2 frames) | widen the game-opening recogniser to the invitation family; keep unparsed mid-game turns inside the game frame with a nudge | NEXT (via coordinator) |
 | 19 | `what do cats eat` / `what colour is grass` / `so like what do cats eat` | "can't answer that as a code question" + code-shaped tries | honest miss (wrong-audience guidance) | in a graph-less seeded session the miss guidance should offer vocabulary shapes, not import/calls examples; the eats/colour relations are absent from the seed — an honest by-name miss would also do | NEXT (via coordinator) |
 | 20 | `any words like happy` / `whats another word for big` | wall; "another word for big" read as one term | honest miss | the SKOS lane's recogniser misses the like/what's wrappers | NEXT (via coordinator) |
-| 21 | `I don't suppose app/lib/e.mjs imports anything` | pronoun-rejection lecture, wrong inferred goal | honest miss shading confident-wrong-intent (chatbench hard fail) | the negative-polarity opener is the one wrapper the desire/wrapper stripper family doesn't peel — the P1 implicature cell's live edge (also CEFR decision-log item 3) | NEXT (via coordinator) |
+| 21 | `I don't suppose app/lib/e.mjs imports anything` | pronoun-rejection lecture, wrong inferred goal | honest miss shading confident-wrong-intent | the negative-polarity opener is the one wrapper the desire/wrapper stripper family doesn't peel — the P1 implicature cell's live edge | NEXT (via coordinator) |
 | 22 | `is Record a Task` (code graph) | bare wall | honest miss | item 22's converse nudge landed on the taught-fact lane only; extend to code-graph entities | NEXT (via coordinator) |
 | 23 | `what calls saveTask` (no such symbol) | ambiguity fan-out incl. commit hashes; saveStore absent from did-you-mean | honest miss (noisy repair) | the candidate ranker admits non-symbol kinds and misses the nearest real neighbour | NEXT (via coordinator) |
 | 24 | `give me a detailed summary of how this app works` | bare module name | honest miss | the completions rescue never fires on the app-overview phrasing | NEXT (via coordinator) |
@@ -335,8 +334,8 @@ the ratchet's criterion 2 holds them.
 frame (it again produced findings no other frame reaches — the rename-confirmation and the describe
 gap) and keep the planner's verification discipline (hand-checking every "shortest" claim is what
 separates a plan that reads well from a plan that is right). The game, pack and SKOS lanes need no
-dedicated frame next round — their canonical surfaces are pinned in chatbench now; their recogniser
-width will be exercised by the newcomer frame naturally.
+dedicated frame next round; their recogniser width will be exercised by the newcomer frame
+naturally.
 
 The ladder stays at **FLOW-0** until the write-boundary family (items 1-3) and the FLOW-0
 regressions (item 14) route out. On current texture, the tiers above are ready to ratchet quickly

@@ -80,7 +80,7 @@ identity. Writing splits three ways:
   gives the P2P path. Conflicting authed teaches resolve exactly as PLAN_FACT.md resolves
   them everywhere else: latest-observation-wins with the tie steps and the contradiction
   report — nothing MUDIII-specific.
-- **P2P**: a fetched snapshot is also a share-able world. The shipped WebRTC mesh (PLAN_MUD_WEBRTC.md) works on
+- **P2P**: a fetched snapshot is also a share-able world. A peer mesh works on
   the same fact-row store, so a player can invite peers into their fork without the server
   ever knowing.
 

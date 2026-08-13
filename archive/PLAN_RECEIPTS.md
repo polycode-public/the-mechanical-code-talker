@@ -13,13 +13,10 @@ plan builds the page from numbers that are real today and adds the two cheap mea
 the RAG comparison is future work with open design questions (see R3).
 
 What exists and is committed, usable as page sources now (corrected during R2: the
-chatbench/idxbench `results/raw/run-*/` dirs are gitignored, so the committed headline for
-each lives in its `reports/BENCHMARK_*.md` write-up, not in run JSON):
+idxbench `results/raw/run-*/` dir is gitignored, so the committed headline
+lives in its `reports/BENCHMARK_*.md` write-up, not in run JSON):
 
-- chatbench: the bolded result sentence in the latest `reports/BENCHMARK_CEFR_ENGLISH_*.md`.
 - idxbench: the headline sentence in the latest `reports/BENCHMARK_CODE_INDEX_*.md`.
-- `reports/PAGE_WEIGHTS.md` rev 3: per-page wire and raw sizes, measured 2026-08-02, with
-  a documented re-measurement procedure.
 - The supply chain shipped in README: npm tarball with Sigstore provenance naming the
   GitLab pipeline, plus a GitLab release tag per published version pinned to the built
   commit.
@@ -84,14 +81,11 @@ sources:
 
 1. **Query latency** — `test-benchmarks/receipts/receipts.json` `latencyMs` (state n and
    the host field beside the numbers).
-2. **Graph and page size** — same file, `graph` and `pages`; wire totals cross-checked
-   against `reports/PAGE_WEIGHTS.md` in prose, linked.
-3. **Answer quality** — the latest chatbench run's `summary.json` headline score, named by
-   run id, linked to the report that discusses it.
-4. **Index fidelity** — the latest idxbench result headline, same treatment.
-5. **Running cost** — the architectural statement: static hosting, engine runs in the
+2. **Graph and page size** — same file, `graph` and `pages`.
+3. **Index fidelity** — the latest idxbench result headline, same treatment.
+4. **Running cost** — the architectural statement: static hosting, engine runs in the
    page, no inference API. No invented currency figure.
-6. **Supply chain** — provenance plus release-tag chain, two sentences, linking the npm
+5. **Supply chain** — provenance plus release-tag chain, two sentences, linking the npm
    package page and the GitLab releases page.
 
 Each section shows its source path in small print. The page gets the standard head block
@@ -116,12 +110,11 @@ not exist, and designing it raises questions this plan does not settle:
 - Which RAG baseline: embedding store + top-k chunks into which model, at which context
   length? The choice dominates the result.
 - What token accounting: tmct spends zero inference tokens by construction, so the
-  interesting number is the baseline's spend per equivalent answer, over which task set —
-  probably the chatbench case pool, which was not designed for that reuse.
+  interesting number is the baseline's spend per equivalent answer, over which task set.
 - Judge design: equivalence of a grounded-or-refused answer against a generated one needs
   its own rubric; the existing LLM-judge contract covers tmct answers only.
 
 Until a harness is designed for these, the receipts page carries no RAG comparison and no
 claim about one. When it becomes worth building, it starts as its own bench under
-`test-benchmarks/` with the same committed-results contract as chatbench, and this section
-becomes its design sketch.
+`test-benchmarks/` with the same committed-results contract as the other benches, and this
+section becomes its design sketch.

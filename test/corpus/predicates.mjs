@@ -36,16 +36,6 @@ function benchProductRows(result, file = "out/product.jsonl") {
   }
 }
 
-/** chatbench completed and every product row is gradeable: a case id, a
- *  tier-1 verdict, and a non-empty transcript for the judge to read. */
-export function chatbenchProductIsGradeable(result, file) {
-  const rows = benchProductRows(result, file);
-  return Boolean(rows && rows.every((r) =>
-    typeof r.caseId === "string"
-    && typeof r.tier1?.pass === "boolean"
-    && Array.isArray(r.transcript) && r.transcript.length > 0));
-}
-
 /** infbench completed and every product row carries a graded verdict, with
  *  both drive points (kernel + chat) represented. */
 export function infbenchProductIsGradeable(result, file) {

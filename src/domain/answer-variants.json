@@ -10,7 +10,7 @@
         "ask.mjs metaFallbackEntityAnswer (\"X is a Y in this codebase, defined in Z ...\")"
       ],
       "deliberatelyNotUsedBy": [
-        "ask.mjs renderCore whereShape (\"X is defined in Y at line(s) Z\" / \"X is defined in Y (no line span...)\") -- test-benchmarks/chatbench/graded-pool-max.jsonl pins this exact substring as ground truth for 11 'where is X defined' cases (2 in the always-run promoted subset), and that pool is append-only/never-edited-mid-arc per .claude/skills/benchmark-cefr-english/SKILL.md."
+        "ask.mjs renderCore whereShape (\"X is defined in Y at line(s) Z\" / \"X is defined in Y (no line span...)\") -- the grammar, messy-user, compositional and drilldowns corpus lanes pin this exact substring as ground truth for 'where is X defined', so varying it there breaks those rows."
       ]
     },
     "is-dated": {

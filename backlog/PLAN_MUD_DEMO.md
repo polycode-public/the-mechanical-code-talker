@@ -96,13 +96,12 @@ on the page, everything else stays quiet and disciplined around it.
   food`, `talk to <character>`) sit below the ring, and only ever name a character actually
   present in the room.
 - **Wave**: a typed `wave` command and a hand-icon button sitting with the non-movement pills,
-  both the same action. Waving writes a real room-scoped fact into the shared world state (exact
-  shape specified in PLAN_MUD_WEBRTC.md), and every pane that can see the room — the
+  both the same action. Waving writes a real room-scoped fact into the shared world state, and
+  every pane that can see the room — the
   waver's own included — renders a brief, larger waving-hand animation over that character's
   sprite the moment the fact lands. Same `prefers-reduced-motion` restraint as the dug-room
   flourish and the speech bubble. Nothing about this needs a network: it's a small, independently
-  buildable addition to the shipped demo, and the P2P work (PLAN_MUD_WEBRTC.md) inherits it rather than
-  introducing it.
+  buildable addition to the shipped demo.
 - **Movement / dig**: `go <direction>` unchanged from the original grammar work. `dig <direction>`
   still only succeeds where no exit exists yet, and now also respects the room's own kind: an
   underground room can be dug on any exit-less side, the surface can only ever be dug straight

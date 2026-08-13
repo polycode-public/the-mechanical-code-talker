@@ -6,16 +6,9 @@ This page is generated from the reports committed in `reports/`, the root `PLAN_
 `README.md`, and the most recent pipeline on `main` — see the `refresh-status` skill
 (`.claude/skills/refresh-status/SKILL.md`) for the refresh recipe. It does not re-run anything itself.
 
-**Measured tree: 3.0.3. Repo now at 5.0.32.** On 2026-08-08 `reports/` was cut to the two files
-a living skill regenerates (`4f9e8d52`): the CEFR English report and the page-weights report.
-The other twenty report docs — every other axis ever measured (AGENT, AGI, CODE_INDEX,
-CODE_SYNTHESIS, CONVERSATION, INFERENCE, INGEST, RESEARCH, the summaries, the playtests) — are
-historical record in `archive/`, at the versions they name. The one live benchmark number below
-predates over 200 `feat` commits, including work aimed squarely at what it measures
-(filler-clause stripping, the discourse record, quantified locative teach, plan
-counterfactuals). Treat it as "true as of 3.0.3", not "true today", until a re-judge lands —
-the delta-judging cache seeded at 3.0.3 (`test-benchmarks/chatbench/verdict-cache.json`) exists
-to make that re-judge cheap.
+**Repo now at 5.0.32.** Every report doc for an axis measured before 5.0 — AGENT, AGI,
+CODE_INDEX, CODE_SYNTHESIS, CONVERSATION, INFERENCE, INGEST, RESEARCH, the summaries, the
+playtests — is historical record in `archive/`, at the versions they name.
 
 ## Last CI pipeline: every consumer surface exercised, one failure
 
@@ -46,25 +39,15 @@ Longest job: `e2e:deployed:pages` at 9m 31s. No defined job was absent from this
 
 ## The benchmark axes
 
-One axis has a live, skill-owned report; the rest are archived history.
-
-| axis | result | measured tree | source |
-|---|---|---|---|
-| CEFR English (conversation quality) | mean 1.773/2 across the full 1,075-case graded pool; 1068/1075 tier-1 pass; 60 hard fails (36 of them C1/C2); 0 voided samples | 3.0.3 | `reports/BENCHMARK_CEFR_ENGLISH_3.0.3.md`, owning skill `benchmark-cefr-english` |
-
-Every other axis (AGENT, AGI, CODE_INDEX, CODE_SYNTHESIS, CONVERSATION, INFERENCE, INGEST,
-RESEARCH) is not currently measured: no report in `reports/`, no owning `benchmark-*` skill.
-Their most recent measurements live in `archive/` (`BENCHMARK_INFERENCE_5.0.5.md`,
-`BENCHMARK_INGEST_5.0.18.md`, `BENCHMARK_RESEARCH_5.0.18.md`, `BENCHMARK_AGENT_5.0.6.md`, and
+`reports/BENCHMARK_INFERENCE_5.0.28.md` is the live report. Every other axis (AGENT, AGI,
+CODE_INDEX, CODE_SYNTHESIS, CONVERSATION, INGEST, RESEARCH) is not currently measured: no
+report in `reports/`, no owning `benchmark-*` skill.
+Their most recent measurements live in `archive/` (`BENCHMARK_INGEST_5.0.18.md`,
+`BENCHMARK_RESEARCH_5.0.18.md`, `BENCHMARK_AGENT_5.0.6.md`, and
 earlier). One number from today's tree worth naming because CI regenerates it
 deterministically: the agentbench envelope reads `rungReached: TOOL-9` at stamp 5.0.22
 (`test-benchmarks/agentbench/envelope.json`), the goal-recognition rung landed 2026-08-08 with
 0% hallucination — that is an artifact of the always-run test suite, not a report.
-
-**The one ranked gate from the live report:** C1/C2 carry 36 of the 60 hard fails — the
-highest-leverage re-judge target, and the conversational-grammar work landed since 3.0.3
-(filler stripping, discourse binding, counterfactuals) is exactly the kind of change the
-verdict cache can re-judge cheaply.
 
 ## The design docs: what's delivered, what's next, what's a research horizon
 
@@ -112,18 +95,10 @@ README verified all eleven new passages independently and found one defect in th
 follow-up-context worked example ran its two turns in an order the discourse record doesn't
 support (a count never registers a set) — corrected to the verified list-then-count sequence.
 
-## Site weight
-
-Source: `reports/PAGE_WEIGHTS.md` (revision 3, measured 2026-08-02 at deployed 5.0.5, 23
-pages). Stale twice over: it predates the site's reduction to 6 demo pages and the addition of
-`help.html`, and it lists pages that no longer ship. Refreshing it is the `page-weights`
-skill's job.
-
 ## Methodology pins
 
-Judge model (CEFR): `claude-haiku-4-5-20251001`, prompt `judge-prompt-v2`, N=2, with the
-verdict cache enabling delta re-judging. Product path: no model call anywhere; the judge is
-offline-eval tooling only, never in the shipped product — see `CLAUDE.md`'s project section.
+Product path: no model call anywhere. Any judge is offline-eval tooling only, never in the
+shipped product — see `CLAUDE.md`'s project section.
 
 ## Refreshing this page
 

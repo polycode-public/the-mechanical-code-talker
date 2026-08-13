@@ -1,6 +1,6 @@
 // infbench/generate-cases.mjs — the deterministic INFBENCH case generator
-// (PLAN_INFERENCE_TESTING.md §2.2), mirroring chatbench/generate-graded.mjs's
-// mechanism for a structurally simpler fixture: INF-1..INF-8's premises/queries
+// (PLAN_INFERENCE_TESTING.md §2.2), for a structurally simple fixture:
+// INF-1..INF-8's premises/queries
 // are STRUCTURAL (a chain of length k, a disjoint pair, a cardinality n), so
 // `expect` is a PURE FUNCTION of each template's own parameters — never a
 // replay of the engine (the zero-fabrication anti-circularity discipline,
@@ -1442,7 +1442,7 @@ function c2SiblingResolution(rng) {
   return cases;
 }
 
-// ---- id assignment (mirrors chatbench's `g-${grade}-${slug}-${i+1}`) ----
+// ---- id assignment: `inf-${band}-${slug}-${i+1}` ----
 const TEMPLATE_SLUG = {
   a1Lookup: "lookup", a2ChainLen2: "chain2", b1Disjoint: "disjoint",
   b1Existential: "existential",

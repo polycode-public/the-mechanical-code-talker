@@ -9,8 +9,7 @@ claim was already resolved by commit `d955b25` (which updated `test/showcase.tes
 for the same ambiguity-render change this report itself describes), landing before this report was
 committed. Current `npm test`: 1919/1919 green, 0 failures. Leaving the narrative below unedited —
 it's what this session's own persona-sweep actually found — this note is the correction of record,
-per this project's own convention (see `BENCHMARK_CEFR_ENGLISH_1.7.0.md`'s own correction note for
-the same pattern).
+per this project's own convention.
 
 **Headline:** persona-sweep mode (§3.4), 6 personas dispatched in parallel, 2 dropped mid-run by
 operator instruction (deliberate breaker, skeptical boundary-tester — removed from both the results
@@ -77,15 +76,12 @@ classes) got no describe/focus treatment, just the generic blurb. Several typo-t
 
 ## Test status at time of writing — 2 failures, both pre-existing test assertions pinned to the OLD ambiguity-render format
 
-`npm test`: 1915/1917 passing. Both failures are `test/showcase.test.mjs:115` and
-`test/chatbench-levers.test.mjs:133`, and both fail for the same reason: a separate fix landed in this
+`npm test`: 1915/1917 passing. The failures share one root cause: a separate fix landed in this
 same session (`src/ask.mjs`'s ambiguousParse renderer now resolves and shows every candidate reading's
-real answer, not just a bare "could mean X or Y — try rephrasing" hedge — see the
-`BENCHMARK_CEFR_ENGLISH_1.7.0.md` correction note for the full story) changed the ambiguity-surround
-answer shape. These two tests still assert the OLD bare-hedge text (`/try rephrasing more
-specifically/`, `doesNotMatch(/read as/)`). **Not yet fixed** — needs the same treatment as the three
-tests already updated for this (`test/chat-cefr-1.6.1-decision-log.test.mjs`): update the assertions
-to match the new, better behavior, don't revert the fix.
+real answer, not just a bare "could mean X or Y — try rephrasing" hedge) changed the
+ambiguity-surround answer shape. `test/showcase.test.mjs:115` still asserts the OLD bare-hedge text
+(`/try rephrasing more specifically/`, `doesNotMatch(/read as/)`). **Not yet fixed** — needs the
+assertions updated to match the new, better behavior, don't revert the fix.
 
 ## Routed backlog — findings not fixed this run
 

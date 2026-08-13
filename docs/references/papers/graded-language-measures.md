@@ -1,7 +1,7 @@
-# Graded language-comprehension measures — the chatbench difficulty spectrum
+# Graded language-comprehension measures — the difficulty spectrum
 
-Sources for calibrating chatbench cases on a recognized too-easy → tough-but-solvable →
-too-hard spectrum, from child development to academic (case-set v2).
+Sources for calibrating test cases on a recognized too-easy → tough-but-solvable →
+too-hard spectrum, from child development to academic.
 All entries authored offline 2026-07-04 — retrieval dates/URLs UNVERIFIED-pending-web-check;
 none of these instruments' items may be committed (most are commercially licensed tests —
 we borrow their *structure*, never their content).
@@ -19,5 +19,3 @@ we borrow their *structure*, never their content).
 | IRT (item response theory) | Psychometric difficulty-placement method | maintenance methodology; pragmatic stand-in: per-cycle pass-rate bands | Method, not data |
 
 Backbone decision: CEFR bands x TROG/CELF construction blocks (original items only).
-Consumer in repo: `test-benchmarks/chatbench/cases.jsonl` graded tags (case-set v2), `test/showcase.test.mjs`
-promotion rule (100% for two cycles → retained showcase; 0% → ceiling marker, not failure).

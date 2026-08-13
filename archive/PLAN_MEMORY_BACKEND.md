@@ -531,8 +531,7 @@ news.html (render + controls only; no engine, no seed, no graph)
   than mixing rows across versions).
 - **What the page sheds, measured honestly.** The ~7 MB gzipped seed fetch and the multi-MB
   engine bundle both leave this page; the thin bundle is the renderer, the controls, the API
-  client, and the version-poll loop. T13 re-measures the page in `reports/PAGE_WEIGHTS.md`
-  and publishes the before/after.
+  client, and the version-poll loop. T13 re-measures the page and publishes the before/after.
 
 The point of this consumer, sharpened again: it proves the whole hosted architecture — row
 store, worker, materialization, turn endpoint — end to end on a public page, exactly the stack
@@ -1853,11 +1852,8 @@ pinning marked and unmarked shapes, `test/adapters/chat-retrieval-marker.test.mj
 including the lane-inventory guard). **Opus**, serialized on `chat.mjs`.
 
 The phase is guarded by tier-1 alone: its pins, the corpus rows, and the free 1,075-case
-replay both arms — no judged round. The operator declined the judge spend, and the accepted
-risk is stated: the marker's trailing lines land in prose the CEFR judge scores, so a wording
-that reads as hedging could move judged cells unseen until some later judged round crosses
-them. The marker templates are written once and pinned byte-for-byte, which is the cheap half
-of the protection.
+replay both arms. The marker templates are written once and pinned byte-for-byte, which is
+the cheap half of the protection.
 
 Acceptance: the test file; the corpus runners for the new rows; the tier-1 replay both arms
 with zero regressions; `node --test
@@ -2052,15 +2048,14 @@ Acceptance: the test file; `npm run test:fast`.
 to a 10 s ceiling, snapping back on change; one shared knownFeedVersion between the watcher
 and the buttons' settle-waits — the split version tracking double-rendered a landing
 cycle), the live per-source cycle UI, the news-side fuzzy toggle on the enrich trigger,
-and the PAGE_WEIGHTS before/after: cold-load wire weight 5,653,036 bytes → 11,374 bytes,
+and the page-weight before/after: cold-load wire weight 5,653,036 bytes → 11,374 bytes,
 a ~497x drop. 82 tests across the news files, stable across repeated runs.
 
 **Owns** `src/surfaces/web/news-browser-entry.mjs` (the `feedVersion` polling loop with
 backoff; refetch-on-change; stop writing the marker's stop request — the worker's
 `shouldAbort` reads it between sources), `src/services/news-viz.mjs` (the cycle marker
 driving the phase UI; the fuzzy toggle riding the enrich trigger per §3.15.2),
-`reports/PAGE_WEIGHTS.md` (re-measured: the thin page's before/after — the shed seed fetch
-and engine bundle, published), `test-e2e/pages-news-feed.test.mjs` (the loop pins: version
+`test-e2e/pages-news-feed.test.mjs` (the loop pins: version
 poll backs off while idle; a worker cycle's document lands without any page-side ingest;
 stop honoured between sources; the fuzzy flag observed by the double). **Sonnet**, after M8
 and T12; parallel with T9.
@@ -2134,7 +2129,7 @@ pause there; the cut is a version number their side can depend on, not a review 
 | T10 docs (surface) | contract doc, README, site copy | Haiku | T5, T9 | — |
 | T11 handoff (surface) | bedrock-meter inbox | Haiku | all | — |
 | T12 news worker + triggers + materializer | server/news-worker/, row-service handler | Sonnet | M5, T0 | T3 |
-| T13 refresh loop + cycle UI + page weights | news-browser-entry.mjs, news-viz.mjs, PAGE_WEIGHTS.md, news e2e | Sonnet | M8, T12 | T9 |
+| T13 refresh loop + cycle UI + page weights | news-browser-entry.mjs, news-viz.mjs, news e2e | Sonnet | M8, T12 | T9 |
 | T14 news chat area | news-viz.mjs, news-browser-entry.mjs, news e2e | Sonnet | M8, T3 | T9 |
 
 `core.mjs` serializes M0-knowledge → M1 → M3. `chat.mjs` serializes T4 → T7 and either

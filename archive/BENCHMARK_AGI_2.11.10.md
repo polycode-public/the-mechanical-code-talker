@@ -97,7 +97,7 @@ Each scale is read at its entry rung by the assessment above and the sources
 `SKILL_BENCHMARK_AGI_SCALES.md` cites. No scalar was run this cycle.
 
 - **Abstention calibration.** Entry rung held: fabrication 0% at ≥50% coverage on the graded pools,
-  on record across INFBENCH, AGENTBENCH, and CHATBENCH. Assessment only.
+  on record across INFBENCH and AGENTBENCH. Assessment only.
 - **Transfer breadth.** Entry rung held: three plan-lane domains (hanoi, river crossing, crates)
   acquired with zero engine changes, on record. Assessment only.
 - **Other-minds depth.** Entry rung held: depth 1, spider-fly beliefs including taught false beliefs.
@@ -121,7 +121,7 @@ Each scale is read at its entry rung by the assessment above and the sources
 
 Assessment-only baseline established; all eight entry rungs held. The next cycle's first candidate
 for a scalar probe is **abstention calibration**: the risk-coverage curve is the closest to
-buildable, since the fabrication rate and coverage it needs are already produced by INFBENCH,
-AGENTBENCH, and CHATBENCH — a cycle would gather them into one curve rather than build new
+buildable, since the fabrication rate and coverage it needs are already produced by INFBENCH
+and AGENTBENCH — a cycle would gather them into one curve rather than build new
 machinery. The other seven scales stay assessment-only until the axis they read grows a probe in the
 plan doc that owns it.

@@ -692,9 +692,7 @@ function renderReceiptsHtml({ receipts }) {
       <p>Per built page, raw and wire (brotli) bytes:</p>
       <ul>${pageRows}
       </ul>
-      <p class="source-note">Source: <code>${RJ}</code>. Cross-checked against
-        <a href="${GITLAB_REPO_URL}/-/blob/main/reports/PAGE_WEIGHTS.md">reports/PAGE_WEIGHTS.md</a>,
-        which measures the same deployed pages with a curl-per-asset pass and a real Chromium cold load.</p>
+      <p class="source-note">Source: <code>${RJ}</code>.</p>
     </section>
 
     <section class="about-section" id="cost">

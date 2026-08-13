@@ -25,7 +25,7 @@ eight scales as scalars (abstention calibration, goal-origination distance). The
 **The no-LLM line held.** Every scalar cited here came from a deterministic harness (AGENTBENCH's
 four driver arms, INFBENCH's replay, IDXBENCH, SYNTHBENCH-CODE, RESEARCHBENCH, INGESTBENCH's
 deterministic ladder — no LLM, no network in any of them). LLM judges appear only where the eval
-harness already allows them (INGESTBENCH's two judged rungs, CONVERSATION's flow judge, CHATBENCH),
+harness already allows them (INGESTBENCH's two judged rungs, CONVERSATION's flow judge),
 and never in the product path.
 
 ---
@@ -56,7 +56,7 @@ Two notes on the row, so the next cycle reads it right. The row stamps **3.0.4**
 aggregator reads `package.json`, which rolled after the 3.0.3 sweep; the envelope's numbers are the
 same 68-case gate-pass `BENCHMARK_AGENT_3.0.3.md` reports (68/68, 0% hallucination, rungReached
 TOOL-8), re-stamped by the envelope build. And the aggregator's own header names its growth path:
-it reads more scales as scalars when INFBENCH and CHATBENCH grow committed envelopes of their own.
+it reads more scales as scalars when INFBENCH grows a committed envelope of its own.
 
 ---
 
@@ -125,9 +125,7 @@ and any movement toward the rung above.
   0% fabrication on 479 INFBENCH rows, 0 fabricated entries across IDXBENCH's 21 surfaces,
   precision 100% on all 20 INGESTBENCH cases, zero invented traversal on RESEARCHBENCH's 7
   measured cases, 0% false-pass on SYNTHBENCH-CODE — seven harnesses now hold the same fixed-risk
-  point. CEFR_ENGLISH 3.0.3 (write-up not yet merged at assessment time; numbers from the sweep):
-  tier-1 replay 1068/1075, judged mean ~1.78/2 with ~50 hard fails on the graded pool, against
-  2.11.0's 1.787/2 on its 92-case sample (`archive/BENCHMARK_CEFR_ENGLISH_2.11.0.md`).
+  point.
 - **Transfer breadth — entry rung held; assessment only.** Three plan-lane domains (hanoi, river
   crossing, crates) acquired with zero engine changes, on record. Movement in mechanism, not yet
   in reading: the index registry seam acquired Python as a second language backend at IDX-5 parity
@@ -186,7 +184,7 @@ and any movement toward the rung above.
 
 The aggregator delivered the probe the 2.11.10 cycle named (abstention calibration read as a
 scalar) for the one bench with a committed envelope. The next growth is mechanical and cheap:
-**commit envelopes for INFBENCH and CHATBENCH** so the aggregator's abstention reading spans the
+**commit an envelope for INFBENCH** so the aggregator's abstention reading spans the
 three pools its entry rung actually names, and knowledge-scale tolerance can read the seed-band
 count from an artifact instead of prose. Among the capability scales, temporal-causal depth is
 closest to its rung above — half of it (row 19) is already on record, and the remaining half is

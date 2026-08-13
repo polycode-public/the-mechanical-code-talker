@@ -27,8 +27,8 @@ import { normFactTerm } from "../../src/domain/hash.mjs";
 import { parseJsonlRows, rollupBy, ladderGateBy } from "../benchlib/bench.mjs";
 
 // ---- the ladder (fact-extraction fidelity — ING-0 -> ING-9). A distinct scale,
-// drawn from this bench's own domain; never compared against CHATBENCH's CEFR,
-// AGENTBENCH's TOOL-* or INFBENCH's INF-*. ----
+// drawn from this bench's own domain; never compared against AGENTBENCH's
+// TOOL-* or INFBENCH's INF-*. ----
 export const RUNGS = Object.freeze([
   "ING-0", "ING-1", "ING-2", "ING-3", "ING-4", "ING-5", "ING-6", "ING-7", "ING-8", "ING-9",
 ]);

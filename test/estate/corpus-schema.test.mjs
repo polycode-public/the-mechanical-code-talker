@@ -41,9 +41,9 @@ test("the validator accepts a well-formed chat row", () => {
 test("the validator accepts a well-formed bench-smoke row", () => {
   assert.deepEqual(
     validateRow({
-      id: "chatbench-one-case",
-      key: "bench.cefr",
-      run: { script: "test-benchmarks/chatbench/run.mjs", args: ["--limit", "1"], predicate: "answerIncludes" },
+      id: "infbench-one-case",
+      key: "bench.infbench",
+      run: { script: "test-benchmarks/infbench/run.mjs", args: ["--limit", "1"], predicate: "answerIncludes" },
     }),
     [],
   );

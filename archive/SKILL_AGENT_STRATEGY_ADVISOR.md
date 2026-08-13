@@ -16,13 +16,11 @@ coordinating, and relay its findings on the completion notification.
 
 Born from a real session where the operator suggested running benchmark batches concurrently
 (a 5x speedup) the main agent had not proposed. Revamped 2026-07-01 after the deep-process
-variant ran live through the B016 spec session (see §7).
+variant ran live through the B016 spec session (see §6).
 
-In this repo the advisor rides the **autonomous chat tuning cycle** (`SKILL_BENCHMARK_CEFR_ENGLISH.md`) —
-a loop with **no hard pause** between iterations. That makes the advisor more than a second pair
-of eyes: it is **the drift alarm between operator check-ins**. When the loop is running
-unattended, the advisor's watch-list (§6) is the mechanism that catches judge drift,
-overfitting-to-judge, and regressions before several cycles compound them.
+When a repo runs an autonomous loop with **no hard pause** between iterations, the advisor is
+more than a second pair of eyes: it is **the drift alarm between operator check-ins**, catching
+regressions before several unattended cycles compound them.
 
 > **Invoke it by telling a session:** *"Follow `SKILL_AGENT_STRATEGY_ADVISOR.md` and start a strategy
 > advisor for this session"* (optionally: focus, cadence). The main agent then sets up the loop below.
@@ -68,12 +66,11 @@ tail, the repo, and the brief.
   tail (`tail -c 120000 <transcript>`): the operator's recent messages plus the main agent's
   recent actions, not the whole file (it can be MBs).
 - **Other agents' outputs** live under the session's `tasks/<agentId>.output`.
-- **A distilled state file** the main agent keeps current (e.g. the latest `BENCHMARK_CEFR_ENGLISH_<version>.md`
+- **A distilled state file** the main agent keeps current (e.g. the latest `BENCHMARK_<AXIS>_<version>.md`
   with its decision log). Cheapest and most reliable signal; point
   the advisor here first.
-- **The repo itself**: worktree, git history, chatbench telemetry, raw judge outputs
-  (`chatbench/results/raw-<NNN>/`). The deep process expects the advisor to read code and data,
-  not just narrative.
+- **The repo itself**: worktree, git history, raw benchmark output. The deep process expects the
+  advisor to read code and data, not just narrative.
 
 ---
 
@@ -115,7 +112,7 @@ confirm `ls ~/.claude/projects/<slug>/<session-id>.jsonl`. If absent, rely on th
 docs instead.
 
 **Step B — spawn the advisor** as a **background** general-purpose agent with **`model: sonnet5`
-(Sonnet 5), the default as of 2026-07-07.** The validated production run (§7) was on Opus 4.8;
+(Sonnet 5), the default as of 2026-07-07.** The validated production run (§6) was on Opus 4.8;
 the model default was changed to Sonnet 5 by operator instruction to run this cadence more
 cheaply. The discipline that made the deep process valuable — verification work (reading graph
 predicate tallies, harness internals, raw result records), not hand-waving — still applies at
@@ -232,7 +229,6 @@ prior tick's findings** so nothing is repeated. Good brief shapes:
   Concrete, falsifiable objections with evidence, and say explicitly what you failed to break."
 - **Design resolution.** "Sub-agent A recommends P, the plan implies Q — which attributes the
   levers cleanly, and what does each cost?"
-- **Telemetry watch** (during chatbench runs — see §6).
 
 The main loop owns the ledger: one line per prior tick, carried in every re-arm prompt. The
 advisor's standing instruction is "do NOT repeat these".
@@ -242,7 +238,7 @@ advisor's standing instruction is "do NOT repeat these".
 ## 5. Discipline (so it stays valuable, not noise)
 
 - **Sonnet 5, by default, as a background sub-agent task** (changed from Opus 4.8 2026-07-07 by
-  operator instruction — see §7 for the Opus-validated production run this recipe was built on).
+  operator instruction — see §6 for the Opus-validated production run this recipe was built on).
   The advisor is a verifier, not a summarizer; expect evidence (file:line, record counts) in
   every claim regardless of model tier, and escalate an individual tick to `model: opus` if its
   findings start reading as plausible-but-unverified.
@@ -263,40 +259,7 @@ advisor's standing instruction is "do NOT repeat these".
 
 ---
 
-## 6. Run-time telemetry watch brief (the alternate brief during chatbench cycles)
-
-While a chatbench cycle runs (apply → smoke → run → judge → write; measurement rules in
-`SKILL_BENCHMARK_CEFR_ENGLISH.md` §1), swap the focused brief for this watch-list. Same mechanics:
-background, signal-only, 1–3 non-obvious flags per tick or the literal "No new advice",
-append-only log. Because the tuning cycle runs **autonomously with no hard pause**, this
-watch-list is the drift alarm between operator check-ins. Priority order:
-
-- **Judge integrity (the measurement-integrity killer).** Judge refusals or format failures must
-  VOID the affected case's sample (re-sampled or excluded), never be counted as a fail — flag any
-  run where voids leak into the fail count. **Judge drift:** the same case with the same product
-  answer scoring differently across cycles means the judge, not the product, moved — flag it and
-  recommend re-pinning the judge model + prompt version.
-- **Overfit-to-judge.** The mean going up while the transcripts read *worse* is the loop gaming
-  its own grader. Spot-read the discriminating transcripts
-  (`BENCHMARK_CEFR_ENGLISH_<version>.md`'s "Evidence / transcripts" section, discriminating transcripts first) each cycle and say whether the improvement is
-  real conversation quality or rubric-shaped noise.
-- **Regression watch.** Any previously-passing case failing is FAIL outright regardless of the
-  mean (the hard decision rule) — flag it the moment per-case results show it, don't wait for
-  the write-up.
-- **Under-parallelized work.** Flag any long-running work executing serially that could fan
-  out: judge runs below the default concurrency, independent workstreams executing one-after-
-  another instead of as parallel subagents, a benchmark blocking the main chat instead of
-  running as a background task. The standing preference is the coordinator model at maximum
-  safe concurrency — the chat is for chat; encourage it whenever the session drifts from it.
-- **Process slips.** The `chatbench/results/raw-<NNN>/` snapshot skipped before the next run
-  overwrites raw judge output; the case set (`chatbench/cases.jsonl`) edited mid-cycle instead of
-  append-only between cycles.
-
-Keep it to what the main session would miss. The main loop surfaces and acts; the advisor flags.
-
----
-
-## 7. Validated in production (2026-07-01, the B016 spec session)
+## 6. Validated in production (2026-07-01, the B016 spec session)
 
 The deep-process variant ran 6 ticks on Opus 4.8 during the session that specced benchmark 016,
 and materially changed the plan:
@@ -318,10 +281,10 @@ Every one of these came from the dry-run/verification step, not from re-reading 
 
 ---
 
-## 8. One-paragraph TL;DR
+## 7. One-paragraph TL;DR
 
 Spawn a background strategy advisor on Sonnet 5 (default since 2026-07-07; Opus 4.8 for the
-validated production run in §7) that each tick infers the operator's goal from
+validated production run in §6) that each tick infers the operator's goal from
 the transcript tail, assesses the main agent's progress, researches the worktree/git/web, ranks
 solutions from all sources, dry-runs the top recommendation when cheap (scratch worktree, never
 committed), and returns 1–3 evidence-backed non-obvious findings or "no new advice". Its

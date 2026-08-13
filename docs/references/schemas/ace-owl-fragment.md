@@ -58,8 +58,8 @@ declines to emit.
   the sentence out of the grammar strategy.
 - **ACE is much larger than this.** Full ACE covers anaphora, relative
   clauses, queries, commands, modality, and maps to full DRS. tmct takes only
-  the axiom-shaped declarative core above; growth beyond it is a Phase 2+
-  decision driven by chatbench evidence.
+  the axiom-shaped declarative core above; growth beyond it is a later
+  decision driven by measured evidence.
 - The planned ConceptNet mapping (`src/adapters/corpus/conceptnet-map.toml`) targets
   **these same 9 patterns** — each ConceptNet relation is expressed as one of
   the surface templates above so corpus assertions and user assertions land in

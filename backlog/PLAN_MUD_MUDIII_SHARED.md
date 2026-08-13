@@ -7,7 +7,7 @@ Status: DESIGN; a later phase, built only after `PLAN_MUD_MUDIII.md`'s page ship
 
 Scoped 2026-08-01 as its own phase: PLAN_MUD_MUDIII.md completes with `mudiii.html`
 deployed alongside mud.html, and this phase then brings mud.html's shipped share/join/waiting
-flow (PLAN_MUD_WEBRTC.md) to that live page — the same solo-first order mud.html itself
+flow to that live page — the same solo-first order mud.html itself
 followed. It reuses the shipped layer wholesale rather than porting anything. One requirement
 reaches back into the MUDIII engine build (the epoch-aware fold, below), and is called out in
 PLAN_MUD_MUDIII.md's build order so it lands early.

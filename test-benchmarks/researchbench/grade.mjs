@@ -5,7 +5,7 @@
 // RESEARCHBENCH grades the TRAVERSAL — which links get followed, in what
 // order, when the run stops — never the per-article facts (that is
 // INGESTBENCH's job). RES-0..RES-8 is its own ladder, drawn from
-// focused crawling, distinct from CEFR/TOOL-*/INF-*.
+// focused crawling, distinct from TOOL-*/INF-*.
 
 import { normFactTerm } from "../../src/domain/hash.mjs";
 import { parseJsonlRows, rollupBy, ladderGateBy } from "../benchlib/bench.mjs";

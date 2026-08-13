@@ -15,8 +15,8 @@
 //
 // Determinism: chat.mjs's own session/provenance strings embed a fresh uuidv7
 // + wall-clock ISO timestamp per turn (ace:chat:<uuid>@<ts> for the ACE assert
-// lane, teach:chat:<uuid>@<ts> for the natural teach frames); the SAME scrub
-// chatbench/run.mjs applies (VOLATILE_PROVENANCE) folds them to a stable
+// lane, teach:chat:<uuid>@<ts> for the natural teach frames); the
+// VOLATILE_PROVENANCE scrub folds them to a stable
 // placeholder before a row is recorded, so two runs over the same cases
 // produce byte-identical product rows. `--replay` runs the whole pipeline
 // twice and byte-compares them (the determinism check PLAN_INFERENCE_TESTING.md
@@ -64,7 +64,7 @@ function sink() {
  *  supplies), then the query turn. A `graph` on the case (the A2 graph-bridge
  *  variant) is materialized to .tmct/graph.json BEFORE the session starts, so
  *  the codegraph individuals/inherits edges it needs are already in place —
- *  exactly runAgentbench/chatbench's fixture-seeding discipline.
+ *  exactly runAgentbench's fixture-seeding discipline.
  *  Returns { answer, miss, error? } for the query turn. */
 export async function driveChat(caseDef) {
   const { runChat } = await import(join(ROOT, "src", "services", "chat.mjs"));

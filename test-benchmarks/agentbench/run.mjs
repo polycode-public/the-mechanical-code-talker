@@ -1,5 +1,5 @@
-// agentbench/run.mjs — the DETERMINISTIC AGENTBENCH runner (sibling of
-// chatbench/run.mjs). Replays every case in agentbench/cases.jsonl through a
+// agentbench/run.mjs — the DETERMINISTIC AGENTBENCH runner.
+// Replays every case in agentbench/cases.jsonl through a
 // PLUGGABLE "agent under test" and grades the tool loop on the TOOL-0→TOOL-8
 // tool-use rungs. No LLM, no network — grading is entirely deterministic (grade.mjs).
 //
@@ -118,8 +118,8 @@ export const MEMORY_FIXTURE = Object.freeze({
 });
 
 /** Build the run context the driver receives. Materializes the ingested fixture
- *  to a throwaway .tmct/graph.json (mirroring chatbench's createRunnerDeps and a
- *  real graph writer's pipeline) so the REAL dispatchTool can resolve entities,
+ *  to a throwaway .tmct/graph.json (mirroring a real graph writer's pipeline)
+ *  so the REAL dispatchTool can resolve entities,
  *  plus MEMORY_FIXTURE seeded through the configured memory backend so the
  *  memory-graph capability (tmct_related) can ground a positive case — routed
  *  by the resolver/goal drivers too, via ctx.resolveMemoryTerm, not only the

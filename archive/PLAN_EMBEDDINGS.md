@@ -143,7 +143,6 @@ score when a query is mostly `[UNK]`.
 - AGENTBENCH: 56/56 on the goal driver, "no rung to push past".
 - INFBENCH: 219/219 and "has stopped discriminating… it now measures the generator's reach, not the
   prover's" — with 50 of those greens graded against declared ceilings.
-- CHATBENCH: blind to 14 of 23 construction shapes, run at N=1.
 
 The meaning axis has no instrument today. **A lever you cannot measure is a lever you cannot
 defend.** A scale for paraphrase misses has to exist before an embedding can be judged against
@@ -175,8 +174,7 @@ does that trick perfectly.
    declared table, which is the product's whole pitch. `c720a16` is the proof that it works: one
    row closed the headline dead-end at 2.1.0.
 3. **Build a paraphrase-miss scale.** Until a benchmark discriminates on this axis, no lever can be
-   scored. `graded-pool-max.jsonl` already holds all 36 grade×construction cells; the lightest
-   full-coverage run is 315 cases.
+   scored.
 4. **Then re-litigate**, with `potion-retrieval-32M` and an `[UNK]` refusal rule, against the
    question the benchmark by then can answer: does a bounded vector signal beat the next 200 lexicon
    entries?

@@ -1,5 +1,5 @@
 // agentbench + router-registry tests — the Stage-0 capability substrate and the
-// AGENTBENCH harness. Like chatbench's
+// AGENTBENCH harness. Like the other bench harnesses'
 // tests these cover the HARNESS + the substrate deterministically; there is no
 //
 // Three groups:

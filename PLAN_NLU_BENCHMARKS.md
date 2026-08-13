@@ -116,7 +116,7 @@ That changes three things for this plan, and leaves the central problem untouche
   run in an ephemeral scratch dir under `TMCT_NO_SEED`, so the wrong-lane-write risk cannot touch
   user memory.
 - **Wiring the harness up is an existing, keyed pattern.** `test/corpus/bench-smoke.jsonl` carries
-  one row per benchmark (`bench.chatbench`, `bench.infbench`, `bench.agentbench`,
+  one row per benchmark (`bench.infbench`, `bench.agentbench`,
   `bench.conversation`), each spawning the real script and handing the finished process to a
   predicate. An `nlubench` adds a `bench.nlubench` row the same way, so "the harness still runs" is
   checked on every `npm test` instead of rotting between cycles.
@@ -143,7 +143,7 @@ That changes three things for this plan, and leaves the central problem untouche
 
 ## Design: a benchmark adapter, not a product rewrite
 
-New top-level `nlubench/` directory, sibling to `test-benchmarks/chatbench/`, holding data plumbing, the
+New top-level `nlubench/` directory, sibling to the other `test-benchmarks/` rigs, holding data plumbing, the
 matcher, the runners and the reports, plus a `bench.nlubench` smoke row in
 `test/corpus/bench-smoke.jsonl`. The matcher trains from the benchmarks' example utterances; that is
 the layer tmct lacks today.
@@ -173,9 +173,9 @@ product-path domain via `registerCapability` is a separate, later decision.
 
 ### Scoring integration
 
-- Runners follow `test-benchmarks/chatbench/run.mjs` conventions: `--stamp` from the CLI, no `Date.now`,
+- Runners follow `test-benchmarks/infbench/run.mjs` conventions: `--stamp` from the CLI, no `Date.now`,
   byte-identical result rows, JSONL per-case output under `nlubench/results/raw/run-<version>/`.
-- Write-ups follow the chatbench measurement contract: `BENCHMARK_CLINC150_<version>.md`
+- Write-ups follow the shared measurement contract: `BENCHMARK_CLINC150_<version>.md`
   and `BENCHMARK_HWU64_<version>.md`, named for the `package.json` version they measure,
   `_00N` suffix for re-runs of the same version.
 - HWU64 is scored with the upstream toolkit's own scripts where runnable, so the F1 we
@@ -194,7 +194,7 @@ product-path domain via `registerCapability` is a separate, later decision.
 
 **1. As-is baseline row.**
    - Run both test sets through the real chat surface (`runTurn`, read-only fixture graph,
-     the chatbench turns-mode pattern) with an outcome mapper: miss wall → "oos" /
+     a multi-turn replay) with an outcome mapper: miss wall → "oos" /
      abstain; orientation card, fact-lane answers and graph answers → recorded verbatim,
      scored as non-label. This turns the table above from an estimate into a measured row
      and produces the false-accept inventory (how many benchmark utterances leak into
@@ -223,7 +223,7 @@ product-path domain via `registerCapability` is a separate, later decision.
    - Per-benchmark write-up with: the headline pair (never OOS recall alone), the published
      rival numbers alongside (labelled "as published in Liu et al. 2019" / "Larson et al.
      2019"), a failure taxonomy (wrong-label vs false-accept vs over-refusal, with counts
-     and discriminating examples first, chatbench style), and an explicit "claims this
+     and discriminating examples first), and an explicit "claims this
      does and does not support" section.
    - Fold the confirmed failure families back into the lever board as candidate levers,
      e.g. "short-utterance sink" if the ≤3-word catch-all shape reappears in adapter form.
@@ -297,7 +297,7 @@ not a planned lever anymore.
 
 ## Score-raising measures: the lever ladder
 
-Ordered by expected points-per-effort. Discipline is the chatbench contract's: **one lever
+Ordered by expected points-per-effort. The discipline is **one lever
 per measured run**, results in the version-named write-up, so every movement is
 attributable. Deltas are against the spike bases (CLINC150 68.2%/89.7%, HWU64 0.792) — and those
 bases came from a scratchpad spike whose scripts were never committed, so nothing in the repo can
@@ -330,7 +330,7 @@ numbers when it lands; until then the bases are a pointer, not a baseline.
   `src/domain/syllogise.mjs` ships five rules: `scm-sco` and `scm-svf1` at class level, and
   `cax-sco`, `cax-dw`, `cls-svf1` over individuals). Honest annotation: this does
   NOT move intent F1 — its benchmark surface is L6 (richer hypernym/role chains behind
-  entity typing) plus chatbench groundedness; its main value is product capability
+  entity typing); its main value is product capability
   (kinship, part-whole, role reasoning). Product-path work, delivered under the
   Syllogist track (`archive/PLAN_SYLLOGIST.md` carries the survey of this territory), recorded
   here so the scoreboard linkage stays explicit.
@@ -340,7 +340,7 @@ numbers when it lands; until then the bases are a pointer, not a baseline.
   conjunctive-body Horn rules ("every X that lives in water is aquatic"), forward-
   chained by `syllogise()` under the same budget/focus/trust guards — Datalog over
   binary predicates, still polynomial and deterministic. Same honest annotation as L7:
-  no direct intent-F1 effect; moves teach/ask capability and chatbench, and feeds L6's
+  no direct intent-F1 effect; moves teach/ask capability, and feeds L6's
   typing. Stratified negation-as-failure needs its own design pass before it lands — it
   must not erode the open-world honesty behavior that wins the CLINC OOS axis.
 
@@ -378,8 +378,8 @@ neither moves a leaderboard number directly — same honest annotation as L7/L8.
   consuming `taught:` records, so "how can I build X" plans over a world model the user
   taught in sentences — with the plan page as the visible-thinking display.
 
-Measurement hooks: W1's rendered proofs become chatbench evidence (the groundedness and
-honesty-on-miss rubric dimensions get transcript-visible premises to score), and both
+Measurement hooks: W1's rendered proofs give the groundedness and honesty-on-miss
+readings transcript-visible premises to score, and both
 surfaces feed the benchmark write-ups' "claims this supports" section — the difference
 between asserting determinism and showing the derivation.
 

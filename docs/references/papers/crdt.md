@@ -291,7 +291,7 @@ Two separate notions, and only one is replicated.
 
 | notion | where it lives | replicated | what it answers |
 |---|---|---|---|
-| the node id | `node-id.json` beside the store (a handle field in memory, a `meta` row in SQLite) | no, by design | what this store calls itself |
+| the node id | node-local state beside the store, never a fact | no, by design | what this store calls itself |
 | the admission graph | `node:<joiner> mgx:invitedBy node:<inviter>` facts | yes, like any fact | every node this world has ever admitted |
 
 **The admission graph is a real roster.** `invitedByFact` in `causal-stability.mjs` mints one edge
@@ -349,8 +349,8 @@ graph already is one.
 **The high-water mark wants to be node-local state beside the store.** It is a max per observer, it
 is nobody else's business, and writing it as facts would turn it into history. A fact store keeps
 every value a mark ever took, so an ack channel built from facts grows faster than the tombstones it
-retires. `node-id.json` is the precedent already in the tree: `loadNodeId` and `saveNodeId` carry
-per-store state that never replicates, across every backend.
+retires. The store's own `meta` scalars are the precedent already in the tree: the syllogise
+watermark carries per-store state that never replicates, across every backend.
 
 The min over the roster is `stableRecordIds`, and it is already written. What that leaves to build,
 in order:

@@ -1895,8 +1895,7 @@ surface grew a verb) and the e2e tier are the coordinator's post-merge job.
   bound it, eviction is deterministic and news-only, and the graph-size tile keeps the number in
   the user's face next to the browser's own quota estimate.
 - **Page weight.** `news.html` reuses `chat-seed.json` (~7 MB gzip, already deployed and
-  SW-cached for chat.html) rather than shipping a second seed. After landing, refresh
-  `reports/PAGE_WEIGHTS.md` via the `page-weights` skill.
+  SW-cached for chat.html) rather than shipping a second seed.
 - **Rate limits and courtesy.** Every fetcher sits behind its own courtesy gate with the 2s
   floor, conditional requests where the source supports validators, the 429 cool-off, and
   per-source backoff on failure; the poll floor is 5 minutes; the Wikimedia sources get the

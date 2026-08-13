@@ -12225,7 +12225,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // verdict or an ex-falso clash replaces the miss outright; an exhausted
     // budget merges onto whichever of the three recovery texts below still
     // renders, so the miss itself stays byte-identical and only gains the
-    // marker chatbench/infbench read apart from a parse miss.
+    // marker infbench reads apart from a parse miss.
     const autoProve = await autoProveFallback(memoryDir, cache, rows, subjectWord, subjCandidates, objVariants, kindWord);
     if (autoProve?.text) return autoProve;
     const askProveBudgetExhausted = !!autoProve?.budgetExhausted;
@@ -14212,7 +14212,7 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
   const definition = (await seonDefinitions()).get(term) ?? null;
   if (!definition) return null;
   // The runChat shell hands the loaded graph straight in; the pure runTurn(config)
-  // path (tests, test-benchmarks/chatbench) does not, so load it the same way dispatchTool does when
+  // path (tests, the bench harnesses) does not, so load it the same way dispatchTool does when
   // it's missing. Failure-tolerated: no loadable graph → no concept force.
   let g = graph;
   if (!g && config && source) {
@@ -17021,8 +17021,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // trailer's own gate. Absent on a point answer and on every miss.
     ...(enumerationLane && !recordMiss ? { enumerationLane } : {}),
     // The automatic /prove fallback's own budget wall — the same marker
-    // /prove's own explicit budget wall stamps, so chatbench/infbench can
-    // count a budget miss apart from a parse miss.
+    // /prove's own explicit budget wall stamps, so infbench can count a
+    // budget miss apart from a parse miss.
     ...(budgetExhausted ? { budgetExhausted: true } : {}),
   };
   const logLines = [ts, `> ${query}`, answer, ""];

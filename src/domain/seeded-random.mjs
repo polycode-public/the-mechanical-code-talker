@@ -3,12 +3,12 @@
 // it. Both are pure arithmetic (no I/O, no imports), so a seed reproduces the
 // same sequence on every machine and every run.
 //
-// The bench case generators (infbench, chatbench's graded pool) draw their
-// committed fixtures through these, so the byte sequence they produce is part of
-// those artifacts' identity: two callers on one seed must shuffle identically or
-// the committed cases.jsonl / graded pool drift. That is the same reason the
-// content-address hashes live once in hash.mjs beside this file — a deterministic
-// primitive shared across writers has exactly one definition.
+// The bench case generators (infbench) draw their committed fixtures through
+// these, so the byte sequence they produce is part of those artifacts' identity:
+// two callers on one seed must shuffle identically or the committed cases.jsonl
+// drifts. That is the same reason the content-address hashes live once in
+// hash.mjs beside this file — a deterministic primitive shared across writers has
+// exactly one definition.
 
 /** mulberry32 PRNG — small, seedable, deterministic across platforms. */
 export function mulberry32(seed) {
