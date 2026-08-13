@@ -101,13 +101,8 @@ The work list, ranked by value against the plan's target card.
    gets content-address order from `sortFactIndividualsById` today, so this is
    already broken there. The fix is to stamp an editor edit
    `snapshotSubject(subject, turn + 1, epoch)` so it outranks rather than relying
-   on arrival. Do this one before item 6 — it is what item 6 breaks.
-6. [ ] **The readers the content tiebreak couldn't reach** — `news-feed.mjs`'s
-   `tierOf` and `/memory`'s listing still order by arrival. Reaching them means
-   sorting `foldFactRows`' output at the root so `readFactRows` hands out content
-   order and every downstream reader inherits it. Measured: 13 pins move, 4 are
-   already fixed, 8 are benign reorderings, and 1 is item 5's editor break.
-7. [ ] **Wikidata** — the pinned dated dump
+   on arrival.
+6. [ ] **Wikidata** — the pinned dated dump
    (`wikidata-20260810-all.json.gz`, 155,457,882,747 bytes) is downloading in
    the operator's terminal via `bash scripts/resume-wikidata-dump.sh`, which
    resumes from wherever a break left it — re-run it after any interruption.

@@ -39,6 +39,7 @@ import {
 // consumers keep one import site.
 export { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "../../domain/memory/trust.mjs";
 import { NEG_PREDICATE_PREFIX, negatedPredicate } from "../../domain/memory/capability.mjs";
+import { factOrderKey } from "../../domain/memory/fact-order.mjs";
 import {
   planHeadRollup, planChainRollup, mergeRollups,
   isHeadRollupId, isChainRollupId, isRollupId, headRollupTypeOf,
@@ -3988,7 +3989,15 @@ export async function foldedFactRows(dir) {
 /** The fold itself, over whatever slice of the graph a context was built for.
  *  `readFactRows` hands it the whole graph; a caller that only needs certain
  *  (subject, predicate) pairs hands it a scoped context and gets exactly the
- *  rows a whole-graph fold would have produced for those pairs. */
+ *  rows a whole-graph fold would have produced for those pairs.
+ *
+ *  The rows come out in content order, not in the order the payload happened to
+ *  hold them. A reader that takes the first of several equally-ranked rows, or
+ *  sorts by a key that ties, otherwise answers by arrival order — and two peers
+ *  holding one fact set arrive at it differently. Sorting here is what lets a
+ *  reader inherit the guarantee instead of re-earning it: the fold is the one
+ *  place every fact read passes through. p2p-room.mjs's sortFactIndividualsById
+ *  does the same job one level down, over the stored records. */
 function foldFactRows(memory, ctx, opts = {}) {
   // A materialised head, when the backend keeps one, replaces the group's own
   // fold with the audit trail that fold was last built from — the same records,
@@ -4006,7 +4015,15 @@ function foldFactRows(memory, ctx, opts = {}) {
     row.trust = computeAssertionGroupTrust(head ? head.inputs : row.assertions, opts).score;
     rows.push(row);
   }
-  return rows;
+  // Each row's key is built once rather than on every comparison. Handing
+  // compareFactsByContent straight to sort rebuilds both keys per comparison,
+  // and a sort makes O(n log n) of them, which on a large store costs several
+  // times what building one key per row does — and this is the fold every fact
+  // read goes through. The order is the one that comparator defines, and a test
+  // holds the two to the same answer.
+  const keyed = rows.map((row) => ({ key: factOrderKey(row), row }));
+  keyed.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  return keyed.map((entry) => entry.row);
 }
 
 /** Everything a group fold reads out of a payload, gathered in one pass: each

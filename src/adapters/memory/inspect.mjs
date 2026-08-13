@@ -5,6 +5,7 @@
 
 import { loadMemory, UTTERANCE_CLASS, IN_REPLY_TO_PROP, readFactRows, findContradictions } from "./core.mjs";
 import { loadBlockIndex } from "./blocks.mjs";
+import { compareFactsByContent } from "../../domain/memory/fact-order.mjs";
 import { buildTableauKb, findTableauViolations } from "../../domain/tableau.mjs";
 import { elUnsatisfiableClasses } from "../../domain/el-classify.mjs";
 
@@ -33,6 +34,23 @@ export function balancedSample(items, k) {
 }
 
 const attrOf = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)?.value || "";
+
+/** Codepoint order, never localeCompare — this text is read on whatever machine
+ *  holds the store, and two locales have to land on the same lines. */
+const byCodepoint = (a, b) => {
+  const ka = String(a ?? "");
+  const kb = String(b ?? "");
+  return ka < kb ? -1 : ka > kb ? 1 : 0;
+};
+
+/** Order two individuals by their own id, in codepoint order. Every id here is
+ *  derived from content — a Fact hashes its triple, an Utterance reads
+ *  `utt:<session>#<ts>#<role>`, a Source keys on its provenance tag — so this
+ *  is a pure function of the stored set, and the utterance case still comes out
+ *  in the order the conversation happened. Without it the class samples below
+ *  span the payload in the order the individuals were written, which is arrival
+ *  order: two peers holding one store would sample different rows. */
+const byIndividualId = (a, b) => byCodepoint(a?.id, b?.id);
 const truncate = (s, cap) => {
   const t = String(s ?? "").replace(/\s+/g, " ").trim();
   return t.length > cap ? `${t.slice(0, cap - 1)}…` : t;
@@ -55,7 +73,8 @@ export function renderMemory({ memory, blocks }, { verbose = false } = {}) {
       if (!byClass.has(cls)) byClass.set(cls, []);
       byClass.get(cls).push(ind);
     }
-    const classes = [...byClass.entries()].sort((a, b) => b[1].length - a[1].length);
+    for (const members of byClass.values()) members.sort(byIndividualId);
+    const classes = [...byClass.entries()].sort((a, b) => b[1].length - a[1].length || byCodepoint(a[0], b[0]));
     lines.push(`memory — ${individuals.length} individuals: ${classes.map(([c, of]) => `${of.length} ${c}`).join(", ")}.`);
     for (const [cls, of] of classes) {
       const k = sampleSize(of.length, { verbose });
@@ -68,7 +87,7 @@ export function renderMemory({ memory, blocks }, { verbose = false } = {}) {
       .filter((r) => r.sourceIds.length || r.provenance)
       .sort((a, b) => b.trust - a.trust
         || b.sourceIds.length - a.sourceIds.length
-        || `${a.subject} ${a.predicate} ${a.object}`.localeCompare(`${b.subject} ${b.predicate} ${b.object}`));
+        || compareFactsByContent(a, b));
     if (ranked.length) {
       lines.push("", "top facts by trust:");
       for (const r of ranked.slice(0, verbose ? 8 : 3)) {
@@ -137,7 +156,7 @@ export function renderMemory({ memory, blocks }, { verbose = false } = {}) {
     const pairs = (replyGroup?.examples || [])
       .map((e) => ({ a: byId.get(e.subject), q: byId.get(e.object) }))
       .filter((p) => p.a && p.q && p.a.class === UTTERANCE_CLASS)
-      .sort((x, y) => attrOf(y.a, "ts").localeCompare(attrOf(x.a, "ts")));
+      .sort((x, y) => byCodepoint(attrOf(y.a, "ts"), attrOf(x.a, "ts")) || byIndividualId(x.a, y.a));
     if (pairs.length) {
       lines.push("", `recent Q→A pairs (${pairs.length} recorded):`);
       for (const p of pairs.slice(0, verbose ? 8 : 3)) {
@@ -153,7 +172,7 @@ export function renderMemory({ memory, blocks }, { verbose = false } = {}) {
     const tokens = entries.reduce((n, [, b]) => n + (b.tokens?.length || 0), 0);
     const top = entries
       .slice()
-      .sort((a, b) => (b[1].rank ?? 0) - (a[1].rank ?? 0) || a[0].localeCompare(b[0]))
+      .sort((a, b) => (b[1].rank ?? 0) - (a[1].rank ?? 0) || byCodepoint(a[0], b[0]))
       .slice(0, verbose ? 8 : 3);
     lines.push("", `blocks — ${entries.length} folded session block${entries.length === 1 ? "" : "s"}, ${tokens} indexed tokens.`);
     lines.push(`  top by rank: ${top.map(([id, b]) => `${String(id).slice(0, 8)} (${(b.rank ?? 0).toFixed(3)})`).join(", ")}`);
@@ -169,7 +188,7 @@ export function renderMemory({ memory, blocks }, { verbose = false } = {}) {
     const freq = new Map();
     for (const f of facts) if (clean(f.object)) freq.set(f.object, (freq.get(f.object) || 0) + 1);
     const terms = [...freq.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .sort((a, b) => b[1] - a[1] || byCodepoint(a[0], b[0]))
       .map(([t]) => t)
       .slice(0, 3);
     const sample = facts.find((f) => clean(f.subject) && terms.includes(f.object));

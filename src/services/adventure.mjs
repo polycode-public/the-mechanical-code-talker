@@ -761,18 +761,26 @@ function rulingTestimonyClaim(provenance, knower, currentEpoch = 0) {
 }
 
 /** What `person` knows about NOW: the object of every knows-about edge whose
- *  ruling claim still stands, in the order the edges were first written.
- *  Nothing is deleted — an edge whose newest claim says the thing is gone just
- *  stops reading back. `currentEpoch` is the run the reader is on, so a claim a
- *  recast has left behind cannot decide what a character knows today. */
+ *  ruling claim still stands, oldest learned first. Nothing is deleted — an edge
+ *  whose newest claim says the thing is gone just stops reading back.
+ *  `currentEpoch` is the run the reader is on, so a claim a recast has left
+ *  behind cannot decide what a character knows today.
+ *
+ *  The order comes off each edge's own ruling claim rather than off the row
+ *  array, so it says what it means: a character lists what it learned in the
+ *  order it learned it, and two peers holding one fact set read the same list.
+ *  Two topics learned on one turn fall back to the topic word. */
 function currentKnowsAboutTopics(rows, person, currentEpoch = 0) {
-  const topics = [];
+  const known = [];
   for (const row of rows || []) {
     if (row.subject !== person || row.predicate !== KNOWS_ABOUT_PREDICATE) continue;
-    if (rulingTestimonyClaim(row.provenance, person, currentEpoch)?.voided) continue;
-    topics.push(row.object);
+    const claim = rulingTestimonyClaim(row.provenance, person, currentEpoch);
+    if (claim?.voided) continue;
+    known.push({ topic: row.object, epoch: claim?.epoch ?? 0, turn: claim?.turn ?? 0 });
   }
-  return topics;
+  known.sort((a, b) => a.epoch - b.epoch || a.turn - b.turn
+    || (a.topic < b.topic ? -1 : a.topic > b.topic ? 1 : 0));
+  return known.map((entry) => entry.topic);
 }
 
 /**
@@ -1223,10 +1231,32 @@ export function freshObjectId(rows, kind, alsoTaken = new Set()) {
 }
 
 /** The kinds a room kind declares for one of the spawn pools, in the order the
- *  world wrote them, or `fallback` when it declares none. Pure. */
+ *  fold hands them over, or `fallback` when it declares none. A pool is a set of
+ *  rows, not a list, so the store keeps no rank between them and the order is
+ *  the fold's content order rather than the order the world file lists them in.
+ *  A caller that shows the whole pool can read it as it stands; one that takes
+ *  only part of it wants preferredDigKinds below. Pure. */
 function declaredKindsOr(rows, roomClass, predicate, fallback) {
   const declared = factObjects(rows, roomClass, predicate);
   return declared.length ? declared : fallback;
+}
+
+/** A dig pool ranked by what a dig should turn up first: the engine's own
+ *  DIG_SPAWN_KINDS order, then content order for a kind it does not name.
+ *
+ *  A den shows everything it holds, so its pool needs no rank. A plain dig takes
+ *  the first few, so which few it takes is a real choice — and the fact store
+ *  holds the pool as a set, with no rank to read. Leaving it to the fold's own
+ *  order would decide it alphabetically, which puts a kind the world already
+ *  keeps as one hand-named prop ahead of one minted only by digging, and the
+ *  point of a minted id is that it names something a hand-authored prop does
+ *  not. Pure. */
+function preferredDigKinds(kinds) {
+  const rank = (kind) => {
+    const at = DIG_SPAWN_KINDS.indexOf(kind);
+    return at < 0 ? DIG_SPAWN_KINDS.length : at;
+  };
+  return kinds.slice().sort((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0));
 }
 
 /** The mass row a freshly minted instance needs, copied off its own class, or
@@ -1499,7 +1529,7 @@ async function handleDigVerb(ctx) {
   const spawnCount = DIG_SPAWN_MIN + stableIndex(dug, spawnMax - DIG_SPAWN_MIN + 1);
   const spawnedKinds = isDen
     ? declaredKindsOr(rows, dugKind, DEN_SPAWN_PREDICATE, DIG_SPAWN_KINDS)
-    : declaredKindsOr(rows, dugKind, DIG_SPAWN_PREDICATE, DIG_SPAWN_KINDS).slice(0, spawnCount);
+    : preferredDigKinds(declaredKindsOr(rows, dugKind, DIG_SPAWN_PREDICATE, DIG_SPAWN_KINDS)).slice(0, spawnCount);
   const minted = new Set();
   const spawned = spawnedKinds.map((kind) => {
     const id = freshObjectId(rows, kind, minted);

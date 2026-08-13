@@ -14,6 +14,8 @@ import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { createInMemoryStore, appendFacts, readFactRows, loadMemory } from "../../src/adapters/memory/core.mjs";
 import { factOrderKey, compareFactsByContent } from "../../src/domain/memory/fact-order.mjs";
 import { rankByBiasThenTrust } from "../../src/domain/memory/bias.mjs";
+import { buildNewsItems } from "../../src/domain/news-feed.mjs";
+import { renderMemory } from "../../src/adapters/memory/inspect.mjs";
 
 const EMPTY_GRAPH = parseEntities({ individuals: [], objectProperties: [] });
 const fact = (subject, predicate, object) => ({ subject, predicate, object });
@@ -107,12 +109,78 @@ test("the ranked order is the same list whichever way the fold hands the rows ov
   assert.deepEqual(a, b);
 });
 
+test("the fold hands out exactly the order compareFactsByContent defines", async () => {
+  const memory = await loadMemory(await storeWith(CACHE_FACTS));
+  const folded = readFactRows(memory);
+  const sorted = [...folded].sort(compareFactsByContent);
+  assert.deepEqual(folded.map(factOrderKey), sorted.map(factOrderKey));
+});
+
 test("compareFactsByContent separates rows that differ only past the subject", () => {
   const a = fact("cache", "mgx:causes", "staleness");
   const b = fact("cache", "mgx:causes", "stale reads");
   assert.ok(compareFactsByContent(a, b) > 0);
   assert.ok(compareFactsByContent(b, a) < 0);
   assert.equal(compareFactsByContent(a, { ...a }), 0);
+});
+
+// The two readers below never went through the chat ranker, so neither
+// inherited the tiebreak the lanes above got. They read the fold directly: the
+// news card build ranks its rows and reads a trust chip off the strongest, and
+// /memory samples each class and names the widest-corroborated fact. Both are
+// order-independent because the fold hands out content order, so both are
+// checked against the bytes rather than against a row list.
+
+const NEWS_WINDOW_MS = 6 * 60 * 60 * 1000;
+const NEWS_NOW = "2026-08-08T12:00:00.000Z";
+const NEWS_OBSERVED = "2026-08-08T11:00:00.000Z";
+
+/** A fact set wide enough for a card to have something to rank: one hub with
+ *  several kinds of edge, two neighbours, and four separate sources so the
+ *  trust chip has a real choice to make. */
+const CEASEFIRE_FACTS = [
+  { ...fact("ceasefire", "mgx:causes", "relief"), provenance: "news:hacker-news@item-1" },
+  { ...fact("ceasefire", "rdf:type", "agreement"), provenance: "news:hacker-news@item-1" },
+  { ...fact("ceasefire", "mgx:hasProperty", "fragile"), provenance: "research:wikipedia:ceasefire" },
+  { ...fact("ceasefire", "rdfs:subClassOf", "truce"), provenance: "research:wikipedia:ceasefire" },
+  { ...fact("relief", "rdf:type", "outcome"), provenance: "news:reuters@item-2" },
+  { ...fact("truce", "rdf:type", "agreement"), provenance: "research:wikipedia:truce" },
+  { ...fact("ceasefire", "mgx:usedFor", "stopping fighting"), provenance: "news:reuters@item-2" },
+  { ...fact("ceasefire", "mgx:madeOf", "promises"), provenance: "news:bbc@item-3" },
+];
+
+/** The same set stored three ways: as given, reversed, and rotated. Each row
+ *  keeps its own provenance, so the orders differ by arrival alone. */
+async function storesAcrossArrivals(rows) {
+  const stores = [];
+  for (const order of arrivalOrders(rows)) {
+    const memoryDir = createInMemoryStore();
+    await appendFacts(memoryDir, order.map((r) => ({
+      ...r, observedAt: NEWS_OBSERVED, createdAt: NEWS_OBSERVED,
+    })));
+    stores.push(await loadMemory(memoryDir));
+  }
+  return stores;
+}
+
+test("a news card is byte-identical however the facts arrived", async () => {
+  const [first, ...rest] = (await storesAcrossArrivals(CEASEFIRE_FACTS)).map(
+    (memory) => JSON.stringify(buildNewsItems(readFactRows(memory), {
+      now: NEWS_NOW, windowMs: NEWS_WINDOW_MS,
+    })),
+  );
+  const cards = JSON.parse(first);
+  assert.ok(cards.length, "the fixture builds at least one card to compare");
+  assert.ok(cards.every((c) => c.tier), "every card carries the trust chip tierOf reads off its strongest row");
+  for (const other of rest) assert.equal(other, first);
+});
+
+test("the /memory listing is byte-identical however the facts arrived", async () => {
+  const [first, ...rest] = (await storesAcrossArrivals(CEASEFIRE_FACTS)).map(
+    (memory) => renderMemory({ memory, blocks: null }, { verbose: true }),
+  );
+  assert.match(first, /top facts by trust:/, first);
+  for (const other of rest) assert.equal(other, first);
 });
 
 test("the content key cannot be forged by moving a delimiter between fields", () => {
