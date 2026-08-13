@@ -138,10 +138,6 @@ The work list, ranked by value against the plan's target card.
    `findContradictions` and its store-row listing, `digest/select.mjs`,
    `digest/compose.mjs` and `ledger-viz.mjs` — left deliberately rather than
    half-sweeping five files mid-task.
-7. [ ] **Wikidata band** — the dump is downloaded and untouched; the load is
-   gated on an evidence question §5.5 will not answer on its own. Plan of record:
-   `PLAN_WIKIDATA_BAND.md`.
-
 ## Discipline
 
 `CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split (including
