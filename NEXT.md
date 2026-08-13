@@ -104,13 +104,7 @@ The work list, ranked by value against the plan's target card.
    `findContradictions` and its store-row listing, `digest/select.mjs`,
    `digest/compose.mjs` and `ledger-viz.mjs` — left deliberately rather than
    half-sweeping five files mid-task.
-6. [ ] **`mud-editor.mjs` has the adventure editor's old loose contract** — in
-   flight on `worktree-agent-a4d08057fea9418e4`.
-   `planMudEditorSync` returns bare triples and `mud-browser-entry.mjs` stamps
-   them at the call site, exactly as the adventure pair did before the fix. Its
-   one production caller stamps correctly, so there is no live break — this is
-   symmetry, and the same mechanical change of shape.
-7. [ ] **Wikidata** — the pinned dated dump is DOWNLOADED and on disk:
+6. [ ] **Wikidata** — the pinned dated dump is DOWNLOADED and on disk:
    `/Users/antony/tmct-dumps/wikidata-20260810-all.json.gz`,
    155,457,882,747 bytes, completed 2026-08-13 05:02 BST.
    Nothing has been done with it, by instruction. Plan §5.5 gates the bulk band
