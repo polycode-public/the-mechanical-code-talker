@@ -158,6 +158,14 @@ const COPULA_NAMING_PARTICIPLES = new Set(["termed", "known", "defined", "descri
 // subject: "a mountain that has lava" is a fact about the volcano, so the
 // relative clause's verb binds to the copula's own subject, not to its object.
 const RELATIVE_PRONOUNS = new Set(["that", "which", "who", "whom", "whose"]);
+// A pronoun standing between a copula and the nearest noun on its left IS that
+// copula's subject: "many say it is just a matter of time" predicates about
+// "it", and a scan that walks through the pronoun lands on whatever noun sits
+// further left and stores a claim the sentence never made. A pronoun names
+// nothing a fact can hold, so the subject side stops there and the frame
+// abstains — the same answer the strict recognizer already gives a
+// pronoun-subject claim.
+const COPULA_SUBJECT_BLOCKERS = new Set([...COPULA_FRAME_BLOCKERS, "PRON"]);
 // The copula-object heads that define a subject rather than classify it. "X is
 // the name for Y" says what X names; it does not put X under the class "name".
 // Followed by "for" or "of", one of these declines the isa and mints the edge
@@ -479,6 +487,64 @@ function candidateTermOccurrencesPos(sentences, nlp, lexicon) {
   return counts;
 }
 
+// The words a noun phrase opens with. One of these in front of a token settles
+// that the token heads a noun phrase, whatever follows it.
+const NOUN_PHRASE_OPENERS = new Set(["DET", "PRON", "PART", "NUM"]);
+
+/** Does the token at `i` stand where only a clause's finite verb can, despite
+ *  its NOUN tag? A tagger reads "many say it is just a matter of time" and "the
+ *  government moves to assert control" as nouns on the very word each clause
+ *  turns on, and a term scan then offers "say" and "moves" as things to look
+ *  up. Two closed frames say otherwise: a pronoun subject and its own verb
+ *  right after the token ("say it is"), and an infinitive right after it
+ *  ("moves to assert"). A determiner in front means the word really does head a
+ *  noun phrase ("the plan to assert control", "the day it happened"), and that
+ *  reading stands. */
+function readsAsClauseVerb(values, pos, i) {
+  if (i > 0 && NOUN_PHRASE_OPENERS.has(pos[i - 1])) return false;
+  if (pos[i + 1] === "PRON" && (pos[i + 2] === "VERB" || pos[i + 2] === "AUX")) return true;
+  return String(values[i + 1] ?? "").toLowerCase() === "to" && pos[i + 2] === "VERB";
+}
+
+/** The stored term keys `sentences` only ever uses as a clause's verb. Folded
+ *  the same way `ungroundedTermOccurrences` folds its own counts, so a caller
+ *  can subtract this set from those keys directly. A term the text also uses as
+ *  a plain noun somewhere ("the peace talks" beside "he talks to them") stays
+ *  out of the set — one verb reading never disqualifies a word that names
+ *  something elsewhere in the same article.
+ *
+ *  `nlp` follows this module's own convention: absent means the shared wink
+ *  instance, and an explicit null (no model) returns an empty set, since the
+ *  frames below are read off part-of-speech tags. */
+export function termsUsedOnlyAsVerbs(sentences, { lexicon = loadLexicon(), nlp } = {}) {
+  const engine = nlp === undefined ? winkInstance() : nlp;
+  const asVerb = new Map();
+  const total = new Map();
+  if (!engine) return new Set();
+  for (const sentence of sentences) {
+    let values;
+    let pos;
+    let lemmas;
+    try {
+      const doc = engine.readDoc(String(sentence || ""));
+      values = doc.tokens().out(engine.its.value);
+      pos = doc.tokens().out(engine.its.pos);
+      lemmas = doc.tokens().out(engine.its.lemma);
+    } catch { continue; }
+    pos = headlineReadPos(values, pos, lemmas, lexicon);
+    for (let i = 0; i < values.length; i += 1) {
+      if (pos[i] !== "NOUN" && pos[i] !== "PROPN") continue;
+      const term = foldEntity(values[i], lexicon);
+      if (!term) continue;
+      total.set(term, (total.get(term) || 0) + 1);
+      if (readsAsClauseVerb(values, pos, i)) asVerb.set(term, (asVerb.get(term) || 0) + 1);
+    }
+  }
+  const verbs = new Set();
+  for (const [term, count] of asVerb) if (count === total.get(term)) verbs.add(term);
+  return verbs;
+}
+
 /** A sentence whose substantial words are nearly all capitalized is a headline
  *  set in Title Case, where a capital says nothing about which words spell a
  *  name. The POS tier reads such a sentence by tag and is unaffected; the
@@ -795,7 +861,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp, { mintDefinitional = false
   const copulaSubjectAt = (i) => {
     let k = i - 1;
     while (k >= 0 && pos[k] === "AUX") k -= 1;
-    const found = nearestEntityIndex(k + 1, -1, COPULA_FRAME_BLOCKERS);
+    const found = nearestEntityIndex(k + 1, -1, COPULA_SUBJECT_BLOCKERS);
     if (found === null) return null;
     const climbed = climbSubjectRun(found);
     if (climbed === null) return null;
