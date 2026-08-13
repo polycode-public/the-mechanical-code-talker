@@ -39,14 +39,6 @@ The work list, ranked by value.
    generated artifact many things pin — README transcripts and the demo pages
    answer out of it — so expect moved pins, and a demo that can no longer answer
    its own question is a real loss to report, not a pin to rewrite.
-2. [ ] **Serve `wordnet-complete` to the news worker from DynamoDB** — the worker
-   already has the client, the row backend and the band rows in its table; it
-   never calls `termQueryOverDocumentClient`. One import and a call site, wired
-   on by default, no IAM change and no seed rebuild. It goes out with the next
-   deploy and the live feed shows what it does. The band carries `PartOf`,
-   `HasProperty`, `MadeOf`, `Causes`, `SimilarTo` and `RelatedTo`, none of which
-   the seed has, so the sense scope will be filtering relation types it has
-   never seen.
 
 ## Discipline
 
