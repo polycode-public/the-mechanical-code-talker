@@ -13,6 +13,10 @@ test("predicatePhrase returns a curated phrase for every table entry", () => {
   assert.equal(predicatePhrase("mgx:causes"), "causes");
   assert.equal(predicatePhrase("mgx:desires"), "wants");
   assert.equal(predicatePhrase("mgx:currently-in"), "is in");
+  // A curated entry, not the minted-verb branch: without it the mgx:<letters>
+  // fold ran attributedTo through the third-person-singular fold and gave back
+  // "attributedToes".
+  assert.equal(predicatePhrase("mgx:attributedTo"), "is attributed to");
 });
 
 test("predicatePhrase renders a minted verb predicate as its third-person surface", () => {
@@ -175,6 +179,7 @@ test("findingCaveat renders one short template per kept finding, and nothing for
   assert.equal(findingCaveat("clause-fallback"), "(read from a clause fragment)");
   assert.equal(findingCaveat("pronoun-carry"), "(subject carried from the previous sentence)");
   assert.equal(findingCaveat("identifier-token"), "(identifier token)");
+  assert.equal(findingCaveat("reported-speech"), "(read from reported speech)");
   // A fact row is the shape a renderer actually holds.
   assert.equal(
     findingCaveat({ subject: "cell", predicate: "rdfs:subClassOf", object: "unit", extraction: ["pronoun-carry"] }),
@@ -194,7 +199,7 @@ test("a row carrying several findings reads them in the table's order, not the r
   const caveat = "(read from a clause fragment) (identifier token)";
   assert.equal(findingCaveat(["clause-fallback", "identifier-token"]), caveat);
   assert.equal(findingCaveat(["identifier-token", "clause-fallback"]), caveat);
-  assert.equal(Object.keys(FINDING_CAVEATS).length, 3, "the caveat table is closed");
+  assert.equal(Object.keys(FINDING_CAVEATS).length, 4, "the caveat table is closed");
 });
 
 test("phraseRendererSource carries everything the reader stands on", () => {
