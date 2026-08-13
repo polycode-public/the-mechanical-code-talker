@@ -580,7 +580,7 @@ question against the same entity always renders the same way.
 ```session cwd=repo
 $ node bin/tmct.mjs chat --repo examples/mini-webapp --ephemeral
 tmct> give me a detailed overview of how the Store works
-Attribute: prose_tokens = memory record store [mgx:hasProseTokens]. Attribute: doc = In-memory record store. [seon:hasDoc]. Other matches: src/core/store.mjs (Module), loadStore (Function), saveStore (Function), testLoadStore (Function).
+Attribute: prose_tokens = memory record store [mgx:hasProseTokens]. Attribute: doc = In-memory record store. [seon:hasDoc]. Store — Class (id: fn:src/core/store.mjs#Store).
 ```
 
 Programmatically, the same pipeline is `generateCompletion()`
