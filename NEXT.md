@@ -121,21 +121,9 @@ The work list, ranked by value against the plan's target card.
    `findContradictions` and its store-row listing, `digest/select.mjs`,
    `digest/compose.mjs` and `ledger-viz.mjs` — left deliberately rather than
    half-sweeping five files mid-task.
-7. [ ] **Wikidata** — the pinned dated dump is DOWNLOADED and on disk:
-   `/Users/antony/tmct-dumps/wikidata-20260810-all.json.gz`,
-   155,457,882,747 bytes, completed 2026-08-13 05:02 BST.
-   Nothing has been done with it, by instruction. Plan §5.5 gates the bulk band
-   on live lookups proving too thin or slow per term, and thirteen iterations
-   point the other way: 11, 12 and 13 each resolved 6 of 8 live, and every miss
-   across the run has been a phrase or a person a dump would not define either
-   ("yemeni government says", "canadian companies", "genevieve glatsky",
-   "deepseek v4"). So the case to make is coverage breadth, and §5.5's own gate
-   will not open on this evidence. One cheap way to test the hypothesis on data
-   that could falsify it: the loop has only ever run `hacker-news` and
-   `nyt-world`, while `usgs-quakes` and `wikimedia-featured` sit captured and
-   untouched — quake and place terms are exactly what a dump defines. Row count
-   and DynamoDB write cost print before any load. The 12-QID slice band is a
-   pipeline proof only.
+7. [ ] **Wikidata band** — the dump is downloaded and untouched; the load is
+   gated on an evidence question §5.5 will not answer on its own. Plan of record:
+   `PLAN_WIKIDATA_BAND.md`.
 
 ## Discipline
 

@@ -140,20 +140,9 @@ full suite only at push moments, `e2e:deployed:news-live` is the rollout's accep
   no-ops. The reusable band jsonl + `.NOTICE` live durably in `~/tmct-dumps/`;
   rebuild path if ever needed: re-download the dump (URL in the build script's
   header), `node scripts/corpus-bands/build-conceptnet-full.mjs --source <tsv>`.
-- **wikidata-slice — full-dump route chosen; the download is operator-run.**
-  `bash scripts/resume-wikidata-dump.sh` resumes it from any interruption and verifies
-  the final byte count. Target: `~/tmct-dumps/wikidata-latest-all.json.gz`
-  (155,314,703,515 bytes from
-  `https://dumps.wikimedia.org/wikidatawiki/entities/latest-all.json.gz`; resume with
-  `curl -sS -L -C - -o <target> <url>` — it was hours from done at ~4 MB/s). Then:
-  pass A streams `gzip -dc` and extracts the 12 committed `SEED_QIDS` entities' lines
-  (strip the dump's per-line trailing commas); a small node script derives the object
-  QIDs from their mapped claims (`WIKIDATA_PROPERTY_RELATIONS`, shared with
-  wikidata-live.mjs); pass B extracts those object entities' lines; concatenate to a
-  dump-derived JSON-lines slice; `node scripts/corpus-bands/build-wikidata-slice.mjs
-  --source <slice>`; `tmct corpus load wikidata-slice` against the same table (also
-  operator-gated). CC0, no notice. Growing the slice later = adding SEED_QIDS and
-  re-running.
+- **wikidata-slice — the dump is downloaded; the load is gated on an evidence
+  question.** Moved to `PLAN_WIKIDATA_BAND.md`, which holds the file on disk, the
+  two-pass build, the table-name lookup and the gate. Read it there.
 - The corpus CLI needs the table name; the stack output is the authority:
   `aws cloudformation describe-stacks --region eu-west-2 --stack-name
   tmct-prod-prod-website --query "Stacks[0].Outputs[?OutputKey=='RowTableName'].OutputValue"
