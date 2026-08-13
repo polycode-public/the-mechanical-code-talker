@@ -58,6 +58,14 @@ The work list, ranked by value.
    ten-minute commands. Promoted out of item 1 rather than held as its
    remainder: the cost is in the engine's own append path, not in the band set
    that exposed it.
+3. [ ] **A config naming a purged band takes the CLI down.** `tmct.toml` files
+   written before the purge still carry `[extensions.tier2-aws]` and its two
+   siblings. `mergeExtensionEntry` reads an unrecognized name as a
+   host-supplied bundle, so the user gets `an unrecognized extension needs a
+   "kind"` — an error about their own config, for a band tmct used to ship.
+   Anyone who runs `npm i -g` over an existing install hits it. Either the
+   resolver skips a name it once shipped and says so, or the purge is a major
+   version bump with the edit in the release notes.
 
 ## Discipline
 
