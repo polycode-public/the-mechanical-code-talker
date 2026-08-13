@@ -113,7 +113,7 @@ export async function importDefinitionFile(repoRoot, filePath, { env = process.e
     for (const sentence of sentences) {
       const before = readFactRows(await loadMemory(memoryDir));
       const beforeById = new Map(before.map((r) => [r.id, r.provenance]));
-      const { record } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7() });
+      const { record } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7(), ingested: true });
       const ok = record?.via === "assert" && !record?.miss;
       if (!ok) {
         const reason = String(record?.answer || "").split("\n")[0] || "not a recognized declarative shape";

@@ -38,6 +38,7 @@ export const CLI_VERBS = [
       { flag: "[--plain]", prose: ["force the plain readline shell (the default when", "stdin/stdout is not a terminal)"] },
       { flag: "[--memory-backend <default|memory|sqlite>]", prose: ["storage backend for taught facts this", "session (CLI flag > TMCT_MEMORY_BACKEND env > tmct.toml's", "[memory] backend > sqlite, .tmct/memory/graph.sqlite)"] },
       { flag: "[--research-source <wikipedia|wikidata|simple-wikipedia-pack>]", prose: ["where \"research <topic>\" fetches from this session", "(/wikipedia|/wikidata in chat > this flag > tmct.toml's", "[research] source > wikipedia)"] },
+      { flag: "[--code-graph]", prose: ["read every line as a question about the code graph", "(default off, and never inferred; also TMCT_CODE_GRAPH=1;", "toggle mid-session with /code-graph on|off)"] },
     ],
   },
   {

@@ -560,12 +560,39 @@ test("renderStats / /stats: entity counts, predicate counts and package totals o
 
 // ---- friendly vs. grammar-hint branch ----
 
-test("isConversational: greetings / help-phrases / short non-code → true; near-miss structural → false", () => {
+test("isConversational: greetings / help-phrases / short lines → true; anything longer → false", () => {
   for (const c of ["hi", "hello", "Hey", "thanks", "thank you", "what can you do", "help me", "?", "banana"]) {
     assert.equal(isConversational(c), true, `"${c}" is conversational`);
   }
-  for (const s of ["which modules import a.mjs", "what calls fnAlpha", "where is walk.mjs", "buildContextBundle", "a.mjs"]) {
-    assert.equal(isConversational(s), false, `"${s}" looks structural`);
+  for (const s of ["which modules import a.mjs", "tell me how this whole thing works"]) {
+    assert.equal(isConversational(s), false, `"${s}" runs past the short-input catch-all`);
+  }
+});
+
+test("isConversational: the declared code-graph switch, not the wording, stands the short-input catch-all down", () => {
+  for (const s of ["what calls fnAlpha", "where is walk.mjs", "buildContextBundle", "a.mjs"]) {
+    assert.equal(isConversational(s), true, `"${s}" is short, and nothing declared a code graph`);
+    assert.equal(isConversational(s, { codeGraphMode: true }), false, `"${s}" is a question about the declared code graph`);
+  }
+  // The closed greeting/identity sets are read before the switch, so a greeting
+  // stays a greeting whichever way the switch is thrown.
+  assert.equal(isConversational("hello", { codeGraphMode: true }), true);
+  assert.equal(isConversational("who are you", { codeGraphMode: true }), true);
+});
+
+test("isConversational: ordinary English is never read as a question about code", () => {
+  const plainEnglish = [
+    "A poodle is a dog.", "It costs 3.50", "Meet me on 12/05", "Dr. Smith is a vet",
+    "Where is my keys", "I use a spoon to eat soup", "I went to my yoga class",
+    "Tell me about the history of Rome", "I need a blood test", "That box contains apples",
+    "Members of the club pay a fee",
+  ];
+  for (const line of plainEnglish) {
+    const words = line.split(/\s+/).length;
+    // Only the word count decides: no full stop, decimal, date slash or
+    // ordinary English word ("use", "class", "history", "test", "contains",
+    // "members") can make a line read as structural.
+    assert.equal(isConversational(line), words <= 3, `"${line}" is judged on its length alone`);
   }
 });
 

@@ -114,7 +114,7 @@ async function runSentence(sentence, { config, memoryDir, env, beforeRows, sessi
   // after-fold it already had to take, so one sentence costs one fold rather
   // than three of the same graph.
   const { record, answer, factsTouched, factRowsAfter } = await runTurn(sentence, {
-    config, memoryDir, sessionId: sessionId || uuidv7(), env, factRowsBefore: before,
+    config, memoryDir, sessionId: sessionId || uuidv7(), env, factRowsBefore: before, ingested: true,
   });
   const after = factRowsAfter || before;
   // Only an assert turn can have written a Fact, so only an assert turn earns

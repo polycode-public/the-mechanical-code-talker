@@ -131,6 +131,14 @@ export async function createSession({
   ephemeral = false,
   narrate = false,
   liveReference = false,
+  // Whether this session reads its lines as questions about a code graph.
+  // The switch a host sets when it supplies its own code graph (seonix does),
+  // so it never has to type a slash command. Session-scoped and mutable —
+  // `/code-graph on|off` flips it turn-to-turn, exactly like narrate. Default
+  // OFF, and nothing derives it from what happens to be loaded: a session
+  // answers code questions because its caller said so, never because a graph
+  // turned up.
+  codeGraphMode = false,
   // Which research source "research <topic>" fetches from: this session's
   // starting value. Precedence — /wikipedia|/wikidata in chat (mutable,
   // applied to session state by `turn()` below) > this param (`tmct chat
@@ -215,6 +223,9 @@ export async function createSession({
   // and mutable — `/wiki on|off` flips it turn-to-turn, exactly like narrate.
   // Default OFF; the toml tier is folded in below, once toml has resolved.
   let liveReferenceOn = liveReference || /^(1|true|yes)$/i.test(String(env.TMCT_LIVE_WIKIPEDIA || ""));
+  // CODE-GRAPH mode (the `codeGraphMode` option, or TMCT_CODE_GRAPH=1): see the
+  // option's own doc comment above. Session-scoped and mutable.
+  let codeGraphModeOn = codeGraphMode || /^(1|true|yes)$/i.test(String(env.TMCT_CODE_GRAPH || ""));
   // Graph resolution order (delegates to src/services/cli-args.mjs's
   // resolveRuntimeConfig): explicit --graph path(s) win outright; then --repo
   // (never silently redirected by env); then TMCT_GRAPH_FILE env; then
@@ -554,6 +565,7 @@ export async function createSession({
     get turns() { return turns; },
     get narrate() { return narrateOn; },
     get liveReference() { return liveReferenceOn; },
+    get codeGraphMode() { return codeGraphModeOn; },
     get researchSource() { return researchSourceOn; },
     promptFor: () => promptFor(focus),
 
@@ -567,7 +579,7 @@ export async function createSession({
     async turn(line, { retrieval: turnRetrieval = null } = {}) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, researchSource: researchSourceOn, vocabHint, tel, biasByBundle, planState, gameConfig, recognitionConfig, researchState, researchConfig, newsState, newsConfig, newsProviders, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks, retrieval: turnRetrieval ?? retrieval });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, codeGraphMode: codeGraphModeOn, researchSource: researchSourceOn, vocabHint, tel, biasByBundle, planState, gameConfig, recognitionConfig, researchState, researchConfig, newsState, newsConfig, newsProviders, discourse: discourseRecord, actingSubject, codeDomainActive: domainActive, laneVocab, domainPacks, retrieval: turnRetrieval ?? retrieval });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -578,7 +590,7 @@ export async function createSession({
         turns += 1;
         return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, prompt: promptFor(focus) };
       }
-      const { record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate, liveReference: nextLiveReference, researchSource: nextResearchSource } = result;
+      const { record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate, liveReference: nextLiveReference, codeGraphMode: nextCodeGraphMode, researchSource: nextResearchSource } = result;
       // "noted — remembered" reports a durable write. In a session that keeps
       // nothing it is the last word on a fact that dies with the process, so
       // say where the fact actually went.
@@ -591,10 +603,11 @@ export async function createSession({
       if ("researchState" in result) researchState = result.researchState;
       if ("newsState" in result) newsState = result.newsState;
       if ("discourse" in result) discourseRecord = result.discourse;
-      // /narrate on|off and /wiki on|off (runCommand) ride the turn RESULT the
-      // same way a focus update does — apply them to this handle's
-      // session-scoped state.
+      // /narrate on|off, /wiki on|off and /code-graph on|off (runCommand) ride
+      // the turn RESULT the same way a focus update does — apply them to this
+      // handle's session-scoped state.
       if (typeof nextNarrate === "boolean") narrateOn = nextNarrate;
+      if (typeof nextCodeGraphMode === "boolean") codeGraphModeOn = nextCodeGraphMode;
       // four-state: false (off), true (rescue on a miss), "supplement" (also
       // append a cited read-out under every grounded vocabulary answer), or
       // "always" (widen that to every grounded answer).
@@ -655,6 +668,7 @@ export async function runChat({
   ephemeral = false,
   narrate = false,
   liveReference = false,
+  codeGraphMode = false,
   researchSource = null,
   memoryBackend = null,
   toolNamePrefix,
@@ -663,7 +677,7 @@ export async function runChat({
   // createSession's first-run seed (~2-3s) produces ZERO output until it fully
   // resolves, which otherwise reads as `npm run chat` hanging with total silence.
   output.write("tmct — starting…\n");
-  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, liveReference, researchSource, memoryBackend, toolNamePrefix, actingSubject });
+  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, liveReference, codeGraphMode, researchSource, memoryBackend, toolNamePrefix, actingSubject });
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
   for (const line of session.bannerLines) output.write(dim(line) + "\n");

@@ -1741,7 +1741,7 @@ const HONEST_MISS_PHRASES = [
 ];
 /** "whats 2+2" — a bare arithmetic expression, not a code/vocabulary question
  *  at all. With no closed-set match of its own, this fell into the SAME
- *  "≤3 words, not code-ish" catch-all a genuine orientation opener
+ *  ≤3-word catch-all a genuine orientation opener
  *  ("what's up", "so what is this") uses, giving the non-sequitur identity
  *  blurb where an honest "I don't do arithmetic" decline belongs. Deliberately
  *  excludes "-" from the operator set: this domain's OWN dates ("what
@@ -1759,8 +1759,11 @@ const ARITHMETIC_RE = /\d+\s*[+*/]\s*\d+/;
  *  ("update the readme") is never caught here — "table"/"from"/"into"/"set"
  *  are the words that make this unambiguously SQL rather than English. */
 const SQL_STATEMENT_RE = /^(?:(?:drop|truncate|alter)\s+table|delete\s+from|insert\s+into|update\s+[a-z0-9_.]+\s+set)\s+[a-z0-9_.]+\b/i;
-/** The structural verbs/nouns that mark a near-miss code question (→ keep the
- *  precise grammar hint, not the friendly nudge). */
+/** Structural verbs and relation nouns the teach lanes must never mint a
+ *  general predicate from. "a commit touches b" and "a class contains a
+ *  method" describe the graph's own edge vocabulary, so reading them as a
+ *  user-taught relation would shadow the built-in one. Every entry is
+ *  lowercase; the lanes lowercase the candidate verb before the lookup. */
 const STRUCT_WORDS = new Set([
   "import", "imports", "call", "calls", "use", "uses", "define", "defines", "defined",
   "class", "classes", "function", "functions", "module", "modules", "method", "methods",
@@ -1775,24 +1778,22 @@ const STRUCT_WORDS = new Set([
   "testing", "defining", "touching", "extending", "inheritance", "coverage", "member", "members",
 ]);
 
-/** Is this raw/normalized query "code-ish" (a dotted/pathed/CamelCase name, "()",
- *  or a structural keyword)? Shared by isConversational and the fuzzy-typo fallback
- *  so neither ever grabs a genuine near-miss structural question. */
-function looksCodeish(raw, q) {
-  return /[a-z][A-Z]|[_./]|\(\)/.test(raw) || q.split(/\s+/).some((w) => STRUCT_WORDS.has(w));
-}
-
 /** Does this look like small-talk / an orientation request rather than a
- *  (near-miss) structural question? Greetings & help/identity phrases always
- *  qualify; a very short input with no code-ish token does too. */
-export function isConversational(query) {
+ *  structural question? Greetings & help/identity phrases always qualify; a
+ *  very short input does too, unless the session declared code-graph mode.
+ *
+ *  `codeGraphMode` is the session's declared switch (`/code-graph on|off`, or
+ *  the `codeGraphMode` option a host sets). Nothing here reads the text for
+ *  code-shaped tokens: what the user is asking about is declared, never
+ *  guessed. With the switch on, every line is a question about the code graph,
+ *  so the short-input catch-all stands down. */
+export function isConversational(query, { codeGraphMode = false } = {}) {
   const raw = String(query).trim();
   const q = raw.toLowerCase().replace(/[.!?]+$/, "").trim();
   if (GREET.has(q) || THANKS.has(q) || OK_ACK.has(q)) return true;
   if (CAPABILITY_PHRASES.some((re) => re.test(raw))) return true;
   if (IDENTITY_PHRASES.some((re) => re.test(raw))) return true;
   if (aiIdentityMatch(raw)) return true;
-  const codeish = looksCodeish(raw, q);
   // The catch-all counts words, so a contraction decides the turn on
   // punctuation alone: "what's on peg-a" counts 3 and gets the orientation
   // card, "what is on peg-a" counts 4 and gets the answer. Write the
@@ -1802,8 +1803,8 @@ export function isConversational(query) {
   // normalizeQuery: the fuller pass strips filler, which takes the count DOWN,
   // and sends "please describe a dog" and "tell me about a dog" to the card
   // instead. `q` itself is left alone so the GREET/THANKS/OK_ACK membership
-  // above reads the text as typed, and looksCodeish reads `raw`.
-  return expandContractions(q).split(/\s+/).filter(Boolean).length <= 3 && !codeish;
+  // above reads the text as typed.
+  return !codeGraphMode && expandContractions(q).split(/\s+/).filter(Boolean).length <= 3;
 }
 
 /** The words that, in the slot of a short "what is X" / "who is X", name the
@@ -1857,9 +1858,13 @@ const BACKED_TOOLS = new Set([
  *      when tmct_ask is declared. Small-talk (isConversational) never emits a
  *      call — it falls through to a text answer.
  *
+ * `codeGraphMode` is the host's declared switch, the same one a session carries
+ * (`/code-graph on|off`). A host that reads its own code graph through this
+ * seam passes true, and short lines stop reading as small-talk.
+ *
  * Returns { name, input } or null (→ answer as text).
  */
-export function selectTool(text, declaredNames) {
+export function selectTool(text, declaredNames, { codeGraphMode = false } = {}) {
   const t = String(text || "").trim();
   if (!t) return null;
 
@@ -1874,20 +1879,20 @@ export function selectTool(text, declaredNames) {
         const val = restTok.join(" ").trim();
         if (val) input[spec.arg] = val;
         // an entity command with no argument can't bind a call — fall through
-        else if (!spec.optional) return askFallback(t, declaredNames);
+        else if (!spec.optional) return askFallback(t, declaredNames, codeGraphMode);
       }
       return { name: spec.tool, input };
     }
   }
 
   // 2. structural question → tmct_ask, unless it's small-talk
-  return askFallback(t, declaredNames);
+  return askFallback(t, declaredNames, codeGraphMode);
 }
 
 /** The tmct_ask fallback: emit tmct_ask{query} for a non-conversational line when
  *  the caller declared tmct_ask; otherwise null (→ text answer). */
-function askFallback(text, declaredNames) {
-  if (declaredNames.has("tmct_ask") && BACKED_TOOLS.has("tmct_ask") && !isConversational(text)) {
+function askFallback(text, declaredNames, codeGraphMode = false) {
+  if (declaredNames.has("tmct_ask") && BACKED_TOOLS.has("tmct_ask") && !isConversational(text, { codeGraphMode })) {
     return { name: "tmct_ask", input: { query: text } };
   }
   return null;
@@ -1910,42 +1915,25 @@ export function capabilityPlanDeps() {
   };
 }
 
-/** Scoped exemption for the bare-meta-fact lane (2b/2c, further down this file)
- *  ONLY — never a change to looksCodeish()/isConversational() themselves, and
- *  never used for the generic orientation-card fallback. A bare "what is
- *  TaskController?" (CamelCase COMPOUND class name, no article) hits
- *  looksCodeish()'s `/[a-z][A-Z]/` branch, so isConversational() returns false
- *  and the whole isConversationalCandidate gate — including the bare-meta-fact
- *  lookup that "what is a TaskController" (articled) already resolves through
- *  — never runs. This re-tests the SAME non-CamelCase codeish reasons (paths,
- *  dotted refs, `()` calls, STRUCT_WORDS) looksCodeish already covers, so a
- *  genuine near-miss structural question ("what is foo.bar()", "what is
- *  import") is unaffected. */
-function isBareCamelCaseMetaQuestion(query) {
+/** A short bare "what is X?" / "is X <adjective>?" with no article — the shape
+ *  the bare-meta-fact lane (2b/2c, further down this file) reads. Used ONLY to
+ *  widen that lane's gate, never the generic orientation-card fallback. Lane
+ *  (2b) still diverts only on a REAL hit, so a term with nothing behind it
+ *  falls through to the ordinary card either way. */
+function isBareMetaQuestionShape(query) {
   const raw = String(query).trim();
   const q = raw.toLowerCase().replace(/[.!?]+$/, "").trim();
-  const nonCamelCodeish = /[_./]|\(\)/.test(raw) || q.split(/\s+/).some((w) => STRUCT_WORDS.has(w));
-  if (nonCamelCodeish || q.split(/\s+/).filter(Boolean).length > 3) return false;
+  if (q.split(/\s+/).filter(Boolean).length > 3) return false;
   return BARE_WHATIS_RE.test(raw) || IS_ADJECTIVE_YESNO_RE.test(raw);
 }
 
-/** The same scoped exemption for the WRAPPERLESS form, lane (2c) only: a bare
- *  "TaskController" typed on its own. isBareCamelCaseMetaQuestion above needs a
- *  "what is X" / "is X <adjective>" wrapper, so a bare CamelCase name still
- *  stops at looksCodeish()'s `/[a-z][A-Z]/` branch while its lowercase twin
- *  ("task") reaches the lane and answers.
- *
- *  A single unbroken word is the whole shape (2c looks the raw line up as a
- *  label), and that shape is what keeps the exemption at the CamelCase reason
- *  and nothing else: a path, a dotted ref, a `()` call or any multi-word
- *  near-miss structural question ("what is import") can't be one bare word, and
- *  every STRUCT_WORDS member is lowercase, so the CamelCase requirement leaves
- *  them all where they are. Lane (2c) still only diverts on a real, unique
- *  graph hit — an unknown CamelCase word answers exactly as it does now. */
-function isBareCamelCaseEntityName(query) {
-  const raw = String(query).trim();
-  if (!/^[A-Za-z][A-Za-z0-9]*$/.test(raw)) return false;
-  return /[a-z][A-Z]/.test(raw);
+/** The WRAPPERLESS form the same lane reads, (2c) only: a bare "TaskController"
+ *  or "task" typed on its own, with no "what is X" wrapper around it. One
+ *  unbroken word is the whole shape — lane (2c) looks the raw line up as a
+ *  graph label and diverts only on a real, unique hit, so a word naming
+ *  nothing answers exactly as it did before. */
+function isBareEntityNameShape(query) {
+  return /^[A-Za-z][A-Za-z0-9]*$/.test(String(query).trim());
 }
 
 // ---- the response-template library (W1: templates → render path) ----
@@ -2175,9 +2163,9 @@ function closedOrCollapsed(q, set, idx) {
  *    - fold an exact word-repeated clause ("bye bye") to one instance before
  *      matching BYE — informal reduplication for emphasis, not a new phrase
  *  Still the SAME closed THANKS/BYE sets underneath (same closedOrCollapsed
- *  matcher) — only the SEGMENTATION generalizes. Bounded to short, non-codeish
- *  lines (same discipline as isConversational/fuzzyConversationalMatch) so a
- *  genuine structural question is never grabbed. A single-clause line (no
+ *  matcher) — only the SEGMENTATION generalizes. Bounded to short lines (same
+ *  discipline as isConversational/fuzzyConversationalMatch), and off entirely
+ *  in code-graph mode. A single-clause line (no
  *  comma/semicolon/"and") is left to the exact whole-line checks above/below —
  *  this only handles the MULTI-clause case those can't. Returns "bye"/"thanks"/
  *  null; bye wins when a line carries both — a farewell should end the
@@ -2253,12 +2241,13 @@ const isClosingFillerClause = (c) => CLOSING_FILLER_CLAUSES.has(c) || CLOSING_FI
  *  "thanks for all your help") — stripped before the closed THANKS lookup so the
  *  bare "thanks" underneath matches. */
 const THANKS_HELP_TAIL_RE = /\s+for\s+(?:the\s+|your\s+|all\s+|all\s+the\s+|all\s+your\s+)?help\s*$/i;
-function farewellOrThanksSignal(raw, q) {
+function farewellOrThanksSignal(q, codeGraphMode) {
+  if (codeGraphMode) return null;
   const words = q.split(/\s+/).filter(Boolean);
   // The upper bound is generous because the real safety is the per-clause gate
   // below (every non-thanks clause must itself be small-talk-shaped or a curated
   // closing-filler clause), not the total word count.
-  if (words.length < 2 || words.length > 16 || looksCodeish(raw, q)) return null;
+  if (words.length < 2 || words.length > 16) return null;
   const clauses = conversationalClauses(q);
   if (clauses.length < 2) return null; // single-clause lines: the exact whole-line checks own this
   // OK_ACK is deliberately NOT a signal here (unlike the exact whole-line check
@@ -2269,7 +2258,7 @@ function farewellOrThanksSignal(raw, q) {
   // as a thanks-signal regressed exactly that live case. THANKS itself is more
   // specific (genuine gratitude words rarely lead into an unrelated question),
   // but still gated below: a THANKS-hit only counts when every OTHER clause is
-  // itself small-talk-shaped (≤3 words, non-codeish) — the SAME bound
+  // itself small-talk-shaped (≤3 words) — the SAME bound
   // isConversational's own catch-all uses — OR a curated closing-filler clause
   // (CLOSING_FILLER_CLAUSES, above) — so "cheers, what does X do" is still left
   // to the existing THANKS_PREAMBLE_RE lane, never grabbed here.
@@ -2286,7 +2275,7 @@ function farewellOrThanksSignal(raw, q) {
   if (byeHit) return "bye";
   const thanksHit = thanksClauseIdx >= 0 && clauses.every((c, i) => i === thanksClauseIdx
     || isClosingFillerClause(c)
-    || (c.split(/\s+/).filter(Boolean).length <= 3 && !looksCodeish(c, c.toLowerCase())));
+    || c.split(/\s+/).filter(Boolean).length <= 3);
   return thanksHit ? "thanks" : null;
 }
 
@@ -2294,9 +2283,9 @@ function farewellOrThanksSignal(raw, q) {
  *  line, an ack lead-in peeled off a dismissal, or a short line whose every word
  *  is laughter / an ack / a single-word dismissal with at least one laughter or
  *  dismissal word (so a bare "ok"/"sure" still falls to the ack lane, not here).
- *  Never fires on a codeish line. */
-function dismissalSignal(q) {
-  if (looksCodeish(q, q)) return false;
+ *  Stands down entirely in code-graph mode. */
+function dismissalSignal(q, codeGraphMode) {
+  if (codeGraphMode) return false;
   if (DISMISSAL.has(q) || LAUGHTER.has(q)) return true;
   const words = q.split(/\s+/).filter(Boolean);
   if (words.length < 2 || words.length > 5) return false;
@@ -2353,14 +2342,17 @@ function expandShorthandContractions(text) {
 /** UNIQUE within-bound fuzzy match of the whole trimmed line against
  *  CONVERSATIONAL_PHRASES — the "helo"/"thnx"/"byee" tier, plus (after shorthand
  *  contraction expansion above) "waht r u"/"wat r u"-style texting shorthand.
- *  Restricted to short (≤4-word), non-code-ish inputs (looksCodeish, shared with
- *  isConversational) so a genuine near-miss structural question is never grabbed;
- *  a distance tie is refused, never guessed (same discipline as fuzzyVocabWord). */
-function fuzzyConversationalMatch(raw) {
+ *  Restricted to short (≤4-word) inputs, and stands down entirely in code-graph
+ *  mode; a distance tie is refused, never guessed (same discipline as
+ *  fuzzyVocabWord). A leading "/" is refused outright: the slash is tmct's own
+ *  command sigil, so "/help" is a command the user declared, not a line one
+ *  edit away from the small-talk phrase "help". */
+function fuzzyConversationalMatch(raw, codeGraphMode) {
+  if (codeGraphMode || String(raw).trim().startsWith("/")) return null;
   const expanded = expandShorthandContractions(raw);
   const q = collapseRuns(expanded.toLowerCase().replace(/[.!?]+$/, "").trim());
   const words = q.split(/\s+/).filter(Boolean);
-  if (!words.length || words.length > 4 || looksCodeish(raw, q)) return null;
+  if (!words.length || words.length > 4) return null;
   return fuzzyMatchInSet(q, CONVERSATIONAL_PHRASES, Math.min(2, fuzzyBound(q)));
 }
 
@@ -2406,13 +2398,17 @@ const identitySelfTemplateId = (uiContext, codeDomainActive) =>
 
 /** The "here's what you CAN ask" tail on a decline that names no term of its own
  *  (the SQL-statement and arithmetic shapes below). `ctx.vocabHint` already
- *  carries the session-gated vocabulary/teach pointer, so only the CODE-graph
- *  half needs the surface split: pointing at a repo is a command a terminal can
- *  run and a page cannot. */
+ *  carries the session-gated vocabulary/teach pointer. The repo pointer needs
+ *  two things on top: a session that declared code-graph mode, and a terminal
+ *  to run the command in. */
 const offRampClause = (ctx) => {
   const hint = ctx.vocabHint || 'Try "what is a dog" for vocabulary.';
-  return ctx.uiContext === "browser" ? hint : `${hint} Or point me at a repo with --repo <path>.`;
+  return (ctx.uiContext === "browser" || !ctx.codeGraphMode) ? hint : `${hint} Or point me at a repo with --repo <path>.`;
 };
+
+/** What a decline that names no term of its own says it DOES answer. The code
+ *  graph is named only when the session declared code-graph mode. */
+const answerableSubjects = (ctx) => (ctx.codeGraphMode ? "a code graph or taught facts" : "taught facts");
 
 /** Recognise a conversational expression and return a templated turn result, or null
  *  to fall through to counts/ask. Handled BEFORE slash-commands' non-slash siblings:
@@ -2462,7 +2458,7 @@ function conversationalTurn(line, ctx) {
     // "thanks, bye") — see farewellOrThanksSignal's own docblock. Never fires
     // on a single-clause line (those are the exact checks just above/below),
     // so this only ADDS coverage, never shadows it.
-    const signal = farewellOrThanksSignal(raw, q);
+    const signal = farewellOrThanksSignal(q, ctx.codeGraphMode);
     if (signal === "bye") {
       note(ctx.trace, "goal: casual/social — ending the session (no graph intent)");
       note(ctx.trace, "lane: conversational — farewell (multi-clause phrase-shape match)");
@@ -2520,7 +2516,7 @@ function conversationalTurn(line, ctx) {
       return mk(t(T_THANKS), { lane: "thanks" });
     }
   }
-  if (dismissalSignal(q)) {
+  if (dismissalSignal(q, ctx.codeGraphMode)) {
     note(ctx.trace, "goal: casual/social — dismissal/laughter, no graph intent");
     note(ctx.trace, "lane: conversational — dismissal (DISMISSAL/LAUGHTER closed set)");
     return mk(t(T_DISMISSAL), { lane: "thanks" });
@@ -2544,7 +2540,7 @@ function conversationalTurn(line, ctx) {
     note(ctx.trace, "goal: nonsense input shaped like a SQL statement — a targeted decline, not the identity blurb");
     note(ctx.trace, "lane: conversational — SQL-statement decline (SQL_STATEMENT_RE)");
     return mk(
-      `That reads like a SQL statement, not a question about a code graph or taught facts. ${offRampClause(ctx)}`,
+      `That reads like a SQL statement, not a question about ${answerableSubjects(ctx)}. ${offRampClause(ctx)}`,
       { lane: "help" },
     );
   }
@@ -2552,7 +2548,7 @@ function conversationalTurn(line, ctx) {
     note(ctx.trace, "goal: arithmetic — not a code/vocabulary question, an honest decline");
     note(ctx.trace, "lane: conversational — arithmetic decline (ARITHMETIC_RE)");
     return mk(
-      `I don't do arithmetic — I answer questions about a code graph or taught facts. ${offRampClause(ctx)}`,
+      `I don't do arithmetic — I answer questions about ${answerableSubjects(ctx)}. ${offRampClause(ctx)}`,
       { lane: "help" },
     );
   }
@@ -2583,12 +2579,11 @@ function conversationalTurn(line, ctx) {
   }
   // Fuzzy-typo fallback (A4): every exact/collapsed closed-set lookup above missed —
   // try a bounded edit-distance match against the flattened conversational phrase
-  // pool ("helo", "thnx", "wat r u", "byee"), restricted to short non-code-ish
-  // input so a genuine near-miss structural question is never grabbed. Skipped
-  // entirely mid-game (see gameActive above) — never reached the CLI's own
-  // process-exit path from a guess before this fix existed.
+  // pool ("helo", "thnx", "wat r u", "byee"), restricted to short input.
+  // Skipped entirely mid-game (see gameActive above) — never reached the CLI's
+  // own process-exit path from a guess before this fix existed.
   if (!gameActive) {
-    const fuzzyHit = fuzzyConversationalMatch(raw);
+    const fuzzyHit = fuzzyConversationalMatch(raw, ctx.codeGraphMode);
     if (fuzzyHit) {
       const bucket = classifyConversational(fuzzyHit);
       note(ctx.trace, `goal: casual/social or orientation — fuzzy-typo match "${raw}" → "${fuzzyHit}"`);
@@ -6864,7 +6859,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // BARE path: "grace mentors alan" — no "remember"/"note" wrapper at all.
     // Without this, such a sentence reaches neither this frame NOR an honest
     // miss, landing on the raw structural wall instead (or, at exactly <=3
-    // words with no code-ish token, the UNRELATED isConversational()
+    // words, the UNRELATED isConversational()
     // orientation card — see subjectIsNounOrPropn's own docblock for why a
     // plain wrapper-required gate can't safely widen to bare sentences on
     // shape alone: "tell me a joke" fits the identical SVO shape and must
@@ -7495,8 +7490,7 @@ async function metaLane(query, { graph, memoryDir, last = null, templates = null
   if (moduleOrient) return moduleOrient;
   // The sha-authorship form ("who authored a1b2c3d") can be as short as
   // THREE words, which the conversational-orientation branch (step 2) would grab
-  // before the author step (4b) is reached — a bare hex sha is not "code-ish" to
-  // isConversational. The form is closed + unambiguous (7-40 hex chars), so the
+  // before the author step (4b) is reached. The form is closed + unambiguous (7-40 hex chars), so the
   // meta lane delegates it to the author lane here. Unknown/ambiguous shas return
   // null and fall through unchanged.
   if (AUTHOR_SHA_RE.test(q)) return authorLane(q, { graph });
@@ -7592,9 +7586,9 @@ const PERSONAL_ASSISTANT_NUDGE_RE = new RegExp(
  *     from a prior result set is a capability the engine genuinely doesn't
  *     have yet (even the fully-spelled "which of those is not X" doesn't
  *     compile — parsePredicateFilter has no negation branch).
- *  Without this, both fall to the generic orientation card (a short,
- *  non-codeish turn trips isConversational's ≤3-word catch-all) or the raw
- *  grammar wall (a codeish one, e.g. a path) — neither names what actually
+ *  Without this, both fall to the generic orientation card (a short turn trips
+ *  isConversational's ≤3-word catch-all) or the raw grammar wall (a longer one,
+ *  e.g. a path) — neither names what actually
  *  went wrong. This is an honest, GUIDING nudge, never a fabricated filtered
  *  answer and never a bare wall. */
 const STACCATO_NEGATION_RE = /^(?:and\s+)?(?:not|except(?:\s+for)?)\s+(.+?)(?:\s+then|\s+though)?[?.!]*$/i;
@@ -7606,7 +7600,7 @@ const NEGATION_PRONOUN_RE = /^(?:it|that|this|those|them)(?:\s+ones?)?$/i;
  *  Genuinely unanswerable as a real graph query, never fabricated: tmct's
  *  superlative only ever names the single top (or bottom) match for a metric
  *  (evalSuperlative) — it has no "runner-up"/"next ranked" or "greater than a
- *  number" capability to reach for. Without this, both a short/non-codeish
+ *  number" capability to reach for. Without this, both a short
  *  phrasing ("more than that") and the wall these route to (once the
  *  isConversational catch-all is deferred below) fall to the generic
  *  orientation card or the raw grammar wall — neither says what actually went
@@ -7831,6 +7825,17 @@ const NO_GRAPH_BOOTSTRAP_WALL_LEAD = "I can't answer that as a code question —
 /** The no-code-domain sibling of the lead above: same role (the bootstrap
  *  wall's opening line), no code vocabulary. */
 const NEUTRAL_BOOTSTRAP_WALL_LEAD = "I couldn't ground that in anything I know.";
+/** What a turn says when the session declared code-graph mode and no code
+ *  graph stands behind it. The declaration is the caller's, so the unmet
+ *  declaration is reported as the error it is, with no remedy command
+ *  attached. */
+const CODE_GRAPH_MISSING_ERROR = "code-graph mode is on, but this session has no code graph behind it.";
+/** Does this ANSWER speak the code lane's own vocabulary? Every index-miss the
+ *  ask engine composes says "found in the index", and the empty-index note
+ *  names the code index outright. Read off what we are about to SAY, never off
+ *  what the user typed: which subject a session will talk about is declared,
+ *  and this only checks that an answer honours the declaration. */
+const speaksCodeIndex = (answer) => /found in the index|no code index/i.test(String(answer));
 
 /** The orientation-repeat one-liner. The conversational
  *  orientation branch sits OUTSIDE the composed-only wall-shortening gate (it
@@ -7904,6 +7909,10 @@ export async function helpText(codeDomainActive = false, helpRows = undefined) {
     ["list <kind>", "list what you've taught under a class (\"list letters\"); \"list facts\" lists memory itself"],
     ["forget that <X> is a <Y>", "withdraw a fact you taught, and anything derived from it — the phrasing the retract lane reads"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
+    // The switch names the code domain, so it lists beside the other
+    // code-domain rows: a session with nothing to index would be reading about
+    // a graph it hasn't got. Typing it still works either way.
+    ...(codeDomainActive ? [["/code-graph on|off", "read every line as a question about the code graph (default off, and never inferred from what you type)"]] : []),
     ["/wiki on|off|supplement|always", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded vocabulary answer; always widens that to every grounded answer"],
     ["/wikipedia | /wikidata", "which source \"research <topic>\" fetches from for the rest of the session: Simple English Wikipedia's prose (the default) or Wikidata's structured claims. tmct.toml's [research] source sets the starting value; tmct chat --research-source overrides it per invocation"],
     ["research <topic> [limit N] [depth D]", "fetch the topic from the session's research source (Simple English Wikipedia by default — /wikidata switches it) (the explicit ask is the network consent), store what it grounds, and queue its linked topics — \"research next\" steps the queue; also status/stop. limit N caps the links queued per topic, depth D how many hops the queue follows (1 by default); a run also stops at its total node budget"],
@@ -15260,7 +15269,7 @@ const ARCH_OVERVIEW_PHRASES = [
   new RegExp(`^${ARCH_OVERVIEW_LEAD}(?:(?:an?|the)\\s+)?(?:overview|map|diagram)\\s+${ARCH_OVERVIEW_OF_REPO}(?:\\s+here)?\\??$`, "i"),
 ];
 
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint: sessionVocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, sourceSkips = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, codeDomainActive = false }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint: sessionVocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, sourceSkips = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, codeDomainActive = false, codeGraphMode = false, ingested = false }) {
   // The session-wide hint names a term this session can PROVE resolves; when
   // the question itself named a subject the lexicon knows, the hint names that
   // instead, so a miss on "how many eyes does a human have" points at "human"
@@ -15897,7 +15906,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     }
   }
   // "what about X" with a genuine PRIOR turn to continue is exempt from the
-  // conversational catch-all even when short/non-codeish: isConversational()
+  // conversational catch-all even when short: isConversational()
   // can't see that discourseRewrite/describeWrapperAnswer haven't had their
   // turn yet. Same exemption for the bare-connective sibling shape ("and
   // Widget?", STACCATO_SWAP_RE), gated the SAME way discourseRewrite gates it.
@@ -16048,7 +16057,13 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // isConversational's word-count catch-all into the orientation blurb, and
   // that blurb (a dispatched turn) then becomes `last`, wiping the very
   // antecedent the next pronoun turn needs.
-  const isConversationalCandidate = conversationalCandidateBaseGate && !vocabAntecedent && isConversational(query);
+  //
+  // `ingested` is the same kind of declaration as codeGraphMode: a caller
+  // feeding a document a sentence at a time (`tmct extract`, /ingest) says so,
+  // and the short-input catch-all stands down. A sentence out of a file was
+  // never small talk, however few words it runs to.
+  const isConversationalCandidate = conversationalCandidateBaseGate && !vocabAntecedent && !ingested
+    && isConversational(query, { codeGraphMode });
   const liveGameOwnWord = gameOwnWord(query, planHolder);
   // "what is X" with NO article ("what is john") is BOTH conversational-shaped
   // (isConversational() would claim it) AND a legitimate bare meta/fact-lookup
@@ -16074,13 +16089,13 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const bareNounMatch = correctMisspellings(String(query).trim()).replace(/[?.!]+\s*$/, "").trim()
     .match(/^(?:the\s+|a\s+|an\s+)?([a-z][a-z-]*)$/i);
   const bareNounShape = !!bareNounMatch;
-  // `isBareCamelCaseMetaQuestion` ORs in alongside isConversationalCandidate
-  // for THIS lane only — a bare "what is TaskController" (CamelCase compound,
-  // no article) is otherwise excluded solely because isConversational()'s
-  // codeish check fires on the CamelCase transition. Shares the SAME base gate
-  // so it's never looser; a CamelCase term with no real hit still falls
-  // through to the ordinary orientation-card fallback further down.
-  const isBareCamelCaseWhatisCandidate = conversationalCandidateBaseGate && isBareCamelCaseMetaQuestion(gateQuery);
+  // `isBareMetaQuestionShape` ORs in alongside isConversationalCandidate
+  // for THIS lane only, so a bare "what is TaskController" still reaches the
+  // bare-meta lookup in code-graph mode, where the conversational candidate
+  // gate stands down. Shares the SAME base gate so it's never looser; a term
+  // with no real hit still falls through to the ordinary orientation-card
+  // fallback further down.
+  const isBareMetaQuestionCandidate = conversationalCandidateBaseGate && isBareMetaQuestionShape(gateQuery);
   // The SAME divert-only-on-a-real-hit gate covers factAnswer's
   // WHAT_USED_FOR_RE/REVERSE_PREDICATE_MARKERS reverse-predicate shapes too —
   // for the shortest members of the family ("what wants happiness") it's
@@ -16102,8 +16117,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // relations only on a real hit, so a name with no facts still falls to the
   // ordinary card.
   const whoIsShape = WHO_IS_BARE_RE.test(gateQuery);
+  // "where is ann" is three words, the same length as the vocabulary openers
+  // above, and factReadBack's locative reader surfaces the taught fact only on
+  // a real hit — so "where is up" with nothing behind it still falls to the
+  // ordinary card. Its auxiliary-fronted sibling ("where does ann live")
+  // reads the same stored fact and takes the same gate.
+  const whereIsShape = WHERE_IS_FACT_RE.test(gateQuery) || WHERE_DOES_FACT_RE.test(gateQuery);
   let bareMetaHit = null;
-  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape || capabilityAskShape || bareNounShape || whoIsShape)) {
+  if ((isConversationalCandidate || isBareMetaQuestionCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape || capabilityAskShape || bareNounShape || whoIsShape || whereIsShape)) {
     if (memoryDir) {
       // The bare noun asks its own "what is a X" — the readers never see the
       // single word, so the vocabulary route is the constructed question's.
@@ -16175,14 +16196,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // returns non-null for an EXACT label match, so ordinary small talk is
   // unaffected.
   //
-  // `isBareCamelCaseEntityCandidate` ORs in for THIS lane the way
-  // isBareCamelCaseWhatisCandidate does for (2b) — a bare "TaskController" is
-  // excluded from isConversationalCandidate solely by the CamelCase transition,
-  // while a bare "task" reaches the lane. Same base gate and same
-  // `!vocabAntecedent`, so it's never looser than the gate it joins.
-  const isBareCamelCaseEntityCandidate = conversationalCandidateBaseGate && !vocabAntecedent
-    && isBareCamelCaseEntityName(query);
-  if (!bareMetaHit && (isConversationalCandidate || isBareCamelCaseEntityCandidate) && graph) {
+  // `isBareEntityNameCandidate` ORs in for THIS lane the way
+  // isBareMetaQuestionCandidate does for (2b), so a bare entity name still
+  // reaches the lane in code-graph mode, where the conversational candidate
+  // gate stands down. Same base gate and same `!vocabAntecedent`, so it's
+  // never looser than the gate it joins.
+  const isBareEntityNameCandidate = conversationalCandidateBaseGate && !vocabAntecedent
+    && isBareEntityNameShape(query);
+  if (!bareMetaHit && (isConversationalCandidate || isBareEntityNameCandidate) && graph) {
     const { metaFallbackEntityAnswer } = await import("../domain/ask.mjs");
     const fallback = metaFallbackEntityAnswer(graph, String(query).trim());
     if (fallback) bareMetaHit = { text: fallback.text, replace: true };
@@ -16297,12 +16318,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // wall-shortening gate below, so it needs its own repeat collapse,
     // mirroring WALL_REPEAT_ONELINER.
     //
-    // `!envelope?.parsed`: isConversational() is a TEXT-ONLY heuristic — it
-    // has no way to know the query already compiled to a real structural AST
-    // shape. A pronoun-shortened follow-up ("who touched it") can be exactly
-    // 3 words with no STRUCT_WORDS token, so without this guard
-    // isConversational would discard a correct, already-composed answer for
-    // the generic orientation wall.
+    // `!envelope?.parsed`: isConversational() counts words and nothing else —
+    // it has no way to know the query already compiled to a real structural
+    // AST shape. A pronoun-shortened follow-up ("who touched it") is exactly
+    // 3 words, so without this guard isConversational would discard a correct,
+    // already-composed answer for the generic orientation wall.
     const orientation = orientationAnswer(templates, graph, vocabHint, uiContext, codeDomainActive);
     const repeat = last?.answer === orientation;
     answer = repeat ? ORIENTATION_REPEAT_ONELINER : orientation;
@@ -16849,47 +16869,48 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     }
   }
   // #4 HONEST-EMPTY POLISH — an empty CODE graph: any still-standing engine
-  // dead-end (an honest empty, the short miss, the bootstrap note) carries the
-  // exit toward a real graph, unless it already points there — or unless the
-  // turn already names its own recovery (a self-contained decline, or a
-  // teach-offer about to land). Only when genuinely empty. The CLI keeps the
-  // --repo/example pointer verbatim; a browser or a live adventure has no
-  // such command to reach for, so each gets a teach-forward pointer (and the
-  // adventure also names the world asides that are guaranteed to hit).
-  // A live adventure keeps its polish even beside a teach-offer: the world
-  // asides ("look", "talk to the butler") are guidance the offer can't carry.
+  // dead-end (an honest empty, the short miss, the bootstrap note) carries a
+  // teach-forward pointer, unless the turn already names its own recovery (a
+  // self-contained decline, or a teach-offer about to land). Only when
+  // genuinely empty. A live adventure keeps its polish even beside a
+  // teach-offer: the world asides ("look", "talk to the butler") are guidance
+  // the offer can't carry.
+  //
+  // With code-graph mode ON and no code graph behind the session, the turn
+  // reports that as an error. The mode is the caller's declaration, and an
+  // unmet declaration is a failure, not a prompt to go index something. With
+  // the mode OFF the miss stands as written: nothing here reaches for
+  // code-graph wording on a session that never asked for it.
   const adventureLive = !!planHolder?.state?.adventure;
-  if (recordMiss && (via === "composed" || via === "miss") && !selfContainedMiss
-      && (adventureLive || !teachOffer)
+  const missStanding = recordMiss && (via === "composed" || via === "miss") && !selfContainedMiss;
+  const codeGraphMissing = codeGraphMode && !(graph && moduleCountOf(graph) > 0);
+  if (missStanding && !adventureLive && codeGraphMissing) {
+    answer = CODE_GRAPH_MISSING_ERROR;
+    via = "miss";
+    genericWallMiss = true;
+    teachOffer = null;
+    note(trace, "intermediate: CODE-GRAPH MODE — the switch is on and no code graph stands behind the session, so the turn reports that error");
+  } else if (missStanding && (adventureLive || !teachOffer)
       && noCodeGraph(graph) && !/--repo|tmct init|no code graph/i.test(answer)) {
     if (adventureLive) {
       answer = `${answer}\n(I don't know that yet — you can teach me: say "remember: <thing> is a <kind>". Or ask the world: "look", "where is the key", "talk to the butler".)`;
-      note(trace, "intermediate: HONEST-EMPTY POLISH — a live adventure miss points at the teach lane and the world asides, not the --repo remedy");
+      note(trace, "intermediate: HONEST-EMPTY POLISH — a live adventure miss points at the teach lane and the world asides");
     } else if (browser) {
       answer = `${answer}\n(I don't know that yet — you can teach me: say "remember: <thing> is a <kind>".)`;
-      note(trace, "intermediate: HONEST-EMPTY POLISH — a browser miss points at the teach lane, not the CLI-only --repo remedy");
-    } else if (looksCodeish(String(query), String(query).toLowerCase())) {
-      if (codeDomainActive) {
-        answer = `${answer}\n(this repo has no code graph — index it with \`tmct index\`, point me at a \`.tmct/graph.json\` with \`--repo <path>\`, or run \`npm run example:mini\`.)`;
-        note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a tmct index/--repo pointer appended");
-      } else {
-        // No code domain active this session: a code-shaped miss here would
-        // otherwise repeat the engine's own code-graph vocabulary. Decline to
-        // the same neutral wall a genuinely unparsed line gets — as if this
-        // lane's grammar had never matched — rather than pointing at a
-        // command that has nothing here to index.
-        answer = vocabHint
-          ? `I couldn't read that as a question I can answer. ${vocabHint} Type /help for all query shapes.`
-          : shortMissHint(query);
-        via = "miss";
-        genericWallMiss = true;
-        note(trace, "intermediate: HONEST-EMPTY POLISH — no code domain active, so the code-shaped miss declined to the ordinary wall instead of a code-graph pointer");
-      }
+      note(trace, "intermediate: HONEST-EMPTY POLISH — a browser miss points at the teach lane");
+    } else if (speaksCodeIndex(answer)) {
+      // Nobody declared code-graph mode and there is no code graph here, so an
+      // answer that speaks the code lane's own vocabulary is reporting on
+      // something this session was never told to have. Decline to the same wall
+      // a genuinely unparsed line gets.
+      answer = vocabHint
+        ? `I couldn't read that as a question I can answer. ${vocabHint} Type /help for all query shapes.`
+        : shortMissHint(query);
+      via = "miss";
+      genericWallMiss = true;
+      note(trace, "intermediate: HONEST-EMPTY POLISH — the miss spoke code-index vocabulary with the switch off, so it declined to the ordinary wall");
     } else {
-      // Nothing in the question is code-shaped, so indexing a repo would not
-      // help. "who won the 2031 world cup" used to carry the pointer anyway,
-      // which reads as a remedy for a question the remedy cannot touch.
-      note(trace, "intermediate: HONEST-EMPTY POLISH — held back: nothing in the question is code-shaped, so the index/--repo remedy would not apply");
+      note(trace, "intermediate: HONEST-EMPTY POLISH — held back: the miss names no code index, so it stands as written");
     }
   }
   if (teachOffer) {
@@ -17151,12 +17172,12 @@ export function renderDeclaredGoals(goals) {
   return lines.join("\n").replace(/\n+$/, "");
 }
 
-async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, researchSource = null, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, laneVocab = null, domainPacks = null, lexicon = null, newsState = null, newsConfig = null, newsProviders = null }) {
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, researchSource = null, tel = null, biasByBundle = {}, cache = null, codeDomainActive = false, codeGraphMode = false, laneVocab = null, domainPacks = null, lexicon = null, newsState = null, newsConfig = null, newsProviders = null }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
   const argText = (sp === -1 ? "" : line.slice(sp + 1)).trim();
-  const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus, narrateNext, liveReferenceNext, researchSourceNext, newsStateNext } = {}) => ({
+  const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus, narrateNext, liveReferenceNext, codeGraphModeNext, researchSourceNext, newsStateNext } = {}) => ({
     answer,
     logLines: [ts, `> ${line}`, answer, ""],
     record: { type: "turn", ts, query: line, command: name, via: "command", resolvedIds, answeredIds: [], miss },
@@ -17164,6 +17185,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     goal: GOAL_BY_COMMAND[name] || "use a specific tool/command directly",
     ...(narrateNext !== undefined ? { narrate: narrateNext } : {}),
     ...(liveReferenceNext !== undefined ? { liveReference: liveReferenceNext } : {}),
+    ...(codeGraphModeNext !== undefined ? { codeGraphMode: codeGraphModeNext } : {}),
     ...(researchSourceNext !== undefined ? { researchSource: researchSourceNext } : {}),
     ...(newsStateNext !== undefined ? { newsState: newsStateNext } : {}),
   });
@@ -17194,6 +17216,30 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     }
     const next = arg === "on";
     return mk(`narrate mode ${next ? "on" : "off"}.`, { narrateNext: next });
+  }
+
+  // /code-graph on|off — whether this session reads its lines as questions
+  // about a code graph (session-scoped, the /narrate and /wiki pattern: the new
+  // state rides the turn RESULT as `codeGraphMode`, and each session shell
+  // applies it to its own mutable state). Default OFF. Nothing else turns it
+  // on: no lane infers code intent from the words a user typed, and no loaded
+  // graph flips it by itself. A bare "/code-graph" reports the CURRENT state
+  // and changes nothing.
+  //
+  // Turning it on in a session with no code graph behind it reports that error
+  // and still sets the mode — the switch answers to the caller, not to what
+  // happens to be loaded.
+  if (name === "code-graph") {
+    const arg = argText.toLowerCase();
+    if (arg !== "on" && arg !== "off") {
+      return mk(`code-graph mode is ${codeGraphMode ? "on" : "off"} — /code-graph on or /code-graph off to change it. `
+        + "When on, I read every line as a question about the code graph. When off, I answer nothing about code.");
+    }
+    const next = arg === "on";
+    if (next && !(graph && moduleCountOf(graph) > 0)) {
+      return mk(`code-graph mode on. ${CODE_GRAPH_MISSING_ERROR}`, { codeGraphModeNext: true, miss: true });
+    }
+    return mk(`code-graph mode ${next ? "on" : "off"}.`, { codeGraphModeNext: next });
   }
 
   // /wiki on|off — the live Wikipedia supplement toggle (session-scoped,
@@ -17590,7 +17636,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     let factCount = 0;
     for (const sentence of sentences) {
       const before = readFactRows(await loadMemory(memoryDir));
-      const { record: ingestRecord } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7() });
+      const { record: ingestRecord } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7(), ingested: true });
       if (ingestRecord?.via !== "assert" || ingestRecord?.miss) continue;
       const after = readFactRows(await loadMemory(memoryDir));
       const rows = touchedFactRows(before, after);
@@ -18695,7 +18741,7 @@ export async function runTurn(input, options = {}) {
   return { ...result, ...(await factsTouchedSince(memoryDir, before)) };
 }
 
-async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, researchSource = null, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, newsState = null, newsConfig = null, newsProviders = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, laneVocab = null, domainPacks = null, retrieval = null } = {}) {
+async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, researchSource = null, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, newsState = null, newsConfig = null, newsProviders = null, discourse = null, _noSplit = false, actingSubject = "player", codeDomainActive = null, codeGraphMode = false, ingested = false, laneVocab = null, domainPacks = null, retrieval = null } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -18792,7 +18838,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // circuit breaker had already given up on it. A name lands here only when
   // the skip changed what served the answer, and the trailer says so.
   const sourceSkips = new Set();
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, researchSource, onLiveLookup, sourceSkips, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, laneVocab: laneVocabValue, domainPacks: domainPacksValue, newsState, newsConfig, newsProviders };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, researchSource, onLiveLookup, sourceSkips, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget, codeDomainActive: domainActive, codeGraphMode, ingested, laneVocab: laneVocabValue, domainPacks: domainPacksValue, newsState, newsConfig, newsProviders };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST

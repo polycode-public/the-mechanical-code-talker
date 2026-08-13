@@ -172,16 +172,13 @@ test("Lever 1 (g-b1-pron-25): 'it' keeps binding to the focus module, never jump
   }
 });
 
-// ---- Lever 1b (Track-1 trio, post-0.8.2): a pronoun-shortened follow-up must
-// not be mistaken for small talk once it already parsed as a real graph query.
-// g-b1-pron red set (1,4,5,7,12,13,16,18,20,21,22,28,30,33,35,36,48,50) + the
-// A2 sibling g-a2-pron-20 — all "who touched {it|this|that}" after a module was
-// established. isConversational() is a ≤3-word / no-code-token TEXT heuristic;
-// "who touched it" is exactly 3 words and "touched" isn't in STRUCT_WORDS, so it
-// used to fire AFTER ask() had already parsed the reverse "touches" shape,
-// resolved the pronoun off the focus, and composed an honest (empty) answer —
-// discarding that correct answer for the generic "I answer questions about…"
-// orientation wall. ----
+// ---- A pronoun-shortened follow-up must not be mistaken for small talk once
+// it already parsed as a real graph query. "who touched {it|this|that}" after a
+// module was established is exactly three words, so isConversational's
+// word-count catch-all used to fire AFTER ask() had already parsed the reverse
+// "touches" shape, resolved the pronoun off the focus, and composed an honest
+// (empty) answer — discarding that correct answer for the generic "I answer
+// questions about…" orientation wall. ----
 
 test("Lever 1b (g-b1-pron red set): 'who touched it/this/that' after a focus-setting turn gets the honest answer, not the orientation wall", async () => {
   const { drive, cleanup } = await repoDriver();

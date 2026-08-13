@@ -142,6 +142,7 @@ export function validateRow(row, predicateNames = Object.keys(predicates)) {
         flag(`setup.memoryBackend: must be one of ${MEMORY_BACKENDS.join("|")}`);
       }
       if (s.seed !== undefined && typeof s.seed !== "boolean") flag("setup.seed: must be a boolean");
+      if (s.codeGraph !== undefined && typeof s.codeGraph !== "boolean") flag("setup.codeGraph: must be a boolean");
       if (s.retrieval !== undefined) {
         const r = s.retrieval;
         if (typeof r !== "object" || r === null || Array.isArray(r)) {
@@ -275,6 +276,9 @@ export async function runChatRow(row, preds = predicates) {
       env: { ...(setup.seed ? {} : { TMCT_NO_SEED: "1" }), ...(setup.env ?? {}) },
       ...(setup.fixture ? { ephemeral: true } : {}),
       ...(setup.memoryBackend ? { memoryBackend: setup.memoryBackend } : {}),
+      // A row asking a question ABOUT a code graph declares it, the same way a
+      // host embedding tmct does. Nothing infers it from the wording.
+      ...(setup.codeGraph ? { codeGraphMode: true } : {}),
       ...(setup.retrieval ? { retrieval: setup.retrieval } : {}),
       ...(setup.newsFixtures?.length || setup.newsKbFixtures?.length
         ? { newsProviders: newsProvidersFromFixtures(setup.newsFixtures, setup.newsKbFixtures) }
