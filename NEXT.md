@@ -78,21 +78,24 @@ The work list, ranked by value against the plan's target card.
    `year | rdfs:subClassOf | eclipse` from simple-wikipedia's solar_eclipse
    body, and it reached a live card's background. Same family as the wikidata
    rows already fixed, through a different source path.
-5. [ ] **Phrasal verbs split, and one event states itself twice** — in flight on
-   `worktree-agent-a8807a5a6b26758d7`. "Takes Over London" reads as
-   `tmct:takes` with the particle dropped and the wrong subject; the russia card
-   carries both `tmct:releases` and `mgx:free` for one release, from the
-   headline and the description.
-6. [ ] **Thin-source cards crowd the feed** — in flight on
-   `worktree-agent-a5b1b24c0282ad707`. Iteration 9 printed nine cards and seven
-   were Hacker News, each reading "hackernews discuss X" with no background. The
-   synthesised summary itself is right and deliberate (`news-sources.mjs` quotes
-   the headline inside a fixed frame so its words can't be re-read as a claim;
-   the comment there explains it), but a source whose items carry no body can
-   never make a target-shaped card, and at seven of nine those cards dominate
-   both the live page and this loop's own measurement. Wanted: admission or
-   ranking that stops a bodyless source crowding out cards with real content —
-   without silently dropping items, which would hide misses rather than fix them.
+5. [ ] **Phrasal verbs split, and one event states itself twice** — built on
+   `worktree-agent-a8807a5a6b26758d7` but NOT merged: that branch was cut before
+   the passive work landed, so its `readNewswireFrame` reinstates the blanket
+   be-form decline the passives replaced. Integration in flight on
+   `worktree-agent-a98d6491e094d48a8`, porting the phrasal table, the widened
+   subject climb, the synonym fold and the strict-lane particle decline onto the
+   current function without losing the passive frames. Open question it carries:
+   what the branch's `lookupVerb(...) continue` gate is for, since the current
+   function has no equivalent.
+6. [~] **Thin cards crowd the feed** — CODE COMPLETE, merged as `2685a438`,
+   awaiting the full suite at the next push. The source was the wrong key: the
+   tim-king card comes off the same bodyless source and is the plan's first
+   target-shaped card, so a rule keyed on Hacker News would have thrown it away.
+   A card is now ranked by what it carries — its own claims, the headline
+   mentions that only restate its ORIGINAL TEXT block, and its background rows —
+   and the scores print admission per source, which is plan §4.2's line. Nothing
+   is dropped: a thin card still builds, still cites its source, still prints,
+   and carries its counts.
 7. [ ] **Fact-listing line order tracks arrival order** — in flight on
    `worktree-agent-a8ebf6f96b26ab822`. The repo invariant says
    any read-time resolver over the fact store is a pure function of the fact
